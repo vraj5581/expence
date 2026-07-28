@@ -8,9 +8,11 @@ const UserPortal = () => {
   const { user } = useAuth();
   const {
     transactions,
+    allocationsHistory,
     settings,
     getUserStats,
-    addTransaction
+    addTransaction,
+    updateTransaction
   } = useExpense();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,11 +25,15 @@ const UserPortal = () => {
   // Filter transactions created by this specific logged in user
   const myTransactions = transactions.filter(t => t.userName === user?.name);
 
+  // Filter allocations/money given by admin to this user
+  const myAllocations = allocationsHistory.filter(a => a.userName === user?.name);
+
   const handleOpenAddModal = () => {
     reset({
       type: 'Cash Out',
       amount: '',
       date: new Date().toISOString().split('T')[0],
+      status: 'Done',
       description: ''
     });
     setIsModalOpen(true);
@@ -36,12 +42,23 @@ const UserPortal = () => {
   const onSubmitForm = (data) => {
     addTransaction({
       ...data,
+      type: 'Cash Out',
+      status: data.status || 'Done',
       userName: user.name,
       createdBy: user.name
     });
     toast.success(`Expense entry of ${settings.currency}${parseFloat(data.amount).toLocaleString()} recorded!`, { theme: 'light' });
     setIsModalOpen(false);
     reset();
+  };
+
+  const handleStatusChange = (txn, newStatus) => {
+    updateTransaction(txn.id, { ...txn, status: newStatus });
+    if (newStatus === 'Done') {
+      toast.success(`Transaction ${txn.id} marked as Done (Deducted from balance)`, { theme: 'light' });
+    } else {
+      toast.info(`Transaction ${txn.id} marked as Due (No deduction)`, { theme: 'light' });
+    }
   };
 
   const filteredMyTransactions = myTransactions.filter((t) => {
@@ -69,7 +86,7 @@ const UserPortal = () => {
           <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          + Record My Expense
+          Expense
         </button>
       </div>
 
@@ -81,7 +98,7 @@ const UserPortal = () => {
           <p className="text-2xl font-extrabold text-[#9e6e34] mt-2">
             {settings.currency}{stats.allocated.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-xs text-[#b88548] mt-1 font-semibold">Your Total Petty Cash Allowance</p>
+          <p className="text-xs text-[#b88548] mt-1 font-semibold">{myAllocations.length} Transfers Received</p>
         </div>
 
         {/* 2. My Spent Expenses */}
@@ -93,13 +110,53 @@ const UserPortal = () => {
           <p className="text-xs text-slate-500 mt-1 font-medium">{myTransactions.length} Expense Logs Submitted</p>
         </div>
 
-        {/* 3. My Remaining Balance */}
+        {/* 3. My Remaining Balance Right Now */}
         <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#d4a359]">
-          <p className="text-xs uppercase font-bold text-slate-500">My Remaining Balance</p>
+          <p className="text-xs uppercase font-bold text-slate-500">My Remaining Balance Right Now</p>
           <p className="text-2xl font-extrabold text-[#9e6e34] mt-2">
             {settings.currency}{stats.remaining.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-xs text-slate-500 mt-1 font-medium">Available Cash In Hand</p>
+          <p className="text-xs text-emerald-700 mt-1 font-bold">Available Cash In Hand</p>
+        </div>
+      </div>
+
+      {/* Money Received from Admin History */}
+      <div className="glass-card p-6 rounded-2xl">
+        <h2 className="text-lg font-extrabold text-[#002B49] mb-1">Money Received from Admin (Allocations)</h2>
+        <p className="text-xs text-slate-500 font-medium mb-4">List of all cash transfers assigned to you by the Admin.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-700">
+            <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200">
+              <tr>
+                <th className="py-3 px-4 font-bold">Transfer ID</th>
+                <th className="py-3 px-4 font-bold">Date</th>
+                <th className="py-3 px-4 font-bold">Amount Received</th>
+                <th className="py-3 px-4 font-bold">Notes / Purpose</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {myAllocations.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="py-6 text-center text-slate-500 text-xs font-medium">
+                    No money allocations received from Admin yet.
+                  </td>
+                </tr>
+              ) : (
+                myAllocations.map((a) => (
+                  <tr key={a.id} className="hover:bg-slate-50 transition">
+                    <td className="py-3.5 px-4 font-mono text-xs font-bold text-[#002B49]">{a.id}</td>
+                    <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">{a.date}</td>
+                    <td className="py-3.5 px-4 font-bold text-emerald-600">
+                      +{settings.currency}{a.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 text-xs font-medium">
+                      {a.notes || 'Admin Money Allocation'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -126,7 +183,7 @@ const UserPortal = () => {
               <tr>
                 <th className="py-3 px-4 font-bold">Txn ID</th>
                 <th className="py-3 px-4 font-bold">Date</th>
-                <th className="py-3 px-4 font-bold">Type</th>
+                <th className="py-3 px-4 font-bold">Status</th>
                 <th className="py-3 px-4 font-bold">Amount</th>
                 <th className="py-3 px-4 font-bold">Description / Purpose</th>
               </tr>
@@ -144,18 +201,21 @@ const UserPortal = () => {
                     <td className="py-3.5 px-4 font-mono text-xs font-bold text-[#002B49]">{t.id}</td>
                     <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">{t.date}</td>
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                          t.type === 'Cash In'
-                            ? 'bg-amber-500/15 text-[#9e6e34]'
-                            : 'bg-slate-900/10 text-[#002B49]'
+                      <select
+                        value={t.status || 'Done'}
+                        onChange={(e) => handleStatusChange(t, e.target.value)}
+                        className={`px-3 py-1 rounded-full text-xs font-extrabold focus:outline-none cursor-pointer transition shadow-xs border ${
+                          (t.status || 'Done') === 'Due'
+                            ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                            : 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
                         }`}
                       >
-                        {t.type}
-                      </span>
+                        <option value="Done">Done</option>
+                        <option value="Due">Due</option>
+                      </select>
                     </td>
-                    <td className={`py-3.5 px-4 font-bold ${t.type === 'Cash In' ? 'text-[#9e6e34]' : 'text-[#002B49]'}`}>
-                      {t.type === 'Cash In' ? '+' : '-'}{settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    <td className="py-3.5 px-4 font-bold text-[#002B49]">
+                      {settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate">
                       {t.description || '-'}
@@ -186,22 +246,10 @@ const UserPortal = () => {
 
             <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
               <span className="text-slate-600 font-medium">Your Current Remaining Balance:</span>
-              <span className="font-extrabold text-[#002B49]">{settings.currency}{stats.remaining.toLocaleString()}</span>
+              <span className="font-[#002B49] font-extrabold">{settings.currency}{stats.remaining.toLocaleString()}</span>
             </div>
 
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
-              {/* Type */}
-              <div>
-                <label className="block text-xs font-bold text-[#002B49] mb-1">Movement Type</label>
-                <select
-                  {...register('type', { required: true })}
-                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none"
-                >
-                  <option value="Cash Out">Cash Out (Expense)</option>
-                  <option value="Cash In">Cash In (Refund / Inflow)</option>
-                </select>
-              </div>
-
               {/* User Name (Disabled / Locked to current user) */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Submitted By</label>
@@ -235,6 +283,19 @@ const UserPortal = () => {
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 focus:outline-none"
                 />
                 {errors.date && <p className="text-xs text-rose-500 mt-1">{errors.date.message}</p>}
+              </div>
+
+              {/* Status (Done / Due) */}
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Status</label>
+                <select
+                  {...register('status')}
+                  defaultValue="Done"
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
+                >
+                  <option value="Done">Done (Paid / Completed)</option>
+                  <option value="Due">Due (Pending - No Deduction)</option>
+                </select>
               </div>
 
               {/* Description / Notes */}

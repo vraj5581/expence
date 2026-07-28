@@ -192,9 +192,9 @@ export const ExpenseProvider = ({ children }) => {
   const getUserStats = (userName) => {
     const allocated = userAllocations[userName] || 0;
     
-    // User Expenses (Cash Out submitted by user)
+    // User Expenses (Cash Out submitted by user - Due entries do NOT deduct balance)
     const spent = transactions
-      .filter(t => t.userName === userName && t.type === 'Cash Out')
+      .filter(t => t.userName === userName && t.type === 'Cash Out' && t.status !== 'Due')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
     // Additional Cash In received directly by user
@@ -216,6 +216,7 @@ export const ExpenseProvider = ({ children }) => {
   const addTransaction = (txnData) => {
     const newTxn = {
       id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+      status: txnData.status || 'Done',
       ...txnData,
       amount: parseFloat(txnData.amount)
     };
@@ -286,7 +287,7 @@ export const ExpenseProvider = ({ children }) => {
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const totalCashOut = transactions
-    .filter(t => t.type === 'Cash Out')
+    .filter(t => t.type === 'Cash Out' && t.status !== 'Due')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const netBalance = totalCashIn - totalCashOut;

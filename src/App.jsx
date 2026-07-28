@@ -22,7 +22,14 @@ import UserPortal from './pages/UserPortal';
 const DefaultRedirect = () => {
   const { user } = useAuth();
   const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
-  return <Navigate to={isAdmin ? "/admin/dashboard" : "/admin/my-expenses"} replace />;
+  return <Navigate to={isAdmin ? "/admin/dashboard" : "/admin/dashboard"} replace />;
+};
+
+// Route wrapper for Admin-only pages
+const AdminOnlyRoute = ({ children }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
+  return isAdmin ? children : <Navigate to="/admin/dashboard" replace />;
 };
 
 function App() {
@@ -39,11 +46,11 @@ function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<DefaultRedirect />} />
                 <Route path="dashboard" element={<Dashboard />} />
-                <Route path="add-money" element={<AddMoney />} />
-                <Route path="cash-in-out" element={<CashInOut />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="users" element={<UserManagement />} />
-                <Route path="settings" element={<Settings />} />
+                <Route path="add-money" element={<AdminOnlyRoute><AddMoney /></AdminOnlyRoute>} />
+                <Route path="cash-in-out" element={<AdminOnlyRoute><CashInOut /></AdminOnlyRoute>} />
+                <Route path="reports" element={<AdminOnlyRoute><Reports /></AdminOnlyRoute>} />
+                <Route path="users" element={<AdminOnlyRoute><UserManagement /></AdminOnlyRoute>} />
+                <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
                 <Route path="my-expenses" element={<UserPortal />} />
               </Route>
             </Route>
