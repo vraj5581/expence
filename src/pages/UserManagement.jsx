@@ -1,0 +1,263 @@
+import React, { useState } from 'react';
+import { useExpense } from '../context/ExpenseContext';
+import { useForm } from 'react-hook-form';
+import { toast } from 'react-toastify';
+
+const UserManagement = () => {
+  const { users, addUser, updateUser, deleteUser, toggleUserStatus } = useExpense();
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [showPasswordMap, setShowPasswordMap] = useState({});
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+
+  const handleOpenAddModal = () => {
+    setEditingUser(null);
+    reset({
+      name: '',
+      id: '',
+      password: '',
+      status: 'Active'
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (user) => {
+    setEditingUser(user);
+    reset({
+      name: user.name,
+      id: user.id,
+      password: user.password,
+      status: user.status
+    });
+    setIsModalOpen(true);
+  };
+
+  const onSubmit = (data) => {
+    if (editingUser) {
+      updateUser(editingUser.id, data);
+      toast.success(`User ${data.name} updated!`, { theme: 'light' });
+    } else {
+      addUser(data);
+      toast.success(`New user ${data.name} created!`, { theme: 'light' });
+    }
+    setIsModalOpen(false);
+    reset();
+  };
+
+  const handleToggleStatus = (user) => {
+    toggleUserStatus(user.id);
+    toast.info(`Status updated for ${user.name}`, { theme: 'light' });
+  };
+
+  const handleDelete = (user) => {
+    if (window.confirm(`Remove user ${user.name}?`)) {
+      deleteUser(user.id);
+      toast.warning(`User ${user.name} removed.`, { theme: 'light' });
+    }
+  };
+
+  const togglePasswordVisibility = (userId) => {
+    setShowPasswordMap(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">User Management</h1>
+          <p className="text-sm text-slate-500 font-medium">Manage user credentials and active status.</p>
+        </div>
+
+        <button
+          onClick={handleOpenAddModal}
+          className="flex items-center px-4 py-2.5 rounded-xl bg-[#c69255] hover:bg-[#d4a359] text-white text-xs font-bold shadow-md transition"
+        >
+          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+          </svg>
+          + Create New User
+        </button>
+      </div>
+
+      {/* User List Table */}
+      <div className="glass-card p-6 rounded-2xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-700">
+            <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200">
+              <tr>
+                <th className="py-3 px-4 font-bold">User Name</th>
+                <th className="py-3 px-4 font-bold">ID/Name</th>
+                <th className="py-3 px-4 font-bold">Password</th>
+                <th className="py-3 px-4 font-bold">Status</th>
+                <th className="py-3 px-4 font-bold">Created Date</th>
+                <th className="py-3 px-4 text-right font-bold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {users.map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50 transition">
+                  <td className="py-3.5 px-4 font-bold text-[#002B49]">{u.name}</td>
+                  <td className="py-3.5 px-4 font-mono text-xs font-bold text-slate-700">{u.id}</td>
+                  <td className="py-3.5 px-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-xs text-slate-600">
+                        {showPasswordMap[u.id] ? u.password : '••••••••'}
+                      </span>
+                      <button
+                        onClick={() => togglePasswordVisibility(u.id)}
+                        className="text-slate-400 hover:text-slate-600 p-0.5"
+                        title="Toggle Password View"
+                      >
+                        {showPasswordMap[u.id] ? (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 012.122-.38c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <button
+                      onClick={() => handleToggleStatus(u)}
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold transition ${
+                        u.status === 'Active'
+                          ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-500/15 text-rose-800 border border-rose-300'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${u.status === 'Active' ? 'bg-emerald-600' : 'bg-rose-600'}`}></span>
+                      {u.status}
+                    </button>
+                  </td>
+                  <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">{u.createdAt}</td>
+                  <td className="py-3.5 px-4 text-right space-x-2">
+                    <button
+                      onClick={() => handleOpenEditModal(u)}
+                      title="Edit User"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-[#002B49] hover:bg-slate-100 transition"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    {u.id !== 'admin' && (
+                      <button
+                        onClick={() => handleDelete(u)}
+                        title="Delete User"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add / Edit User Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-md p-6 sm:p-8 rounded-3xl border border-slate-200 relative shadow-2xl">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">
+              {editingUser ? `Edit User (${editingUser.name})` : 'Create New User'}
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mb-6">Assign credentials and status for Shukan Packaging portal.</p>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* 1. User Name */}
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">User Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Patel"
+                  {...register('name', { required: 'User Name is required' })}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
+                />
+                {errors.name && <p className="text-xs text-rose-500 mt-1">{errors.name.message}</p>}
+              </div>
+
+              {/* 2. ID/Name (Fully Editable) */}
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">ID/Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. rahul"
+                  {...register('id', { required: 'ID/Name is required' })}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
+                />
+                {errors.id && <p className="text-xs text-rose-500 mt-1">{errors.id.message}</p>}
+              </div>
+
+              {/* 3. Password */}
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Password</label>
+                <input
+                  type="text"
+                  placeholder="Enter password"
+                  {...register('password', { required: 'Password is required' })}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
+                />
+                {errors.password && <p className="text-xs text-rose-500 mt-1">{errors.password.message}</p>}
+              </div>
+
+              {/* 4. Status */}
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Status</label>
+                <select
+                  {...register('status')}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Suspended">Suspended</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-[#c69255] hover:bg-[#d4a359] text-white text-xs font-bold shadow-md"
+                >
+                  {editingUser ? 'Save Changes' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default UserManagement;
