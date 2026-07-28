@@ -44,26 +44,8 @@ const Navbar = ({ onToggleSidebar }) => {
         </div>
       </div>
 
-      {/* Right section: Vault / Balance Badge & User Profile */}
+      {/* Right section: User Profile */}
       <div className="flex items-center space-x-3 lg:space-x-4">
-        {/* Admin Vault vs Staff User Balance Badge */}
-        {isAdmin ? (
-          <div className="flex items-center bg-[#002B49] text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs space-x-2 border border-[#c69255]/40">
-            <span className="text-[#e6b875]">Vault:</span>
-            <span>{settings.currency}{adminVaultBalance.toLocaleString()}</span>
-            <button
-              onClick={() => setIsAddMoneyOpen(true)}
-              className="ml-1 px-2 py-0.5 rounded bg-[#c69255] hover:bg-[#d4a359] text-white text-[11px] font-extrabold transition flex items-center space-x-1"
-            >
-              <span>+ Deposit Capital</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center bg-[#002B49] text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs space-x-2 border border-[#c69255]/40">
-            <span className="text-[#e6b875]">My Remaining Bal:</span>
-            <span className="text-emerald-400">{settings.currency}{userStats.remaining.toLocaleString()}</span>
-          </div>
-        )}
 
         {/* User Profile Info */}
         <div className="flex items-center space-x-3 pl-3 border-l border-slate-200">

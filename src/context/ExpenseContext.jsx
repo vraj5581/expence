@@ -6,31 +6,35 @@ const initialTransactions = [];
 
 const initialUsers = [
   {
-    id: 'admin',
-    name: 'Shukan Admin',
-    password: 'Vraj@2026',
+    id: 'vraj',
+    name: 'Vraj',
+    password: 'vraj123',
+    role: 'Administrator',
     status: 'Active',
     createdAt: '2025-01-10'
   },
   {
-    id: 'sarah',
-    name: 'Sarah Connor',
-    password: 'sarah123',
+    id: 'raj',
+    name: 'Raj',
+    password: 'raj123',
+    role: 'Staff',
     status: 'Active',
     createdAt: '2025-03-14'
   },
   {
-    id: 'alex',
-    name: 'Alex Mercer',
-    password: 'alex123',
+    id: 'teerth',
+    name: 'Teerth',
+    password: 'teerth123',
+    role: 'Staff',
     status: 'Active',
     createdAt: '2025-06-20'
   },
   {
-    id: 'john',
-    name: 'John Doe',
-    password: 'john123',
-    status: 'Suspended',
+    id: 'mayank',
+    name: 'Mayank',
+    password: 'mayank123',
+    role: 'Staff',
+    status: 'Active',
     createdAt: '2025-09-01'
   }
 ];
@@ -62,7 +66,7 @@ export const ExpenseProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : initialVaultDeposits;
   });
 
-  // Per-User Money Allocations (e.g. { 'Sarah Connor': 500, 'Alex Mercer': 1000 })
+  // Per-User Money Allocations (e.g. { 'Raj': 500, 'Alex Mercer': 1000 })
   const [userAllocations, setUserAllocations] = useState(() => {
     const saved = localStorage.getItem('shukan_user_allocations_v1');
     return saved ? JSON.parse(saved) : {};
@@ -80,8 +84,11 @@ export const ExpenseProvider = ({ children }) => {
   });
 
   const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem('shukan_expense_users_v2');
-    return saved ? JSON.parse(saved) : initialUsers;
+    const saved = localStorage.getItem('shukan_expense_users_v5');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return initialUsers;
   });
 
   const [settings, setSettings] = useState(() => {
@@ -106,7 +113,7 @@ export const ExpenseProvider = ({ children }) => {
   }, [transactions]);
 
   useEffect(() => {
-    localStorage.setItem('shukan_expense_users_v2', JSON.stringify(users));
+    localStorage.setItem('shukan_expense_users_v5', JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
@@ -188,6 +195,62 @@ export const ExpenseProvider = ({ children }) => {
     return { success: true, allocationLog };
   };
 
+  const updateAllocation = (id, updatedData) => {
+    const oldAlloc = allocationsHistory.find(a => a.id === id);
+    if (!oldAlloc) return { success: false, message: 'Allocation record not found' };
+
+    const newAmount = parseFloat(updatedData.amount);
+    if (isNaN(newAmount) || newAmount <= 0) {
+      return { success: false, message: 'Please enter a valid amount' };
+    }
+
+    const oldAmount = oldAlloc.amount;
+    const diff = newAmount - oldAmount;
+
+    if (diff > 0 && adminVaultBalance < diff) {
+      return {
+        success: false,
+        message: `Cannot increase allocation by ${settings.currency}${diff}. Admin Vault has only ${settings.currency}${adminVaultBalance.toLocaleString()} available.`
+      };
+    }
+
+    setUserAllocations(prev => {
+      const next = { ...prev };
+      const oldUser = oldAlloc.userName;
+      const newUser = updatedData.userName || oldUser;
+
+      if (oldUser === newUser) {
+        next[newUser] = Math.max(0, (next[newUser] || 0) + diff);
+      } else {
+        next[oldUser] = Math.max(0, (next[oldUser] || 0) - oldAmount);
+        next[newUser] = (next[newUser] || 0) + newAmount;
+      }
+      return next;
+    });
+
+    setAllocationsHistory(prev => prev.map(a => a.id === id ? {
+      ...a,
+      ...updatedData,
+      amount: newAmount,
+      userName: updatedData.userName || a.userName
+    } : a));
+
+    return { success: true };
+  };
+
+  const deleteAllocation = (id) => {
+    const targetAlloc = allocationsHistory.find(a => a.id === id);
+    if (!targetAlloc) return { success: false, message: 'Allocation record not found' };
+
+    setUserAllocations(prev => ({
+      ...prev,
+      [targetAlloc.userName]: Math.max(0, (prev[targetAlloc.userName] || 0) - targetAlloc.amount)
+    }));
+
+    setAllocationsHistory(prev => prev.filter(a => a.id !== id));
+    return { success: true };
+  };
+
   // Helper to calculate user statistics (Allocated, Spent, Remaining)
   const getUserStats = (userName) => {
     const allocated = userAllocations[userName] || 0;
@@ -203,12 +266,14 @@ export const ExpenseProvider = ({ children }) => {
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
     const remaining = (allocated + cashInReceived) - spent;
+    const needFromCompany = remaining < 0 ? Math.abs(remaining) : 0;
 
     return {
       allocated,
       spent,
       cashInReceived,
-      remaining
+      remaining,
+      needFromCompany
     };
   };
 
@@ -311,6 +376,8 @@ export const ExpenseProvider = ({ children }) => {
         updateVaultDeposit,
         deleteVaultDeposit,
         allocateMoneyToUser,
+        updateAllocation,
+        deleteAllocation,
         getUserStats,
         addTransaction,
         updateTransaction,

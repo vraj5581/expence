@@ -9,12 +9,15 @@ export const AuthProvider = ({ children }) => {
   });
 
   const login = (id, password, usersList = []) => {
-    // 1. Check Admin Master Credentials
-    if (id === 'admin' && password === 'Vraj@2026') {
+    const cleanId = (id || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim().toLowerCase();
+
+    // 1. Check Vraj / Admin Master Credentials (case-insensitive)
+    if ((cleanId === 'vraj' || cleanId === 'admin') && (cleanPassword === 'vraj123' || cleanPassword === 'vraj@2026')) {
       const adminUser = {
-        id: 'admin',
-        name: 'Shukan Admin',
-        email: 'admin@shukanpackaging.com',
+        id: 'vraj',
+        name: 'Vraj',
+        email: 'vraj@shukanpackaging.com',
         role: 'Administrator',
         avatar: '/logo.jpg'
       };
@@ -23,19 +26,23 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: adminUser };
     }
 
-    // 2. Check User Management List
-    const matchedUser = usersList.find(u => (u.id.toLowerCase() === id.toLowerCase() || u.name.toLowerCase() === id.toLowerCase()) && u.password === password);
+    // 2. Check User List (case-insensitive for ID/Name and Password)
+    const matchedUser = usersList.find(u => 
+      (u.id.toLowerCase() === cleanId || u.name.toLowerCase() === cleanId) && 
+      u.password.toLowerCase() === cleanPassword
+    );
 
     if (matchedUser) {
       if (matchedUser.status === 'Suspended') {
         return { success: false, message: 'Account is Suspended. Please contact Admin.' };
       }
 
+      const isAdminUser = matchedUser.id.toLowerCase() === 'vraj' || matchedUser.id.toLowerCase() === 'admin' || matchedUser.role === 'Administrator';
       const loggedInUser = {
         id: matchedUser.id,
         name: matchedUser.name,
         email: `${matchedUser.id}@shukanpackaging.com`,
-        role: matchedUser.id === 'admin' ? 'Administrator' : 'Staff',
+        role: isAdminUser ? 'Administrator' : 'Staff',
         avatar: '/logo.jpg'
       };
       setUser(loggedInUser);
@@ -43,7 +50,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: loggedInUser };
     }
 
-    return { success: false, message: 'Invalid ID or Password. Try admin / Vraj@2026' };
+    return { success: false, message: 'Invalid ID or Password. Try Vraj / vraj123' };
   };
 
   const logout = () => {

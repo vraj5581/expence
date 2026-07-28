@@ -166,29 +166,31 @@ const Dashboard = () => {
     }
   };
 
-  // Calculations for Staff Financial Overview Chart
-  const doneTotal = userTransactions
+  // Calculations for Financial Overview Bar Chart
+  const targetTxns = isAdmin ? transactions : userTransactions;
+
+  const doneTotal = targetTxns
     .filter(t => (t.status || 'Done') === 'Done')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-  const dueTotal = userTransactions
+  const dueTotal = targetTxns
     .filter(t => (t.status || 'Done') === 'Due')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-  const moneyGiven = myStats.allocated;
+  const moneyGiven = isAdmin ? totalAllocatedToTeam : myStats.allocated;
   const totalExpensesRequired = doneTotal + dueTotal;
   const neededFromAdmin = Math.max(0, totalExpensesRequired - moneyGiven);
 
-  const staffBarChartData = {
-    labels: ['Money Given', 'Expenses Done', 'Expenses Due', 'Need from Admin'],
+  const overviewBarChartData = {
+    labels: ['Expenses Done', 'Expenses Due', 'Money Given', 'Need from Company'],
     datasets: [
       {
         label: 'Amount',
-        data: [moneyGiven, doneTotal, dueTotal, neededFromAdmin],
-        backgroundColor: ['#c69255', '#10b981', '#f59e0b', '#ef4444'],
+        data: [doneTotal, dueTotal, moneyGiven, neededFromAdmin],
+        backgroundColor: ['#10b981', '#f59e0b', '#c69255', '#ef4444'],
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: ['#b88548', '#059669', '#d97706', '#dc2626']
+        borderColor: ['#059669', '#d97706', '#b88548', '#dc2626']
       }
     ]
   };
@@ -280,143 +282,114 @@ const Dashboard = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
           {/* Main Action: Give Money to User (Admin Only) */}
           {isAdmin && (
             <button
-              onClick={() => setIsGiveMoneyModalOpen(true)}
-              className="flex items-center px-4 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-sm font-bold shadow-md shadow-slate-900/20 transition-all border border-[#c69255]/40"
+              onClick={() => setIsGiveMoneyOpen(true)}
+              className="flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-xs sm:text-sm font-bold shadow-md shadow-slate-900/20 transition-all border border-[#c69255]/40 whitespace-nowrap"
             >
-              <svg className="w-5 h-5 mr-1.5 text-[#e6b875]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-1.5 text-[#e6b875] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Give Money to User
+              Give Money
             </button>
           )}
 
           <button
             onClick={() => openAddTxnModal('Cash Out')}
-            className="flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-sm font-bold shadow-md shadow-amber-900/20 transition-all"
+            className="flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs sm:text-sm font-bold shadow-md shadow-amber-900/20 transition-all whitespace-nowrap"
           >
-            <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            Expense
+            + Expense
           </button>
         </div>
       </div>
 
       {/* KPI Cards Grid */}
       {isAdmin ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* 1. Admin Vault Balance */}
-          <div className="glass-card p-5 rounded-2xl relative overflow-hidden border-t-4 border-t-[#002B49]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Admin Vault Reserve</span>
-              <button
-                onClick={() => setIsTopUpVaultModalOpen(true)}
-                className="text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-[#9e6e34] hover:bg-amber-500/25 font-bold transition"
-              >
-                + Top Up
-              </button>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-extrabold text-[#002B49]">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5">
+          {/* 1. Company Vault Balance */}
+          <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden border-t-2 sm:border-t-4 border-t-[#002B49]">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 block truncate">Company Vault</span>
+            <div className="mt-1 sm:mt-3">
+              <div className="text-base sm:text-2xl font-extrabold text-[#002B49] truncate">
                 {settings.currency}{adminVaultBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
-              <span className="text-xs text-slate-500 font-semibold flex items-center mt-1">
-                Available to Transfer to Team
+              <span className="text-[10px] sm:text-xs text-slate-500 font-semibold block mt-0.5 sm:mt-1 truncate">
+                Master Reserve
               </span>
             </div>
           </div>
 
           {/* 2. Total Allocated to Team */}
-          <div className="glass-card p-5 rounded-2xl relative overflow-hidden border-t-4 border-t-[#c69255]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Given to Team</span>
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-[#b88548] flex items-center justify-center font-bold">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-extrabold text-[#9e6e34]">
+          <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden border-t-2 sm:border-t-4 border-t-[#c69255]">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 block truncate">Total Given</span>
+            <div className="mt-1 sm:mt-3">
+              <div className="text-base sm:text-2xl font-extrabold text-[#9e6e34] truncate">
                 {settings.currency}{totalAllocatedToTeam.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
-              <span className="text-xs text-[#b88548] font-semibold flex items-center mt-1">
-                Allocated Petty Cash Pools
+              <span className="text-[10px] sm:text-xs text-[#b88548] font-semibold block mt-0.5 sm:mt-1 truncate">
+                Team Allowance
               </span>
             </div>
           </div>
 
           {/* 3. Total Expenses Spent */}
-          <div className="glass-card p-5 rounded-2xl relative overflow-hidden border-t-4 border-t-[#002B49]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Spent by Team</span>
-              <div className="w-9 h-9 rounded-xl bg-slate-900/10 text-[#002B49] flex items-center justify-center font-bold">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
-                </svg>
-              </div>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-extrabold text-[#002B49]">
+          <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden border-t-2 sm:border-t-4 border-t-[#002B49]">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 block truncate">Total Spent</span>
+            <div className="mt-1 sm:mt-3">
+              <div className="text-base sm:text-2xl font-extrabold text-[#002B49] truncate">
                 {settings.currency}{totalCashOut.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
-              <span className="text-xs text-slate-600 font-semibold flex items-center mt-1">
-                Logged User Expenses
+              <span className="text-[10px] sm:text-xs text-slate-600 font-semibold block mt-0.5 sm:mt-1 truncate">
+                Team Expenses
               </span>
             </div>
           </div>
 
           {/* 4. Total Team Remaining Balance */}
-          <div className="glass-card p-5 rounded-2xl relative overflow-hidden border-t-4 border-t-[#d4a359]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Team Remaining Balance</span>
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-[#9e6e34] flex items-center justify-center font-bold">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-extrabold text-[#9e6e34]">
+          <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden border-t-2 sm:border-t-4 border-t-[#d4a359]">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 block truncate">Team Remaining</span>
+            <div className="mt-1 sm:mt-3">
+              <div className="text-base sm:text-2xl font-extrabold text-[#9e6e34] truncate">
                 {settings.currency}{totalTeamRemaining.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
-              <span className="text-xs text-slate-500 font-semibold flex items-center mt-1">
-                Unspent In-Hand Balance
+              <span className="text-[10px] sm:text-xs text-slate-500 font-semibold block mt-0.5 sm:mt-1 truncate">
+                Unspent Balance
               </span>
             </div>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {/* 1. My Money Given by Admin */}
-          <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#c69255]">
-            <p className="text-xs uppercase font-bold text-slate-500">My Money Given by Admin</p>
-            <p className="text-2xl font-extrabold text-[#9e6e34] mt-2">
+        <div className="grid grid-cols-3 gap-2 sm:gap-5">
+          {/* 1. My Money Given by Company */}
+          <div className="glass-card p-2.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255]">
+            <p className="text-[9px] sm:text-xs uppercase font-bold text-slate-500 truncate">Money Given</p>
+            <p className="text-sm sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate">
               {settings.currency}{myStats.allocated.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-[#b88548] mt-1 font-semibold">Your Total Petty Cash Allowance</p>
+            <p className="text-[9px] sm:text-xs text-[#b88548] mt-0.5 sm:mt-1 font-semibold truncate">From Company</p>
           </div>
 
           {/* 2. My Spent Expenses */}
-          <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#002B49]">
-            <p className="text-xs uppercase font-bold text-slate-500">My Spent Expenses</p>
-            <p className="text-2xl font-extrabold text-[#002B49] mt-2">
+          <div className="glass-card p-2.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49]">
+            <p className="text-[9px] sm:text-xs uppercase font-bold text-slate-500 truncate">Spent Expenses</p>
+            <p className="text-sm sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate">
               {settings.currency}{myStats.spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-slate-500 mt-1 font-medium">{userTransactions.length} Expense Logs Submitted</p>
+            <p className="text-[9px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate">My Receipts</p>
           </div>
 
           {/* 3. My Remaining Balance Right Now */}
-          <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#d4a359]">
-            <p className="text-xs uppercase font-bold text-slate-500">My Remaining Balance Right Now</p>
-            <p className="text-2xl font-extrabold text-[#9e6e34] mt-2">
+          <div className="glass-card p-2.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#d4a359]">
+            <p className="text-[9px] sm:text-xs uppercase font-bold text-slate-500 truncate">My Balance</p>
+            <p className="text-sm sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate">
               {settings.currency}{myStats.remaining.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-emerald-700 mt-1 font-bold">Available Cash In Hand</p>
+            <p className="text-[9px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 font-bold truncate">In Hand</p>
           </div>
         </div>
       )}
@@ -438,7 +411,72 @@ const Dashboard = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile View Card List (No Scrollbar - App Style) */}
+          <div className="block md:hidden space-y-3">
+            {users.map((u) => {
+              const stats = getUserStats(u.name);
+              const spentPercent = stats.allocated > 0 ? Math.min(100, Math.round((stats.spent / stats.allocated) * 100)) : 0;
+              
+              return (
+                <div key={u.id} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-extrabold text-[#002B49]">{u.name}</span>
+                    <span className="text-[11px] font-mono text-slate-500">{u.id}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Money Given</span>
+                      <span className="font-extrabold text-[#9e6e34]">
+                        {settings.currency}{stats.allocated.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Spent Expenses</span>
+                      <span className="font-extrabold text-[#002B49]">
+                        {settings.currency}{stats.spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Remaining Balance</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${stats.remaining > 0 ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-700'}`}>
+                        {settings.currency}{stats.remaining.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        resetGive({ userName: u.name, amount: '', notes: '' });
+                        setIsGiveMoneyOpen(true);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-[#002B49] hover:bg-[#003c66] text-white text-xs font-bold transition shadow-xs"
+                    >
+                      + Give Money
+                    </button>
+                  </div>
+
+                  <div className="pt-1">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold mb-1">
+                      <span>Allowance Progress</span>
+                      <span>{spentPercent}% spent</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                      <div
+                        className={`h-full transition-all duration-300 ${spentPercent > 85 ? 'bg-rose-500' : spentPercent > 50 ? 'bg-[#c69255]' : 'bg-emerald-500'}`}
+                        style={{ width: `${spentPercent}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-700">
               <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200">
                 <tr>
@@ -484,7 +522,7 @@ const Dashboard = () => {
                         <button
                           onClick={() => {
                             resetGive({ userName: u.name, amount: '', notes: '' });
-                            setIsGiveMoneyModalOpen(true);
+                            setIsGiveMoneyOpen(true);
                           }}
                           className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-[#002B49] hover:text-white text-slate-700 text-xs font-bold border border-slate-300 transition"
                         >
@@ -502,17 +540,15 @@ const Dashboard = () => {
 
       {/* Analytics Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Admin Line Chart or Staff Personal Overview Chart */}
+        {/* Financial Overview Chart */}
         <div className="lg:col-span-2 glass-card p-6 rounded-2xl flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-extrabold text-[#002B49]">
-                {isAdmin ? 'Allocated vs Spent Financial Trends' : 'My Financial Overview (Given, Done, Due & Need)'}
+                {isAdmin ? 'Team Financial Overview (Given, Done, Due & Need)' : 'My Financial Overview (Given, Done, Due & Need)'}
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                {isAdmin
-                  ? 'Comparison of money given by Admin vs team expenditures'
-                  : 'Breakdown of money given by Admin, total done expenses, due expenses, and extra money needed'}
+                Breakdown of money given by Company, total done expenses, due expenses, and extra money needed
               </p>
             </div>
             <span className="text-xs px-3 py-1 rounded-full bg-amber-500/10 border border-[#c69255]/30 text-[#9e6e34] font-bold">
@@ -521,41 +557,35 @@ const Dashboard = () => {
           </div>
 
           <div className="h-64">
-            {isAdmin ? (
-              <Line data={lineChartData} options={lineChartOptions} />
-            ) : (
-              <Bar data={staffBarChartData} options={staffBarChartOptions} />
-            )}
+            <Bar data={overviewBarChartData} options={staffBarChartOptions} />
           </div>
 
-          {!isAdmin && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <span className="text-[10px] font-bold uppercase text-slate-500 block">Money Given</span>
-                <span className="text-xs sm:text-sm font-extrabold text-[#9e6e34]">
-                  {settings.currency}{moneyGiven.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-[10px] font-bold uppercase text-slate-500 block">Expenses Done</span>
-                <span className="text-xs sm:text-sm font-extrabold text-emerald-800">
-                  {settings.currency}{doneTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <span className="text-[10px] font-bold uppercase text-slate-500 block">Expenses Due</span>
-                <span className="text-xs sm:text-sm font-extrabold text-amber-800">
-                  {settings.currency}{dueTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                <span className="text-[10px] font-bold uppercase text-slate-500 block">Need From Admin</span>
-                <span className="text-xs sm:text-sm font-extrabold text-rose-700">
-                  {settings.currency}{neededFromAdmin.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">Expenses Done</span>
+              <span className="text-xs sm:text-sm font-extrabold text-emerald-800">
+                {settings.currency}{doneTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
             </div>
-          )}
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">Expenses Due</span>
+              <span className="text-xs sm:text-sm font-extrabold text-amber-800">
+                {settings.currency}{dueTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">Money Given</span>
+              <span className="text-xs sm:text-sm font-extrabold text-[#9e6e34]">
+                {settings.currency}{moneyGiven.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">Need From Company</span>
+              <span className="text-xs sm:text-sm font-extrabold text-rose-700">
+                {settings.currency}{neededFromAdmin.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* User Volume Doughnut Chart */}
@@ -584,48 +614,67 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile View Card List (No Scrollbar - App Style) */}
+          <div className="block md:hidden space-y-3">
+            {recentTransactions.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
+                No cash movement entries created yet.
+              </div>
+            ) : (
+              recentTransactions.map((t, index) => (
+                <div key={t.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
+                      <span className="text-sm font-extrabold text-[#002B49]">{t.userName}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-semibold">{t.date}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                    <div className="text-xs text-slate-600 font-medium truncate max-w-[180px]">
+                      {t.description || 'Expense Entry'}
+                    </div>
+                    <div className="text-sm font-extrabold text-[#002B49]">
+                      {settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-700">
               <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4 font-bold">Txn ID</th>
-                  <th className="py-3 px-4 font-bold">Movement Type</th>
+                  <th className="py-3 px-4 font-bold">Sr. No.</th>
+                  <th className="py-3 px-4 font-bold">Date</th>
                   <th className="py-3 px-4 font-bold">User Name</th>
                   <th className="py-3 px-4 font-bold">Description</th>
                   <th className="py-3 px-4 font-bold">Amount</th>
-                  <th className="py-3 px-4 font-bold">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {recentTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-500 text-xs font-medium">
+                    <td colSpan="5" className="py-8 text-center text-slate-500 text-xs font-medium">
                       No cash movement entries created yet. Click "Give Money to User" or "Add Expense" to start.
                     </td>
                   </tr>
                 ) : (
-                  recentTransactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50 transition">
-                      <td className="py-3.5 px-4 font-mono text-xs font-bold text-[#002B49]">{t.id}</td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                            t.type === 'Cash In'
-                              ? 'bg-amber-500/15 text-[#9e6e34] border border-[#c69255]/30'
-                              : 'bg-slate-900/10 text-[#002B49] border border-[#002B49]/20'
-                          }`}
-                        >
-                          {t.type}
-                        </span>
-                      </td>
+                  recentTransactions.map((t, index) => (
+                    <tr key={t.id || index} className="hover:bg-slate-50 transition">
+                      <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
+                      <td className="py-3.5 px-4 text-slate-500 text-xs font-medium">{t.date}</td>
                       <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>
                       <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate">
                         {t.description || '-'}
                       </td>
-                      <td className={`py-3.5 px-4 font-bold ${t.type === 'Cash In' ? 'text-[#9e6e34]' : 'text-[#002B49]'}`}>
-                        {t.type === 'Cash In' ? '+' : '-'}{settings.currency}{t.amount.toLocaleString()}
+                      <td className="py-3.5 px-4 font-bold text-[#002B49]">
+                        {settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500 text-xs font-medium">{t.date}</td>
                     </tr>
                   ))
                 )}
