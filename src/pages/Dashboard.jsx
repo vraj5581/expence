@@ -277,35 +277,9 @@ const Dashboard = () => {
           <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">
             {isAdmin ? 'Shukan Packaging Control Center' : `Welcome, ${currentUser?.name}!`}
           </h1>
-          <p className="text-sm text-slate-500 font-medium">
-            {isAdmin ? 'Petty cash vault, team allocations, and real-time user balances.' : 'View your petty cash balance and recent transactions.'}
-          </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-          {/* Main Action: Give Money to User (Admin Only) */}
-          {isAdmin && (
-            <button
-              onClick={() => setIsGiveMoneyOpen(true)}
-              className="flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-xs sm:text-sm font-bold shadow-md shadow-slate-900/20 transition-all border border-[#c69255]/40 whitespace-nowrap"
-            >
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-1.5 text-[#e6b875] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Give Money
-            </button>
-          )}
 
-          <button
-            onClick={() => openAddTxnModal('Cash Out')}
-            className="flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs sm:text-sm font-bold shadow-md shadow-amber-900/20 transition-all whitespace-nowrap"
-          >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            + Expense
-          </button>
-        </div>
       </div>
 
       {/* KPI Cards Grid */}
@@ -400,14 +374,13 @@ const Dashboard = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h2 className="text-lg font-extrabold text-[#002B49]">User Balance & Allowance Summary</h2>
-              <p className="text-xs text-slate-500 font-medium">Real-time breakdown of funds given by Admin, spent amount, and remaining balance.</p>
             </div>
 
             <button
               onClick={() => setIsGiveMoneyModalOpen(true)}
               className="px-3.5 py-2 rounded-xl bg-[#c69255] hover:bg-[#d4a359] text-white text-xs font-bold shadow-xs"
             >
-              + Give Money to User
+              Allocate
             </button>
           </div>
 
@@ -450,11 +423,11 @@ const Dashboard = () => {
                     <button
                       onClick={() => {
                         resetGive({ userName: u.name, amount: '', notes: '' });
-                        setIsGiveMoneyOpen(true);
+                        setIsGiveMoneyModalOpen(true);
                       }}
                       className="px-3 py-1 rounded-lg bg-[#002B49] hover:bg-[#003c66] text-white text-xs font-bold transition shadow-xs"
                     >
-                      + Give Money
+                      Allocate
                     </button>
                   </div>
 
@@ -522,11 +495,11 @@ const Dashboard = () => {
                         <button
                           onClick={() => {
                             resetGive({ userName: u.name, amount: '', notes: '' });
-                            setIsGiveMoneyOpen(true);
+                            setIsGiveMoneyModalOpen(true);
                           }}
                           className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-[#002B49] hover:text-white text-slate-700 text-xs font-bold border border-slate-300 transition"
                         >
-                          + Give Money
+                          Allocate
                         </button>
                       </td>
                     </tr>
@@ -547,9 +520,6 @@ const Dashboard = () => {
               <h2 className="text-lg font-extrabold text-[#002B49]">
                 {isAdmin ? 'Team Financial Overview (Given, Done, Due & Need)' : 'My Financial Overview (Given, Done, Due & Need)'}
               </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Breakdown of money given by Company, total done expenses, due expenses, and extra money needed
-              </p>
             </div>
             <span className="text-xs px-3 py-1 rounded-full bg-amber-500/10 border border-[#c69255]/30 text-[#9e6e34] font-bold">
               2026 Financial Year
@@ -594,9 +564,6 @@ const Dashboard = () => {
             <h2 className="text-lg font-extrabold text-[#002B49]">
               {isAdmin ? 'User Expenditure Breakdown' : 'My Expense Status Breakdown'}
             </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              {isAdmin ? 'Expenses spent by team member' : 'Paid (Done) vs Pending (Due) expense breakdown'}
-            </p>
           </div>
           <div className="h-64 relative flex items-center justify-center">
             <Doughnut data={doughnutData} options={doughnutOptions} />
@@ -610,7 +577,6 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-extrabold text-[#002B49]">Recent Transactions Log</h2>
-              <p className="text-xs text-slate-500 font-medium">Latest recorded financial entries</p>
             </div>
           </div>
 
@@ -660,7 +626,7 @@ const Dashboard = () => {
                 {recentTransactions.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="py-8 text-center text-slate-500 text-xs font-medium">
-                      No cash movement entries created yet. Click "Give Money to User" or "Add Expense" to start.
+                      No cash movement entries created yet. Click "Allocate" or "Add Expense" to start.
                     </td>
                   </tr>
                 ) : (
@@ -697,8 +663,7 @@ const Dashboard = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">Give Money to User</h3>
-            <p className="text-xs text-slate-500 font-medium mb-4">Transfer petty cash funds from Admin Vault to team member allowance.</p>
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-4">Allocate to User</h3>
 
             <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
               <span className="text-slate-600 font-medium">Available Admin Vault Balance:</span>
@@ -782,8 +747,7 @@ const Dashboard = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">Top Up Admin Vault</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Add capital funds into Admin Master Vault reserve.</p>
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-6">Top Up Admin Vault</h3>
 
             <form onSubmit={subTopUp(onTopUpVaultSubmit)} className="space-y-4">
               <div>
@@ -831,8 +795,7 @@ const Dashboard = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">Record New {modalTxnType}</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Fill in details for Shukan Packaging ledger.</p>
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-6">Record New {modalTxnType}</h3>
 
             <form onSubmit={subTxn(onAddTxnSubmit)} className="space-y-4">
               <div>

@@ -18,6 +18,7 @@ import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
 import UserPortal from './pages/UserPortal';
 import MoneyReceived from './pages/MoneyReceived';
+import AssignTask from './pages/AssignTask';
 
 // Component to handle intelligent default redirection based on user role
 const DefaultRedirect = () => {
@@ -54,6 +55,7 @@ function App() {
                 <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
                 <Route path="my-expenses" element={<UserPortal />} />
                 <Route path="money-received" element={<MoneyReceived />} />
+                <Route path="tasks" element={<AdminOnlyRoute><AssignTask /></AdminOnlyRoute>} />
               </Route>
             </Route>
 

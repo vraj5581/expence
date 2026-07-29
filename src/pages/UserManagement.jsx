@@ -71,7 +71,6 @@ const UserManagement = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">User Management</h1>
-          <p className="text-sm text-slate-500 font-medium">Manage user credentials and active status.</p>
         </div>
 
         <button
@@ -260,10 +259,9 @@ const UserManagement = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-6">
               {editingUser ? `Edit User (${editingUser.name})` : 'Create New User'}
             </h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Assign credentials and status for Shukan Packaging portal.</p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {/* 1. User Name */}

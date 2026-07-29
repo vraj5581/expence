@@ -1,24 +1,5 @@
 import React, { useState } from 'react';
 import { useExpense } from '../context/ExpenseContext';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
 
 const Reports = () => {
   const {
@@ -40,39 +21,6 @@ const Reports = () => {
     return true;
   });
 
-  const barChartData = {
-    labels: users.map(u => u.name),
-    datasets: [
-      {
-        label: 'Money Given (Allocated)',
-        data: users.map(u => getUserStats(u.name).allocated),
-        backgroundColor: '#c69255',
-        borderRadius: 8
-      },
-      {
-        label: 'Spent Expenses',
-        data: users.map(u => getUserStats(u.name).spent),
-        backgroundColor: '#002B49',
-        borderRadius: 8
-      }
-    ]
-  };
-
-  const barChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top',
-        labels: { color: '#334155', font: { family: 'Inter', weight: '600' } }
-      }
-    },
-    scales: {
-      x: { grid: { color: '#e2e8f0' }, ticks: { color: '#64748b' } },
-      y: { grid: { color: '#e2e8f0' }, ticks: { color: '#64748b' } }
-    }
-  };
-
   const handlePrint = () => {
     window.print();
   };
@@ -83,7 +31,6 @@ const Reports = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">Shukan Packaging Audit Reports</h1>
-          <p className="text-sm text-slate-500 font-medium">Petty cash vault logs, user allowance reports, and audit logs.</p>
         </div>
 
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full md:w-auto">
@@ -148,23 +95,11 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* User Comparative Bar Chart */}
-      <div className="glass-card p-6 rounded-2xl">
-        <div className="mb-4">
-          <h2 className="text-lg font-extrabold text-[#002B49]">User Allowance vs Expenditure Breakdown</h2>
-          <p className="text-xs text-slate-500 font-medium">Money given by Admin vs actual money spent by user</p>
-        </div>
-        <div className="h-80">
-          <Bar data={barChartData} options={barChartOptions} />
-        </div>
-      </div>
-
       {/* Admin Money Allocation Transfer History Log */}
       <div className="glass-card p-3.5 sm:p-6 rounded-2xl">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-extrabold text-[#002B49]">Company Money Transfer Log</h2>
-            <p className="text-xs text-slate-500 font-medium">History of funds given from Vault to team members</p>
           </div>
         </div>
 
@@ -240,7 +175,6 @@ const Reports = () => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-extrabold text-[#002B49]">User Expense Receipts Log</h2>
-            <p className="text-xs text-slate-500 font-medium">Showing {filteredTransactions.length} filtered items</p>
           </div>
         </div>
 

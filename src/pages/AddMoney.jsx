@@ -28,6 +28,10 @@ const AddMoney = () => {
   const [editingDeposit, setEditingDeposit] = useState(null);
   const [editingAllocation, setEditingAllocation] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUser, setSelectedUser] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const { register: regGive, handleSubmit: subGive, reset: resetGive, formState: { errors: errGive } } = useForm();
@@ -160,9 +164,14 @@ const AddMoney = () => {
     (a, b) => new Date(b.date) - new Date(a.date)
   );
 
+  const hasActiveFilters = Boolean(selectedUser !== 'All' || startDate || endDate);
+
   const filteredTransactions = combinedList.filter((t) => {
     if (activeTab === 'Add Money' && t.txnCategory !== 'Add Money') return false;
     if (activeTab === 'Give Money' && t.txnCategory !== 'Give Money') return false;
+    if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
+    if (startDate && t.date < startDate) return false;
+    if (endDate && t.date > endDate) return false;
 
     if (!searchTerm.trim()) return true;
     const query = searchTerm.toLowerCase();
@@ -175,22 +184,17 @@ const AddMoney = () => {
 
   return (
     <div className="space-y-8">
-      {/* Printable Header for PDF Export */}
       <div className="hidden print:block text-center border-b pb-4 mb-4">
         <h1 className="text-2xl font-bold uppercase text-[#002B49]">SHUKAN PACKAGING</h1>
         <p className="text-xs font-semibold text-[#c69255]">Company Vault Deposit Logs & Capital Audit Report</p>
       </div>
 
-      {/* Screen Header & Top Right Action Buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">Add Money Log & Vault Deposits</h1>
-          <p className="text-sm text-slate-500 font-medium font-sans">Manage Company capital deposits, edit entries, and export PDF reports.</p>
         </div>
 
-        {/* Top Right Corner Buttons */}
         <div className="grid grid-cols-2 sm:flex sm:flex-row flex-wrap items-center gap-2 w-full sm:w-auto">
-          {/* Add Money Primary Button */}
           <button
             onClick={handleOpenAddModal}
             className="flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
@@ -198,10 +202,9 @@ const AddMoney = () => {
             <svg className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            + Add Money
+            Deposit
           </button>
 
-          {/* Give Money to User Button */}
           <button
             onClick={handleOpenGiveMoneyModal}
             className="flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
@@ -209,10 +212,9 @@ const AddMoney = () => {
             <svg className="w-4 h-4 mr-1 sm:mr-1.5 text-[#e6b875] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Give Money
+            Allocate
           </button>
 
-          {/* Export PDF Button */}
           <button
             onClick={handleExportPDF}
             className="col-span-2 sm:col-span-1 flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold border border-slate-300 shadow-xs transition cursor-pointer whitespace-nowrap"
@@ -225,7 +227,6 @@ const AddMoney = () => {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 gap-2.5 sm:gap-5 print:grid-cols-2">
         <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255]">
           <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">Total Deposited</p>
@@ -244,14 +245,12 @@ const AddMoney = () => {
         </div>
       </div>
 
-      {/* Tabs & Search Filter Bar */}
       <div className="glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 print:hidden">
-        {/* Category Filter Tabs */}
         <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 sm:p-1.5 rounded-xl border border-slate-200 w-full md:w-auto">
           {[
             { id: 'All', label: 'All Transactions' },
-            { id: 'Add Money', label: '+ Add Money' },
-            { id: 'Give Money', label: 'Give Money to User' }
+            { id: 'Add Money', label: 'Deposit' },
+            { id: 'Give Money', label: 'Allocate' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -267,28 +266,130 @@ const AddMoney = () => {
           ))}
         </div>
 
-        {/* Search Input */}
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Name or Description..."
-            className="px-4 py-2 text-xs rounded-xl glass-input text-slate-800 placeholder-slate-400 focus:outline-none w-full md:w-64"
-          />
-          <span className="text-xs text-slate-500 font-semibold hidden sm:inline whitespace-nowrap">
-            Showing {filteredTransactions.length} entries
-          </span>
+        <div className="flex items-center space-x-2.5 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by Name or Description..."
+              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input text-slate-800 placeholder-slate-400 focus:outline-none"
+            />
+          </div>
+
+          <button
+            onClick={() => setIsFilterOpen(true)}
+            className={`flex items-center justify-center px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 border ${
+              hasActiveFilters
+                ? 'bg-[#002B49] text-white border-[#002B49] shadow-sm'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <svg className="w-4 h-4 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filter {hasActiveFilters && <span className="ml-1 text-[#c69255] font-extrabold">●</span>}
+          </button>
         </div>
       </div>
 
-      {/* Vault Deposits & Allocations Table / Mobile Card List */}
+      {isFilterOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-[#c69255]/30">
+                  <svg className="w-5 h-5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Filter Transactions</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Refine deposits & allocations by criteria</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsFilterOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Category Type</label>
+                <select
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
+                >
+                  <option value="All">All Transactions (Deposits & Allocations)</option>
+                  <option value="Add Money">Deposit (Vault Capital)</option>
+                  <option value="Give Money">Allocate (User Transfer)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Select User</label>
+                <select
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
+                >
+                  <option value="All">All Users</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
+              <button
+                onClick={() => { setSelectedUser('All'); setStartDate(''); setEndDate(''); setActiveTab('All'); setSearchTerm(''); }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                Reset All
+              </button>
+              <button
+                onClick={() => setIsFilterOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="glass-card p-3.5 sm:p-6 rounded-2xl">
-        {/* Mobile View Card List (No Scrollbar - App Style) */}
         <div className="block md:hidden space-y-3">
           {filteredTransactions.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
-              No transaction entries found. Click "+ Add Money" or "Give Money to User" to record funds.
+              No transaction entries found. Click "Deposit" or "Allocate" to record entries.
             </div>
           ) : (
             filteredTransactions.map((t, index) => (
@@ -303,7 +404,7 @@ const AddMoney = () => {
                           : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
                       }`}
                     >
-                      {t.txnCategory === 'Add Money' ? '+ Add Money' : 'Give Money'}
+                      {t.txnCategory === 'Add Money' ? 'Deposit' : 'Allocate'}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-500 font-semibold">{t.date}</span>
@@ -397,7 +498,7 @@ const AddMoney = () => {
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-8 text-center text-slate-500 text-xs font-medium">
-                    No transaction entries found. Click "+ Add Money" or "Give Money to User" to record funds.
+                    No transaction entries found. Click "Deposit" or "Allocate" to record entries.
                   </td>
                 </tr>
               ) : (
@@ -413,7 +514,7 @@ const AddMoney = () => {
                             : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
                         }`}
                       >
-                        {t.txnCategory === 'Add Money' ? '+ Add Money' : 'Give Money'}
+                        {t.txnCategory === 'Add Money' ? 'Deposit' : 'Allocate'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>
@@ -489,10 +590,9 @@ const AddMoney = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">
-              {editingDeposit ? 'Edit Deposit Entry' : 'Add Money to Vault'}
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-6">
+              {editingDeposit ? 'Edit Deposit Entry' : 'Deposit to Vault'}
             </h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Record capital funds added into Company Master Vault.</p>
 
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
               {/* Date */}
@@ -577,12 +677,9 @@ const AddMoney = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-1">
-              {editingAllocation ? 'Edit Money Allocation' : 'Give Money to User'}
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-4">
+              {editingAllocation ? 'Edit Allocation' : 'Allocate to User'}
             </h3>
-            <p className="text-xs text-slate-500 font-medium mb-4">
-              {editingAllocation ? 'Modify allocated petty cash amount or user details.' : 'Transfer petty cash funds from Company Vault to team member allowance.'}
-            </p>
 
             <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
               <span className="text-slate-600 font-medium">Available Company Vault Balance:</span>

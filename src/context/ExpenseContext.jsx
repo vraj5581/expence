@@ -59,6 +59,42 @@ const initialSettings = {
   autoEmailReports: true
 };
 
+const initialTasks = [
+  {
+    id: 'TSK-1001',
+    title: 'Raw Material Corrugated Sheet Inspection',
+    description: 'Inspect quality of newly delivered corrugated sheet batch at Factory Gate 2.',
+    assignedTo: 'Raj',
+    priority: 'High',
+    category: 'Purchase',
+    status: 'In Progress',
+    dueDate: '2026-07-30',
+    createdAt: '2026-07-28'
+  },
+  {
+    id: 'TSK-1002',
+    title: 'Client Dispatch & Transport Vehicle Audit',
+    description: 'Verify shipping manifest and load security for major client order delivery.',
+    assignedTo: 'Teerth',
+    priority: 'Urgent',
+    category: 'Delivery',
+    status: 'Pending',
+    dueDate: '2026-07-29',
+    createdAt: '2026-07-29'
+  },
+  {
+    id: 'TSK-1003',
+    title: 'Weekly Factory Machine Maintenance',
+    description: 'Perform scheduled lubrication and roller checks for packaging assembly line.',
+    assignedTo: 'Mayank',
+    priority: 'Medium',
+    category: 'Maintenance',
+    status: 'Completed',
+    dueDate: '2026-07-27',
+    createdAt: '2026-07-25'
+  }
+];
+
 export const ExpenseProvider = ({ children }) => {
   // Vault Deposits List (CRUD)
   const [vaultDeposits, setVaultDeposits] = useState(() => {
@@ -96,6 +132,11 @@ export const ExpenseProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : initialSettings;
   });
 
+  const [tasks, setTasks] = useState(() => {
+    const saved = localStorage.getItem('shukan_tasks_v1');
+    return saved ? JSON.parse(saved) : initialTasks;
+  });
+
   useEffect(() => {
     localStorage.setItem('shukan_vault_deposits_v1', JSON.stringify(vaultDeposits));
   }, [vaultDeposits]);
@@ -120,11 +161,20 @@ export const ExpenseProvider = ({ children }) => {
     localStorage.setItem('shukan_expense_settings', JSON.stringify(settings));
   }, [settings]);
 
+  useEffect(() => {
+    localStorage.setItem('shukan_tasks_v1', JSON.stringify(tasks));
+  }, [tasks]);
+
   // Calculate Admin Vault Balance dynamically
-  // Vault Balance = (Sum of all Vault Deposits) - (Sum of all Money Given to Users)
+  // Vault Balance = (Sum of all Vault Deposits) - (Sum of all Money Given to Users) - (Direct Company Expenses)
   const totalVaultDeposited = vaultDeposits.reduce((sum, d) => sum + (d.amount || 0), 0);
   const totalAllocatedToTeam = Object.values(userAllocations).reduce((sum, val) => sum + val, 0);
-  const adminVaultBalance = totalVaultDeposited - totalAllocatedToTeam;
+  
+  const totalCompanyDirectExpenses = transactions
+    .filter(t => (t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+  const adminVaultBalance = totalVaultDeposited - totalAllocatedToTeam - totalCompanyDirectExpenses;
 
   // 1. ADD VAULT DEPOSIT
   const addVaultDeposit = (depositData) => {
@@ -171,7 +221,7 @@ export const ExpenseProvider = ({ children }) => {
     if (adminVaultBalance < numAmount) {
       return {
         success: false,
-        message: `Cannot give ${settings.currency}${numAmount}. Admin Vault has only ${settings.currency}${adminVaultBalance.toLocaleString()} available. Please click "+ Add Money" to add vault funds first!`
+        message: `Cannot give ${settings.currency}${numAmount}. Admin Vault has only ${settings.currency}${adminVaultBalance.toLocaleString()} available. Please click "Deposit" to add vault funds first!`
       };
     }
 
@@ -253,6 +303,16 @@ export const ExpenseProvider = ({ children }) => {
 
   // Helper to calculate user statistics (Allocated, Spent, Remaining)
   const getUserStats = (userName) => {
+    if (userName === 'Shukan Packaging (Company)' || userName === 'Company Vault') {
+      return {
+        allocated: totalVaultDeposited,
+        spent: totalCompanyDirectExpenses,
+        cashInReceived: 0,
+        remaining: adminVaultBalance,
+        needFromCompany: 0
+      };
+    }
+
     const allocated = userAllocations[userName] || 0;
     
     // User Expenses (Cash Out submitted by user - Due entries do NOT deduct balance)
@@ -332,6 +392,33 @@ export const ExpenseProvider = ({ children }) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
+  // Task Management CRUD
+  const addTask = (taskData) => {
+    const newTask = {
+      id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
+      createdAt: new Date().toISOString().split('T')[0],
+      status: taskData.status || 'Pending',
+      priority: taskData.priority || 'Medium',
+      category: taskData.category || 'General',
+      assignedTo: taskData.assignedTo || 'Raj',
+      ...taskData
+    };
+    setTasks(prev => [newTask, ...prev]);
+    return newTask;
+  };
+
+  const updateTask = (id, updatedData) => {
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData } : t)));
+  };
+
+  const updateTaskStatus = (id, newStatus) => {
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, status: newStatus } : t)));
+  };
+
+  const deleteTask = (id) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+  };
+
   const resetToDefaultData = () => {
     setVaultDeposits(initialVaultDeposits);
     setUserAllocations({});
@@ -339,12 +426,14 @@ export const ExpenseProvider = ({ children }) => {
     setTransactions([]);
     setUsers(initialUsers);
     setSettings(initialSettings);
+    setTasks(initialTasks);
     localStorage.removeItem('shukan_vault_deposits_v1');
     localStorage.removeItem('shukan_user_allocations_v1');
     localStorage.removeItem('shukan_allocations_history_v1');
     localStorage.removeItem('shukan_expense_transactions_v3');
     localStorage.removeItem('shukan_expense_users_v2');
     localStorage.removeItem('shukan_expense_settings');
+    localStorage.removeItem('shukan_tasks_v1');
   };
 
   const totalCashIn = transactions
@@ -368,6 +457,7 @@ export const ExpenseProvider = ({ children }) => {
         transactions,
         users,
         settings,
+        tasks,
         totalAllocatedToTeam,
         totalCashIn,
         totalCashOut,
@@ -387,7 +477,11 @@ export const ExpenseProvider = ({ children }) => {
         deleteUser,
         toggleUserStatus,
         updateSettings,
-        resetToDefaultData
+        resetToDefaultData,
+        addTask,
+        updateTask,
+        updateTaskStatus,
+        deleteTask
       }}
     >
       {children}

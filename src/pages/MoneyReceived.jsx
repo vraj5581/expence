@@ -55,9 +55,6 @@ const MoneyReceived = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">Money Received Log</h1>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium">
-            Date-wise history of petty cash funds received from Shukan Packaging.
-          </p>
         </div>
 
         <button
@@ -112,8 +109,8 @@ const MoneyReceived = () => {
         </div>
       </div>
 
-      {/* 1-Line Search Bar & Filter Drawer */}
-      <div className="glass-card p-3 sm:p-4 rounded-2xl space-y-3 print:hidden">
+      {/* 1-Line Search Bar & Filter Button */}
+      <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,55 +126,90 @@ const MoneyReceived = () => {
           </div>
 
           <button
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`flex items-center justify-center px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 border ${
-              isFilterOpen || hasActiveFilters
-                ? 'bg-[#002B49] text-white border-[#002B49]'
+            onClick={() => setIsFilterOpen(true)}
+            className={`flex items-center justify-center px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 border ${
+              hasActiveFilters
+                ? 'bg-[#002B49] text-white border-[#002B49] shadow-sm'
                 : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
             }`}
           >
-            <svg className="w-4 h-4 mr-1 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
-            Filter {hasActiveFilters && <span className="ml-1 text-[#c69255]">●</span>}
+            Filter {hasActiveFilters && <span className="ml-1 text-[#c69255] font-extrabold">●</span>}
           </button>
         </div>
-
-        {isFilterOpen && (
-          <div className="pt-3 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs rounded-xl glass-input text-slate-800 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs rounded-xl glass-input text-slate-800 focus:outline-none"
-              />
-            </div>
-
-            {hasActiveFilters && (
-              <div className="sm:col-span-2 flex justify-end">
-                <button
-                  onClick={handleResetFilters}
-                  className="px-3 py-1 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 text-xs font-bold transition"
-                >
-                  Reset Date Filters
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
+
+      {/* Filter Popup Modal */}
+      {isFilterOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-[#c69255]/30">
+                  <svg className="w-5 h-5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Filter Received Cash</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Filter allocation records by date range</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsFilterOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Filter Form Options */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                />
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
+              <button
+                onClick={() => { handleResetFilters(); setIsFilterOpen(false); }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                Reset All
+              </button>
+              <button
+                onClick={() => setIsFilterOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Money Received List (Mobile App Cards + Desktop Table) */}
       <div className="glass-card p-3.5 sm:p-6 rounded-2xl">

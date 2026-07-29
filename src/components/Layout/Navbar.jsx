@@ -95,7 +95,6 @@ const Navbar = ({ onToggleSidebar }) => {
               </div>
               <div>
                 <h3 className="text-xl font-extrabold text-[#002B49]">Deposit Vault Capital</h3>
-                <p className="text-xs text-slate-500 font-medium">Top up Admin Master Reserve to give funds to team members.</p>
               </div>
             </div>
 
