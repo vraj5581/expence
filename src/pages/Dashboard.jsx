@@ -685,13 +685,11 @@ const Dashboard = () => {
 
           {/* 4. Company Owes Me (Reimbursement Due) */}
           <div
-            onClick={() => navigate('/admin/my-expenses', { state: { statusFilter: 'Due', selectedStatus: 'Due' } })}
-            className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 flex flex-col justify-between cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all ${
+            className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 flex flex-col justify-between transition-all ${
               myStats.needFromCompany > 0
                 ? 'bg-rose-50 border border-rose-200 border-l-rose-500 shadow-xs'
                 : 'glass-card border-l-slate-400'
             }`}
-            title="Click to view Pending/Due Reimbursement Expenses"
           >
             <div>
               <div className="flex items-center justify-between">
@@ -1039,9 +1037,7 @@ const Dashboard = () => {
               </span>
             </div>
             <div
-              onClick={() => navigate(isAdmin ? '/admin/expenses' : '/admin/my-expenses', { state: { selectedStatus: 'Due' } })}
-              className={`p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 flex flex-col justify-center shadow-2xs cursor-pointer hover:scale-102 transition-all ${isAdmin ? 'col-span-2 sm:col-span-1' : ''}`}
-              title="Click to view Due Expenses"
+              className={`p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 flex flex-col justify-center shadow-2xs transition-all ${isAdmin ? 'col-span-2 sm:col-span-1' : ''}`}
             >
               <span className="text-[10px] font-extrabold uppercase text-rose-800 block truncate">Company Owes</span>
               <span className="text-xs sm:text-sm font-black text-rose-700 mt-0.5 truncate">
