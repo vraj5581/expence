@@ -6,9 +6,12 @@ import { toast } from 'react-toastify';
 
 const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth();
-  const { adminVaultBalance, settings, addMoneyToAdminVault, getUserStats } = useExpense();
+  const { adminVaultBalance, settings, addMoneyToAdminVault, getUserStats, users } = useExpense();
 
-  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
+  const currentUserInDb = users?.find(u => u.id === user?.id || u.name?.toLowerCase() === user?.name?.toLowerCase());
+  const effectiveRole = currentUserInDb?.role || user?.role || 'Staff';
+
+  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || currentUserInDb?.role === 'Administrator';
   const userStats = getUserStats(user?.name || '');
 
   const [isAddMoneyOpen, setIsAddMoneyOpen] = useState(false);
@@ -40,7 +43,7 @@ const Navbar = ({ onToggleSidebar }) => {
 
         <div className="hidden md:block">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Portal Mode: </span>
-          <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{user?.role || 'Staff'} View</span>
+          <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{effectiveRole} View</span>
         </div>
       </div>
 
@@ -57,8 +60,8 @@ const Navbar = ({ onToggleSidebar }) => {
             />
           </div>
           <div className="hidden md:block text-left">
-            <div className="text-xs font-bold text-[#002B49]">{user?.name || 'Staff User'}</div>
-            <div className="text-[11px] text-[#c69255] font-semibold">{user?.role || 'Staff Member'}</div>
+            <div className="text-xs font-bold text-[#002B49]">{user?.name || 'User'}</div>
+            <div className="text-[11px] text-[#c69255] font-semibold">{effectiveRole}</div>
           </div>
 
           {/* Logout Button */}

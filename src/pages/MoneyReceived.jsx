@@ -145,7 +145,7 @@ const MoneyReceived = () => {
             className={`flex items-center justify-center px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 border ${
               hasActiveFilters
                 ? 'bg-[#002B49] text-white border-[#002B49] shadow-sm'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                : 'bg-white text-[#002B49] border-slate-300 hover:bg-slate-50'
             }`}
           >
             <svg className="w-4 h-4 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,9 +271,9 @@ const MoneyReceived = () => {
               <tr>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Sr. No.</th>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Date</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Received Amount</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Notes / Purpose</th>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Transferred By</th>
+                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Notes / Purpose</th>
+                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Received Amount</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 print:divide-slate-300">
@@ -288,13 +288,13 @@ const MoneyReceived = () => {
                   <tr key={a.id || index} className="hover:bg-slate-50 transition print:hover:bg-transparent">
                     <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">{index + 1}</td>
                     <td className="py-3.5 px-4 text-xs font-semibold text-slate-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-semibold print:border print:border-slate-300">{a.date}</td>
-                    <td className="py-3.5 px-4 font-extrabold text-emerald-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-black print:border print:border-slate-300">
-                      +{settings.currency}{parseFloat(a.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
+                    <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">Shukan Company</td>
                     <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-medium print:truncate-none print:border print:border-slate-300">
                       {a.notes || 'Company Money Allocation'}
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">Shukan Company Vault</td>
+                    <td className="py-3.5 px-4 font-extrabold text-emerald-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-black print:border print:border-slate-300">
+                      +{settings.currency}{parseFloat(a.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </td>
                   </tr>
                 ))
               )}
@@ -302,11 +302,10 @@ const MoneyReceived = () => {
             {filteredAllocations.length > 0 && (
               <tfoot className="border-t-2 border-slate-400 font-extrabold text-xs text-slate-900 bg-slate-50 print:bg-slate-100">
                 <tr>
-                  <td colSpan="2" className="py-2.5 px-4 print:py-1.5 print:px-2.5 text-right font-black uppercase text-slate-700 print:text-black print:border print:border-slate-300">Total Received Amount:</td>
+                  <td colSpan="4" className="py-2.5 px-4 print:py-1.5 print:px-2.5 text-right font-black uppercase text-slate-700 print:text-black print:border print:border-slate-300">Total Received Amount:</td>
                   <td className="py-2.5 px-4 print:py-1.5 print:px-2.5 font-black text-emerald-700 print:text-black print:border print:border-slate-300">
                     +{settings.currency}{totalFilteredReceived.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
-                  <td colSpan="2" className="print:border print:border-slate-300"></td>
                 </tr>
               </tfoot>
             )}

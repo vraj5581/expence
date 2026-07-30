@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useExpense } from '../../context/ExpenseContext';
 
 const adminNavItems = [
   {
@@ -110,7 +111,12 @@ const staffNavItems = [
 
 const Sidebar = ({ isOpen, onClose }) => {
   const { user } = useAuth();
-  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
+  const { users } = useExpense();
+
+  const currentUserInDb = users?.find(u => u.id === user?.id || u.name?.toLowerCase() === user?.name?.toLowerCase());
+  const effectiveRole = currentUserInDb?.role || user?.role || 'Staff';
+
+  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || currentUserInDb?.role === 'Administrator';
 
   const menuItems = isAdmin ? adminNavItems : staffNavItems;
 
@@ -183,7 +189,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             </div>
             <div className="overflow-hidden">
               <p className="text-xs font-bold text-white truncate">{user?.name}</p>
-              <p className="text-[10px] text-slate-400 font-medium truncate uppercase">{user?.role || 'Staff'}</p>
+              <p className="text-[10px] text-slate-400 font-medium truncate uppercase">{effectiveRole}</p>
             </div>
           </div>
         </div>

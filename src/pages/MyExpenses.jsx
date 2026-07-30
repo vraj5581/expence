@@ -22,16 +22,19 @@ const MyExpenses = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState(location.state?.statusFilter || 'All');
+  const [statusFilter, setStatusFilter] = useState(
+    location.state?.statusFilter || location.state?.selectedStatus || 'All'
+  );
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
-    if (location.state?.statusFilter !== undefined) {
-      setStatusFilter(location.state.statusFilter);
+    const filterFromState = location.state?.statusFilter || location.state?.selectedStatus;
+    if (filterFromState !== undefined) {
+      setStatusFilter(filterFromState);
     }
-  }, [location.state?.statusFilter, location.key]);
+  }, [location.state, location.key]);
 
   const hasActiveFilters = Boolean(startDate || endDate || statusFilter !== 'All' || minAmount || maxAmount || searchTerm);
 
@@ -388,8 +391,8 @@ const MyExpenses = () => {
               <tr>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Sr. No.</th>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Date</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Amount</th>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Description / Purpose</th>
+                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Amount</th>
                 <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Status</th>
               </tr>
             </thead>
@@ -405,11 +408,11 @@ const MyExpenses = () => {
                   <tr key={t.id || index} className="hover:bg-slate-50 transition print:hover:bg-transparent">
                     <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">{index + 1}</td>
                     <td className="py-3.5 px-4 text-xs text-slate-500 font-medium print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-semibold print:border print:border-slate-300">{t.date}</td>
-                    <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-black print:border print:border-slate-300">
-                      {settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
                     <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-medium print:truncate-none print:border print:border-slate-300">
                       {t.description || '-'}
+                    </td>
+                    <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-black print:border print:border-slate-300">
+                      {settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3.5 px-4 print:py-1.5 print:px-2.5 print:border print:border-slate-300">
                       <span className="hidden print:inline font-extrabold text-xs text-slate-800 print:text-black">
@@ -435,11 +438,11 @@ const MyExpenses = () => {
             {filteredMyTransactions.length > 0 && (
               <tfoot className="border-t-2 border-slate-400 font-extrabold text-xs text-slate-900 bg-slate-50 print:bg-slate-100">
                 <tr>
-                  <td colSpan="2" className="py-2.5 px-4 print:py-1.5 print:px-2.5 text-right font-black uppercase text-slate-700 print:text-black print:border print:border-slate-300">Total Filtered Expense Amount:</td>
+                  <td colSpan="3" className="py-2.5 px-4 print:py-1.5 print:px-2.5 text-right font-black uppercase text-slate-700 print:text-black print:border print:border-slate-300">Total Filtered Expense Amount:</td>
                   <td className="py-2.5 px-4 print:py-1.5 print:px-2.5 font-black text-[#002B49] print:text-black print:border print:border-slate-300">
                     {settings.currency}{filteredMyTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
-                  <td colSpan="2" className="print:border print:border-slate-300"></td>
+                  <td className="print:border print:border-slate-300"></td>
                 </tr>
               </tfoot>
             )}

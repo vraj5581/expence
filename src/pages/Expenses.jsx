@@ -18,7 +18,9 @@ const Expenses = () => {
     deleteTransaction
   } = useExpense();
 
-  const [selectedStatus, setSelectedStatus] = useState(location.state?.selectedStatus || 'All');
+  const [selectedStatus, setSelectedStatus] = useState(
+    location.state?.selectedStatus || location.state?.statusFilter || 'All'
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(location.state?.selectedUser || 'All');
   const [startDate, setStartDate] = useState('');
@@ -41,10 +43,11 @@ const Expenses = () => {
     if (location.state?.selectedUser !== undefined) {
       setSelectedUser(location.state.selectedUser);
     }
-    if (location.state?.selectedStatus !== undefined) {
-      setSelectedStatus(location.state.selectedStatus);
+    const statusVal = location.state?.selectedStatus || location.state?.statusFilter;
+    if (statusVal !== undefined) {
+      setSelectedStatus(statusVal);
     }
-  }, [location.state]);
+  }, [location.state, location.key]);
 
 
   const [isModalOpen, setIsModalOpen] = useState(false);

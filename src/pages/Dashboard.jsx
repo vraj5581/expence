@@ -649,9 +649,9 @@ const Dashboard = () => {
 
           {/* 2. Total Spent */}
           <div
-            onClick={() => navigate('/admin/my-expenses', { state: { statusFilter: 'All' } })}
+            onClick={() => navigate('/admin/my-expenses', { state: { statusFilter: 'Done', selectedStatus: 'Done' } })}
             className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-            title="Click to view My Submitted Receipts"
+            title="Click to view My Settled Expense Receipts"
           >
             <div>
               <div className="flex items-center justify-between">
@@ -667,7 +667,7 @@ const Dashboard = () => {
 
           {/* 3. Cash In Hand */}
           <div
-            onClick={() => navigate('/admin/my-expenses', { state: { statusFilter: 'Done' } })}
+            onClick={() => navigate('/admin/my-expenses', { state: { statusFilter: 'Done', selectedStatus: 'Done' } })}
             className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-emerald-500 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col justify-between"
             title="Click to view Settled (Done) Expenses"
           >
@@ -685,11 +685,13 @@ const Dashboard = () => {
 
           {/* 4. Company Owes Me (Reimbursement Due) */}
           <div
-            className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 flex flex-col justify-between ${
+            onClick={() => navigate('/admin/my-expenses', { state: { statusFilter: 'Due', selectedStatus: 'Due' } })}
+            className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 flex flex-col justify-between cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all ${
               myStats.needFromCompany > 0
                 ? 'bg-rose-50 border border-rose-200 border-l-rose-500 shadow-xs'
                 : 'glass-card border-l-slate-400'
             }`}
+            title="Click to view Pending/Due Reimbursement Expenses"
           >
             <div>
               <div className="flex items-center justify-between">
@@ -1119,7 +1121,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
-                    <span className="text-sm font-extrabold text-[#002B49]">{t.userName}</span>
+                    {isAdmin && <span className="text-sm font-extrabold text-[#002B49]">{t.userName}</span>}
                   </div>
                   <span className="text-[11px] text-slate-500 font-semibold">{t.date}</span>
                 </div>
@@ -1144,7 +1146,7 @@ const Dashboard = () => {
               <tr>
                 <th className="py-3 px-4 font-bold">Sr. No.</th>
                 <th className="py-3 px-4 font-bold">Date</th>
-                <th className="py-3 px-4 font-bold">User Name</th>
+                {isAdmin && <th className="py-3 px-4 font-bold">User Name</th>}
                 <th className="py-3 px-4 font-bold">Description</th>
                 <th className="py-3 px-4 text-right font-bold">Amount</th>
               </tr>
@@ -1152,7 +1154,7 @@ const Dashboard = () => {
             <tbody className="divide-y divide-slate-100">
               {recentTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="py-8 text-center text-slate-500 text-xs font-medium">
+                  <td colSpan={isAdmin ? 5 : 4} className="py-8 text-center text-slate-500 text-xs font-medium">
                     No cash movement entries created yet. Click "Direct Expense" to record one.
                   </td>
                 </tr>
@@ -1161,7 +1163,7 @@ const Dashboard = () => {
                   <tr key={t.id || index} className="hover:bg-slate-50 transition">
                     <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
                     <td className="py-3.5 px-4 text-slate-500 text-xs font-medium">{t.date}</td>
-                    <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>
+                    {isAdmin && <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>}
                     <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate">
                       {t.description || '-'}
                     </td>

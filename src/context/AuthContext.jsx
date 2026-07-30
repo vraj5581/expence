@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
         id: matchedUser.id,
         name: matchedUser.name,
         email: `${matchedUser.id}@shukanpackaging.com`,
-        role: isAdminUser ? 'Administrator' : 'Staff',
+        role: matchedUser.role || (isAdminUser ? 'Administrator' : 'Staff'),
         avatar: '/logo.jpg'
       };
       setUser(loggedInUser);
