@@ -74,3 +74,47 @@
   border-color: #c69255;
   box-shadow: 0 0 0 3px rgba(198, 146, 85, 0.2);
 }
+
+/* Print Styling Rules */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide navigation, headers, filter bars, action buttons */
+  nav, header, aside, .no-print, button, input, select {
+    display: none !important;
+  }
+
+  /* Expand hidden mobile cards / desktop tables appropriately for print */
+  .hidden.md\:block {
+    display: block !important;
+  }
+  
+  .block.md\:hidden {
+    display: none !important;
+  }
+
+  /* Card styling for print */
+  .glass-card {
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    margin-bottom: 2rem !important;
+  }
+
+  /* Target specific report printing */
+  body.print-target-transfers #report-expenses-card,
+  body.print-target-transfers #reports-kpi-summary,
+  body.print-target-transfers #reports-global-filter-bar {
+    display: none !important;
+  }
+
+  body.print-target-expenses #report-transfers-card,
+  body.print-target-expenses #reports-kpi-summary,
+  body.print-target-expenses #reports-global-filter-bar {
+    display: none !important;
+  }
+}
+

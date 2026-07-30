@@ -13,17 +13,8 @@ const adminNavItems = [
     )
   },
   {
-    name: 'Transactions',
-    path: '/admin/add-money',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-      </svg>
-    )
-  },
-  {
-    name: 'Expense',
-    path: '/admin/cash-in-out',
+    name: 'Expenses',
+    path: '/admin/expenses',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -31,7 +22,16 @@ const adminNavItems = [
     )
   },
   {
-    name: 'Assign Task',
+    name: 'Deposit & Allocate',
+    path: '/admin/deposit-allocate',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Tasks',
     path: '/admin/tasks',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,8 +49,8 @@ const adminNavItems = [
     )
   },
   {
-    name: 'User Management',
-    path: '/admin/users',
+    name: 'Team Accounts',
+    path: '/admin/team',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -116,66 +116,77 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Mobile Backdrop */}
+      {/* Mobile backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs lg:hidden"
           onClick={onClose}
-        />
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs md:hidden"
+        ></div>
       )}
 
-      {/* Sidebar Container - Shukan Navy Theme */}
+      {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-[#002B49] text-white border-r border-[#001D33] shadow-xl transition-transform duration-300 ease-in-out lg:translate-x-0 flex flex-col ${
+        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-[#002B49] text-white flex flex-col justify-between transition-transform duration-300 ease-in-out md:translate-x-0 border-r border-[#001D33] ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Brand Header */}
-        <div className="h-20 px-5 flex items-center justify-between border-b border-white/10 bg-[#00223B]">
-          <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-md border border-[#c69255]/40 overflow-hidden">
-              <img
-                src="/logo.jpg"
-                alt="Shukan Packaging Logo"
-                className="w-full h-full object-contain"
-              />
+        <div>
+          {/* Brand Header */}
+          <div className="h-16 px-6 flex items-center justify-between border-b border-white/10 bg-[#002B49]">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl bg-[#c69255] flex items-center justify-center font-extrabold text-white text-base shadow-md">
+                SP
+              </div>
+              <div>
+                <span className="font-extrabold text-sm tracking-tight text-white block leading-none">SHUKAN</span>
+                <span className="text-[10px] font-bold text-[#c69255] tracking-widest uppercase block mt-0.5">PACKAGING</span>
+              </div>
             </div>
-            <div>
-              <h1 className="text-sm font-extrabold text-white tracking-wider uppercase leading-tight">SHUKAN</h1>
-              <p className="text-[10px] text-[#c69255] font-bold tracking-widest uppercase">PACKAGING</p>
-            </div>
+
+            <button
+              onClick={onClose}
+              className="md:hidden text-slate-300 hover:text-white p-1 rounded-lg"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          <button
-            onClick={onClose}
-            className="lg:hidden p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Navigation Links */}
+          <nav className="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-140px)]">
+            {menuItems.map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.path}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center space-x-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all duration-200 ${
+                    isActive
+                      ? 'bg-[#c69255] text-white shadow-md'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  }`
+                }
+              >
+                {item.icon}
+                <span>{item.name}</span>
+              </NavLink>
+            ))}
+          </nav>
         </div>
 
-        {/* Navigation Menu */}
-        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-          {menuItems.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gradient-to-r from-[#c69255] to-[#b88548] text-white shadow-md shadow-amber-900/30 font-semibold'
-                    : 'text-slate-200 hover:text-white hover:bg-white/10'
-                }`
-              }
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.name}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Footer User Info */}
+        <div className="p-4 border-t border-white/10 bg-[#00223b]">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-full bg-[#c69255]/20 text-[#c69255] border border-[#c69255]/40 flex items-center justify-center font-bold text-xs">
+              {user?.name?.[0] || 'U'}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-xs font-bold text-white truncate">{user?.name}</p>
+              <p className="text-[10px] text-slate-400 font-medium truncate uppercase">{user?.role || 'Staff'}</p>
+            </div>
+          </div>
+        </div>
       </aside>
     </>
   );

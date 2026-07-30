@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 
 const shukanPartners = ['Vraj', 'Raj', 'Teerth', 'Mayank'];
 
-const AddMoney = () => {
+const DepositAllocate = () => {
   const {
     adminVaultBalance,
     totalVaultDeposited,
@@ -183,15 +183,31 @@ const AddMoney = () => {
   });
 
   return (
-    <div className="space-y-8">
-      <div className="hidden print:block text-center border-b pb-4 mb-4">
-        <h1 className="text-2xl font-bold uppercase text-[#002B49]">SHUKAN PACKAGING</h1>
-        <p className="text-xs font-semibold text-[#c69255]">Company Vault Deposit Logs & Capital Audit Report</p>
+    <div className="space-y-6">
+      {/* Print-Only Header with Filter & User Details */}
+      <div className="hidden print:block text-center border-b border-slate-300 pb-3 mb-4">
+        <h1 className="text-2xl font-black uppercase text-[#002B49] tracking-wider">SHUKAN PACKAGING</h1>
+        <h2 className="text-sm font-extrabold text-[#c69255] uppercase mt-0.5">
+          {selectedUser !== 'All' ? `${selectedUser} - Deposit & Allocation Statement` : 'Company Vault Deposit Logs & Capital Audit Report'}
+        </h2>
+        <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center justify-center space-x-3">
+          <span>Printed: {new Date().toLocaleDateString('en-IN')}</span>
+          {selectedUser !== 'All' && <span>| User: <strong>{selectedUser}</strong></span>}
+          {activeTab !== 'All' && <span>| Type: <strong>{activeTab === 'Add Money' ? 'Deposit' : 'Allocate'}</strong></span>}
+          {(startDate || endDate) && <span>| Date Range: <strong>{startDate || 'Start'} to {endDate || 'Today'}</strong></span>}
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">Add Money Log & Vault Deposits</h1>
+          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">
+            {selectedUser !== 'All' ? `${selectedUser}'s Deposits & Allocations` : 'Deposit & Allocate'}
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            {selectedUser !== 'All'
+              ? `Filtered vault deposits and user allocations for ${selectedUser}`
+              : 'Manage partner capital deposits and petty cash user allocations'}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 sm:flex sm:flex-row flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -222,28 +238,110 @@ const AddMoney = () => {
             <svg className="w-4 h-4 mr-1 sm:mr-1.5 text-[#002B49] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            Export PDF / Print
+            Print
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-5 print:grid-cols-2">
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255]">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">Total Deposited</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate">
+      {/* Active Filter Indicator Banner */}
+      {hasActiveFilters && (
+        <div className="p-3 rounded-xl bg-amber-50/80 border border-[#c69255]/30 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+          <div className="flex flex-wrap items-center gap-2 text-slate-800">
+            <span className="font-extrabold text-[#002B49] flex items-center">
+              <svg className="w-4 h-4 mr-1 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Active Filter:
+            </span>
+            {selectedUser !== 'All' && (
+              <span className="px-2.5 py-0.5 rounded-md bg-[#002B49] text-white font-bold">
+                User: {selectedUser}
+              </span>
+            )}
+            {activeTab !== 'All' && (
+              <span className="px-2.5 py-0.5 rounded-md bg-[#c69255] text-white font-bold">
+                Type: {activeTab === 'Add Money' ? 'Deposit' : 'Allocate'}
+              </span>
+            )}
+            {(startDate || endDate) && (
+              <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
+                Date: {startDate || 'Beginning'} to {endDate || 'Today'}
+              </span>
+            )}
+            {searchTerm && (
+              <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
+                Search: "{searchTerm}"
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => { setSelectedUser('All'); setActiveTab('All'); setStartDate(''); setEndDate(''); setSearchTerm(''); }}
+            className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-5 print:grid-cols-2 print:gap-2">
+        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Total Deposited</p>
+          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
             {settings.currency}{totalVaultDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate">{vaultDeposits.length} Entries</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">{vaultDeposits.length} Entries</p>
         </div>
 
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49]">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">Company Vault</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate">
+        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Company Vault</p>
+          <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
             {settings.currency}{adminVaultBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate">Available Reserve</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">Available Reserve</p>
         </div>
       </div>
+
+      {/* Compact Over-Budget Alert Strip */}
+      {(() => {
+        const overBudgetUsers = users.filter(u => {
+          if (u.id === 'admin') return false;
+          const s = getUserStats(u.name);
+          return s.needFromCompany > 0;
+        });
+        if (overBudgetUsers.length === 0) return null;
+        const totalNeeded = overBudgetUsers.reduce((sum, u) => sum + getUserStats(u.name).needFromCompany, 0);
+        return (
+          <div className="flex flex-wrap items-center gap-2 px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 print:hidden">
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <svg className="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-[11px] font-extrabold text-rose-700 uppercase tracking-wide">Top-up Needed:</span>
+            </div>
+            {overBudgetUsers.map(u => {
+              const s = getUserStats(u.name);
+              return (
+                <button
+                  key={u.id}
+                  onClick={handleOpenGiveMoneyModal}
+                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-white border border-rose-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition group cursor-pointer"
+                >
+                  <span className="w-4 h-4 rounded-full bg-rose-100 group-hover:bg-rose-500 flex items-center justify-center text-[9px] font-black text-rose-700 group-hover:text-white shrink-0">
+                    {u.name.charAt(0)}
+                  </span>
+                  <span className="text-[11px] font-bold text-rose-800 group-hover:text-white">{u.name}</span>
+                  <span className="text-[11px] font-extrabold text-rose-600 group-hover:text-rose-100">
+                    +{settings.currency}{s.needFromCompany.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+                  </span>
+                </button>
+              );
+            })}
+            <span className="ml-auto text-[11px] font-extrabold text-rose-800 shrink-0">
+              Total: {settings.currency}{totalNeeded.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        );
+      })()}
 
       <div className="glass-card p-3.5 sm:p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 print:hidden">
         <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 sm:p-1.5 rounded-xl border border-slate-200 w-full md:w-auto">
@@ -595,7 +693,6 @@ const AddMoney = () => {
             </h3>
 
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
-              {/* Date */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Date</label>
                 <input
@@ -606,7 +703,6 @@ const AddMoney = () => {
                 {errors.date && <p className="text-xs text-rose-500 mt-1">{errors.date.message}</p>}
               </div>
 
-              {/* Partner Name */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Partner Name</label>
                 <select
@@ -620,7 +716,6 @@ const AddMoney = () => {
                 {errors.userName && <p className="text-xs text-rose-500 mt-1">{errors.userName.message}</p>}
               </div>
 
-              {/* Amount */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Amount ({settings.currency})</label>
                 <input
@@ -633,7 +728,6 @@ const AddMoney = () => {
                 {errors.amount && <p className="text-xs text-rose-500 mt-1">{errors.amount.message}</p>}
               </div>
 
-              {/* Description / Notes */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Description / Notes</label>
                 <textarea
@@ -687,7 +781,6 @@ const AddMoney = () => {
             </div>
 
             <form onSubmit={subGive(onGiveMoneySubmit)} className="space-y-4">
-              {/* Select Target User */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Select User</label>
                 <select
@@ -698,7 +791,7 @@ const AddMoney = () => {
                     const stats = getUserStats(u.name);
                     return (
                       <option key={u.id} value={u.name}>
-                        {u.name} (Current Remaining: {settings.currency}{stats.remaining.toLocaleString()})
+                        {u.name} (Current Balance: {settings.currency}{stats.remaining.toLocaleString()})
                       </option>
                     );
                   })}
@@ -706,7 +799,6 @@ const AddMoney = () => {
                 {errGive.userName && <p className="text-xs text-rose-500 mt-1">{errGive.userName.message}</p>}
               </div>
 
-              {/* Amount */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Amount to Give ({settings.currency})</label>
                 <input
@@ -719,7 +811,6 @@ const AddMoney = () => {
                 {errGive.amount && <p className="text-xs text-rose-500 mt-1">{errGive.amount.message}</p>}
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Purpose / Notes</label>
                 <input
@@ -753,4 +844,4 @@ const AddMoney = () => {
   );
 };
 
-export default AddMoney;
+export default DepositAllocate;

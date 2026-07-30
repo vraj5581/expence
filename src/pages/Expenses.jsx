@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
-const CashInOut = () => {
+const Expenses = () => {
+  const location = useLocation();
   const {
     adminVaultBalance,
     transactions,
@@ -18,12 +20,18 @@ const CashInOut = () => {
 
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUser, setSelectedUser] = useState('All');
+  const [selectedUser, setSelectedUser] = useState(location.state?.selectedUser || 'All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const hasActiveFilters = Boolean(selectedUser !== 'All' || selectedStatus !== 'All' || startDate || endDate);
+  useEffect(() => {
+    if (location.state?.selectedUser) {
+      setSelectedUser(location.state.selectedUser);
+    }
+  }, [location.state]);
+
+  const hasActiveFilters = Boolean(selectedUser !== 'All' || selectedStatus !== 'All' || startDate || endDate || searchTerm);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGiveMoneyOpen, setIsGiveMoneyOpen] = useState(false);
@@ -37,7 +45,7 @@ const CashInOut = () => {
     reset({
       type,
       amount: '',
-      userName: 'Shukan Packaging (Company)',
+      userName: 'Shukan Company',
       date: new Date().toISOString().split('T')[0],
       status: 'Done',
       description: ''
@@ -60,13 +68,21 @@ const CashInOut = () => {
 
   const onSubmitForm = (data) => {
     if (editingTxn) {
-      updateTransaction(editingTxn.id, data);
+      const res = updateTransaction(editingTxn.id, data);
+      if (res && res.success === false) {
+        toast.error(res.message, { theme: 'light' });
+        return;
+      }
       toast.success(`Transaction ${editingTxn.id} updated successfully!`, { theme: 'light' });
     } else {
-      addTransaction({
+      const res = addTransaction({
         ...data,
         createdBy: 'Admin'
       });
+      if (res && res.success === false) {
+        toast.error(res.message, { theme: 'light' });
+        return;
+      }
       toast.success(`New ${data.type} entry of ${settings.currency}${parseFloat(data.amount).toLocaleString()} recorded!`, { theme: 'light' });
     }
     setIsModalOpen(false);
@@ -85,11 +101,15 @@ const CashInOut = () => {
   };
 
   const handleStatusChange = (txn, newStatus) => {
-    updateTransaction(txn.id, { ...txn, status: newStatus });
+    const res = updateTransaction(txn.id, { ...txn, status: newStatus });
+    if (res && res.success === false) {
+      toast.error(res.message, { theme: 'light' });
+      return;
+    }
     if (newStatus === 'Done') {
-      toast.success(`Transaction ${txn.id} marked as Done (Deducted from user balance)`, { theme: 'light' });
+      toast.success(`Transaction ${txn.id} marked as Done`, { theme: 'light' });
     } else {
-      toast.info(`Transaction ${txn.id} marked as Due (No deduction from user balance)`, { theme: 'light' });
+      toast.info(`Transaction ${txn.id} marked as Due`, { theme: 'light' });
     }
   };
 
@@ -100,35 +120,93 @@ const CashInOut = () => {
     }
   };
 
-  const filteredTransactions = transactions.filter((t) => {
-    if (selectedStatus !== 'All' && (t.status || 'Done') !== selectedStatus) return false;
-    if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
-    if (startDate && t.date < startDate) return false;
-    if (endDate && t.date > endDate) return false;
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      if (selectedStatus !== 'All' && (t.status || 'Done') !== selectedStatus) return false;
+      if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
+      if (startDate && t.date < startDate) return false;
+      if (endDate && t.date > endDate) return false;
 
-    if (searchTerm.trim()) {
-      const query = searchTerm.toLowerCase();
-      const matchId = t.id.toLowerCase().includes(query);
-      const matchUser = (t.userName || '').toLowerCase().includes(query);
-      const matchDesc = (t.description || '').toLowerCase().includes(query);
-      const matchDate = (t.date || '').includes(query);
-      return matchId || matchUser || matchDesc || matchDate;
-    }
-    return true;
-  });
+      if (searchTerm.trim()) {
+        const query = searchTerm.toLowerCase();
+        const matchId = t.id.toLowerCase().includes(query);
+        const matchUser = (t.userName || '').toLowerCase().includes(query);
+        const matchDesc = (t.description || '').toLowerCase().includes(query);
+        const matchDate = (t.date || '').includes(query);
+        return matchId || matchUser || matchDesc || matchDate;
+      }
+      return true;
+    });
+  }, [transactions, selectedStatus, selectedUser, startDate, endDate, searchTerm]);
+
+  // Total Expense Calculations
+  const totalFilteredExpenseAmount = useMemo(() => {
+    return filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredTransactions]);
+
+  const totalFilteredDoneAmount = useMemo(() => {
+    return filteredTransactions
+      .filter((t) => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredTransactions]);
+
+  const totalFilteredDueAmount = useMemo(() => {
+    return filteredTransactions
+      .filter((t) => (t.status || 'Done') === 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredTransactions]);
 
   return (
     <div className="space-y-6">
+      {/* Print-Only Header with Filter & User Details */}
+      <div className="hidden print:block text-center border-b border-slate-300 pb-3 mb-4">
+        <h1 className="text-2xl font-black uppercase text-[#002B49] tracking-wider">SHUKAN PACKAGING</h1>
+        <h2 className="text-sm font-extrabold text-[#c69255] uppercase mt-0.5">
+          {selectedUser !== 'All' ? `${selectedUser} - Expense Statement` : 'Company Expense Ledger & Audit Report'}
+        </h2>
+        <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center justify-center space-x-3">
+          <span>Printed: {new Date().toLocaleDateString('en-IN')}</span>
+          {selectedUser !== 'All' && <span>| User: <strong>{selectedUser}</strong></span>}
+          {selectedStatus !== 'All' && <span>| Status: <strong>{selectedStatus}</strong></span>}
+          {(startDate || endDate) && <span>| Date Range: <strong>{startDate || 'Start'} to {endDate || 'Today'}</strong></span>}
+        </div>
+      </div>
+
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">Shukan Packaging Ledger</h1>
+          <div className="flex items-center space-x-3">
+            <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">
+              {selectedUser !== 'All' ? `${selectedUser}'s Expenses` : 'Shukan Packaging Ledger'}
+            </h1>
+            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#002B49] text-white shadow-xs">
+              Total: {settings.currency}{totalFilteredExpenseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            {selectedUser !== 'All'
+              ? `Filtered expense records and status breakdown for ${selectedUser}`
+              : 'Real-time expense logs, pending dues, and company expenditure summary'}
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {/* Print Report Button */}
+          <button
+            onClick={() => window.print()}
+            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition w-full sm:w-auto cursor-pointer"
+            title="Print Current Expense View"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print Report
+          </button>
+
+          {/* Add Expense Button */}
           <button
             onClick={() => handleOpenAddModal('Cash Out')}
-            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition w-full sm:w-auto"
+            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition w-full sm:w-auto cursor-pointer"
           >
             <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -138,8 +216,105 @@ const CashInOut = () => {
         </div>
       </div>
 
-      {/* 1-Line Search Bar & Filter Button */}
-      <div className="glass-card p-3 sm:p-4 rounded-2xl">
+      {/* Active Filter Indicator Banner */}
+      {hasActiveFilters && (
+        <div className="p-3 rounded-xl bg-amber-50/80 border border-[#c69255]/30 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+          <div className="flex flex-wrap items-center gap-2 text-slate-800">
+            <span className="font-extrabold text-[#002B49] flex items-center">
+              <svg className="w-4 h-4 mr-1 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Active Filter:
+            </span>
+            {selectedUser !== 'All' && (
+              <span className="px-2.5 py-0.5 rounded-md bg-[#002B49] text-white font-bold">
+                User: {selectedUser}
+              </span>
+            )}
+            {selectedStatus !== 'All' && (
+              <span className="px-2.5 py-0.5 rounded-md bg-[#c69255] text-white font-bold">
+                Status: {selectedStatus}
+              </span>
+            )}
+            {(startDate || endDate) && (
+              <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
+                Date: {startDate || 'Beginning'} to {endDate || 'Today'}
+              </span>
+            )}
+            {searchTerm && (
+              <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
+                Search: "{searchTerm}"
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => { setSelectedUser('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setSearchTerm(''); }}
+            className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
+
+      {/* Prominent KPI Summary Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:grid-cols-3 print:gap-2">
+        {/* Total Paid Expense Card */}
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-[#002B49] flex items-center justify-between shadow-xs print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-slate-500 font-bold print:text-[10px] print:text-slate-800 print:font-extrabold">Total Expense (Done)</p>
+            <p className="text-2xl font-extrabold text-[#002B49] mt-1 print:text-base print:font-black print:text-black print:mt-0">
+              {settings.currency}{totalFilteredDoneAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium print:text-[9px] print:text-slate-700 print:mt-0">
+              {filteredTransactions.filter(t => (t.status || 'Done') === 'Done').length} Completed Receipts
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-[#002B49]/10 flex items-center justify-center text-[#002B49] print:hidden">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Total Pending/Due Expense Card */}
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-amber-500 flex items-center justify-between shadow-xs print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-slate-500 font-bold print:text-[10px] print:text-slate-800 print:font-extrabold">Total Expense (Due)</p>
+            <p className="text-2xl font-extrabold text-amber-800 mt-1 print:text-base print:font-black print:text-black print:mt-0">
+              {settings.currency}{totalFilteredDueAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium print:text-[9px] print:text-slate-700 print:mt-0">
+              {filteredTransactions.filter(t => (t.status || 'Done') === 'Due').length} Due Entries
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-700 print:hidden">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Overall Total Expense Recorded */}
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-[#c69255] flex items-center justify-between shadow-xs print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-slate-500 font-bold print:text-[10px] print:text-slate-800 print:font-extrabold">Overall Total Expense</p>
+            <p className="text-2xl font-extrabold text-[#9e6e34] mt-1 print:text-base print:font-black print:text-black print:mt-0">
+              {settings.currency}{totalFilteredExpenseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium print:text-[9px] print:text-slate-700 print:mt-0">
+              {filteredTransactions.length} Total Receipt Logs
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-[#c69255]/10 flex items-center justify-center text-[#9e6e34] print:hidden">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* 1-Line Search Bar & Filter Button (Hidden in Print) */}
+      <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +383,7 @@ const CashInOut = () => {
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
                 >
                   <option value="All">All Users & Company</option>
-                  <option value="Shukan Packaging (Company)">🏢 Shukan Packaging (Company Vault)</option>
+                  <option value="Shukan Company">🏢 Shukan Company</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
                   ))}
@@ -222,9 +397,9 @@ const CashInOut = () => {
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
                 >
-                  <option value="All">All Statuses (Done & Due)</option>
-                  <option value="Done">Done (Paid)</option>
-                  <option value="Due">Due (Pending)</option>
+                  <option value="All">All Statuses</option>
+                  <option value="Done">Done</option>
+                  <option value="Due">Due</option>
                 </select>
               </div>
 
@@ -356,7 +531,7 @@ const CashInOut = () => {
                 <th className="py-3 px-4 font-bold">Description / Notes</th>
                 <th className="py-3 px-4 font-bold">Amount</th>
                 <th className="py-3 px-4 font-bold">Status</th>
-                <th className="py-3 px-4 text-right font-bold">Actions</th>
+                <th className="py-3 px-4 text-right font-bold no-print">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -379,10 +554,13 @@ const CashInOut = () => {
                       {settings.currency}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3.5 px-4">
+                      <span className="hidden print:inline-block font-extrabold text-xs text-slate-800">
+                        {(t.status || 'Done') === 'Due' ? 'Due' : 'Done'}
+                      </span>
                       <select
                         value={t.status || 'Done'}
                         onChange={(e) => handleStatusChange(t, e.target.value)}
-                        className={`px-3 py-1 rounded-full text-xs font-extrabold focus:outline-none cursor-pointer transition shadow-xs border ${
+                        className={`no-print px-3 py-1 rounded-full text-xs font-extrabold focus:outline-none cursor-pointer transition shadow-xs border ${
                           (t.status || 'Done') === 'Due'
                             ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
                             : 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
@@ -392,7 +570,7 @@ const CashInOut = () => {
                         <option value="Due">Due</option>
                       </select>
                     </td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
+                    <td className="py-3.5 px-4 text-right space-x-2 no-print">
                       <button
                         onClick={() => handleOpenEditModal(t)}
                         title="Edit Record"
@@ -416,6 +594,20 @@ const CashInOut = () => {
                 ))
               )}
             </tbody>
+            {filteredTransactions.length > 0 && (
+              <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-200">
+                <tr>
+                  <td colSpan="4" className="py-3 px-4 text-right text-xs uppercase text-slate-600">Total Expense Amount:</td>
+                  <td className="py-3 px-4 text-sm text-[#002B49] font-extrabold">
+                    {settings.currency}{totalFilteredExpenseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-3 px-4 text-xs text-slate-500 font-semibold">
+                    {filteredTransactions.length} Receipts
+                  </td>
+                  <td className="py-3 px-4 text-right no-print"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -433,11 +625,11 @@ const CashInOut = () => {
               </svg>
             </button>
 
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-4">Allocate to User</h3>
+            <h3 className="text-xl font-extrabold text-[#002B49] mb-4">Allocate Petty Cash to User</h3>
 
             <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-              <span className="text-slate-600 font-medium">Available Admin Vault Balance:</span>
-              <span className="font-extrabold text-[#002B49]">{settings.currency}{adminVaultBalance.toLocaleString()}</span>
+              <span className="text-slate-600 font-medium">Available Company Vault Balance:</span>
+              <span className="font-[#002B49] font-extrabold">{settings.currency}{adminVaultBalance.toLocaleString()}</span>
             </div>
 
             <form onSubmit={subGive(onGiveMoneySubmit)} className="space-y-4">
@@ -451,11 +643,12 @@ const CashInOut = () => {
                     const stats = getUserStats(u.name);
                     return (
                       <option key={u.id} value={u.name}>
-                        {u.name} (Current Remaining: {settings.currency}{stats.remaining.toLocaleString()})
+                        {u.name} (Current Balance: {settings.currency}{stats.remaining.toLocaleString()})
                       </option>
                     );
                   })}
                 </select>
+                {errGive.userName && <p className="text-xs text-rose-500 mt-1">{errGive.userName.message}</p>}
               </div>
 
               <div>
@@ -474,7 +667,7 @@ const CashInOut = () => {
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Purpose / Notes</label>
                 <input
                   type="text"
-                  placeholder="e.g. Petty cash advance"
+                  placeholder="e.g. Factory petty cash advance"
                   {...regGive('notes')}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
                 />
@@ -500,10 +693,10 @@ const CashInOut = () => {
         </div>
       )}
 
-      {/* Add / Edit Transaction Modal */}
+      {/* Record / Edit Expense Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg p-6 sm:p-8 rounded-3xl border border-slate-200 relative shadow-2xl">
+          <div className="bg-white w-full max-w-md p-6 sm:p-8 rounded-3xl border border-slate-200 relative shadow-2xl">
             <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700"
@@ -514,12 +707,26 @@ const CashInOut = () => {
             </button>
 
             <h3 className="text-xl font-extrabold text-[#002B49] mb-6">
-              {editingTxn ? `Edit Transaction (${editingTxn.id})` : 'New Cash Entry'}
+              {editingTxn ? 'Edit Expense Record' : 'Record Expense Entry'}
             </h3>
 
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[#002B49] mb-1">Amount ({settings.currency})</label>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Spender Account / Name</label>
+                <select
+                  {...register('userName', { required: 'Spender Account is required' })}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
+                >
+                  <option value="Shukan Company">🏢 Shukan Company (Direct Expense)</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+                {errors.userName && <p className="text-xs text-rose-500 mt-1">{errors.userName.message}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Expense Amount ({settings.currency})</label>
                 <input
                   type="number"
                   step="0.01"
@@ -530,35 +737,14 @@ const CashInOut = () => {
                 {errors.amount && <p className="text-xs text-rose-500 mt-1">{errors.amount.message}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#002B49] mb-1">User Name</label>
-                  <select
-                    {...register('userName', { required: 'User Name is required' })}
-                    className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
-                  >
-                    <option value="Shukan Packaging (Company)">
-                      🏢 Shukan Packaging (Company Vault: {settings.currency}{adminVaultBalance.toLocaleString()})
-                    </option>
-                    {users.map((u) => {
-                      const stats = getUserStats(u.name);
-                      return (
-                        <option key={u.id} value={u.name}>
-                          {u.name} (Bal: {settings.currency}{stats.remaining.toLocaleString()})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#002B49] mb-1">Date</label>
-                  <input
-                    type="date"
-                    {...register('date', { required: 'Date is required' })}
-                    className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 focus:outline-none"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Date</label>
+                <input
+                  type="date"
+                  {...register('date', { required: 'Date is required' })}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 focus:outline-none"
+                />
+                {errors.date && <p className="text-xs text-rose-500 mt-1">{errors.date.message}</p>}
               </div>
 
               <div>
@@ -568,8 +754,8 @@ const CashInOut = () => {
                   defaultValue="Done"
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                 >
-                  <option value="Done">Done (Paid / Completed)</option>
-                  <option value="Due">Due (Pending - No Deduction)</option>
+                  <option value="Done">Done</option>
+                  <option value="Due">Due</option>
                 </select>
               </div>
 
@@ -577,7 +763,7 @@ const CashInOut = () => {
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Description / Notes</label>
                 <textarea
                   rows="3"
-                  placeholder="Describe transaction details..."
+                  placeholder="Describe transaction details (e.g. plumbing work, recharge, electricity)..."
                   {...register('description')}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none resize-none"
                 ></textarea>
@@ -606,4 +792,4 @@ const CashInOut = () => {
   );
 };
 
-export default CashInOut;
+export default Expenses;

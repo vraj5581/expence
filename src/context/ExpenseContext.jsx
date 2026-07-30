@@ -171,7 +171,7 @@ export const ExpenseProvider = ({ children }) => {
   const totalAllocatedToTeam = Object.values(userAllocations).reduce((sum, val) => sum + val, 0);
   
   const totalCompanyDirectExpenses = transactions
-    .filter(t => (t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
+    .filter(t => (t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const adminVaultBalance = totalVaultDeposited - totalAllocatedToTeam - totalCompanyDirectExpenses;
@@ -303,7 +303,7 @@ export const ExpenseProvider = ({ children }) => {
 
   // Helper to calculate user statistics (Allocated, Spent, Remaining)
   const getUserStats = (userName) => {
-    if (userName === 'Shukan Packaging (Company)' || userName === 'Company Vault') {
+    if (userName === 'Shukan Company' || userName === 'Shukan Packaging (Company)' || userName === 'Company Vault') {
       return {
         allocated: totalVaultDeposited,
         spent: totalCompanyDirectExpenses,
@@ -339,22 +339,68 @@ export const ExpenseProvider = ({ children }) => {
 
   // Transaction CRUD
   const addTransaction = (txnData) => {
+    const numAmount = parseFloat(txnData.amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return { success: false, message: 'Please enter a valid amount' };
+    }
+
+    const isCompanyTxn = txnData.userName === 'Shukan Company' || txnData.userName === 'Shukan Packaging (Company)' || txnData.userName === 'Company Vault';
+
+    if (isCompanyTxn && txnData.status !== 'Due') {
+      if (adminVaultBalance <= 0) {
+        return {
+          success: false,
+          message: `Cannot record company expense. Company Vault balance is ${settings.currency}0.00. Please click "Deposit Vault" to add funds first!`
+        };
+      }
+      if (adminVaultBalance < numAmount) {
+        return {
+          success: false,
+          message: `Cannot record expense of ${settings.currency}${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}. Company Vault has only ${settings.currency}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available. Please deposit vault funds first!`
+        };
+      }
+    }
+
     const newTxn = {
       id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
       status: txnData.status || 'Done',
       ...txnData,
-      amount: parseFloat(txnData.amount)
+      amount: numAmount
     };
     setTransactions(prev => [newTxn, ...prev]);
-    return newTxn;
+    return { success: true, txn: newTxn };
   };
 
   const updateTransaction = (id, updatedData) => {
-    setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData, amount: parseFloat(updatedData.amount) } : t)));
+    const oldTxn = transactions.find(t => t.id === id);
+    if (!oldTxn) return { success: false, message: 'Transaction record not found' };
+
+    const newAmount = parseFloat(updatedData.amount !== undefined ? updatedData.amount : oldTxn.amount);
+    const newUserName = updatedData.userName || oldTxn.userName;
+    const newStatus = updatedData.status !== undefined ? updatedData.status : oldTxn.status;
+
+    const isCompanyTxn = newUserName === 'Shukan Company' || newUserName === 'Shukan Packaging (Company)' || newUserName === 'Company Vault';
+
+    if (isCompanyTxn && newStatus !== 'Due') {
+      const wasCompanyTxn = oldTxn.userName === 'Shukan Company' || oldTxn.userName === 'Shukan Packaging (Company)' || oldTxn.userName === 'Company Vault';
+      const oldAmount = (wasCompanyTxn && oldTxn.status !== 'Due') ? oldTxn.amount : 0;
+      const diff = newAmount - oldAmount;
+
+      if (diff > 0 && adminVaultBalance < diff) {
+        return {
+          success: false,
+          message: `Cannot update expense. Insufficient Company Vault balance (${settings.currency}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available).`
+        };
+      }
+    }
+
+    setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData, amount: newAmount } : t)));
+    return { success: true };
   };
 
   const deleteTransaction = (id) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
+    return { success: true };
   };
 
   // User CRUD
@@ -375,7 +421,21 @@ export const ExpenseProvider = ({ children }) => {
   };
 
   const deleteUser = (id) => {
-    setUsers(prev => prev.filter(u => u.id !== id));
+    const targetUser = users.find(u => u.id === id);
+    if (!targetUser) return { success: false, message: 'User not found' };
+
+    const userName = targetUser.name;
+    const hasAllocations = (userAllocations[userName] || 0) > 0;
+    const hasTransactions = transactions.some(t => t.userName === userName);
+
+    if (hasAllocations || hasTransactions) {
+      // Soft-delete / archive to preserve historical accounting & audit trail
+      setUsers(prev => prev.map(u => (u.id === id ? { ...u, status: 'Inactive', isDeleted: true } : u)));
+    } else {
+      // Permanently remove if user has no financial activity
+      setUsers(prev => prev.filter(u => u.id !== id));
+    }
+    return { success: true };
   };
 
   const toggleUserStatus = (id) => {

@@ -11,20 +11,20 @@ import AdminLayout from './components/Layout/AdminLayout';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import AddMoney from './pages/AddMoney';
-import CashInOut from './pages/CashInOut';
+import DepositAllocate from './pages/DepositAllocate';
+import Expenses from './pages/Expenses';
 import Reports from './pages/Reports';
-import UserManagement from './pages/UserManagement';
+import TeamAccounts from './pages/TeamAccounts';
 import Settings from './pages/Settings';
-import UserPortal from './pages/UserPortal';
+import MyExpenses from './pages/MyExpenses';
 import MoneyReceived from './pages/MoneyReceived';
-import AssignTask from './pages/AssignTask';
+import Tasks from './pages/Tasks';
 
 // Component to handle intelligent default redirection based on user role
 const DefaultRedirect = () => {
   const { user } = useAuth();
   const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
-  return <Navigate to={isAdmin ? "/admin/dashboard" : "/admin/dashboard"} replace />;
+  return <Navigate to="/admin/dashboard" replace />;
 };
 
 // Route wrapper for Admin-only pages
@@ -48,14 +48,20 @@ function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<DefaultRedirect />} />
                 <Route path="dashboard" element={<Dashboard />} />
-                <Route path="add-money" element={<AdminOnlyRoute><AddMoney /></AdminOnlyRoute>} />
-                <Route path="cash-in-out" element={<AdminOnlyRoute><CashInOut /></AdminOnlyRoute>} />
+                <Route path="expenses" element={<AdminOnlyRoute><Expenses /></AdminOnlyRoute>} />
+                <Route path="deposit-allocate" element={<AdminOnlyRoute><DepositAllocate /></AdminOnlyRoute>} />
+                <Route path="team" element={<AdminOnlyRoute><TeamAccounts /></AdminOnlyRoute>} />
+                <Route path="tasks" element={<AdminOnlyRoute><Tasks /></AdminOnlyRoute>} />
                 <Route path="reports" element={<AdminOnlyRoute><Reports /></AdminOnlyRoute>} />
-                <Route path="users" element={<AdminOnlyRoute><UserManagement /></AdminOnlyRoute>} />
                 <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
-                <Route path="my-expenses" element={<UserPortal />} />
+                <Route path="my-expenses" element={<MyExpenses />} />
                 <Route path="money-received" element={<MoneyReceived />} />
-                <Route path="tasks" element={<AdminOnlyRoute><AssignTask /></AdminOnlyRoute>} />
+
+                {/* Backward Compatible Redirects for Legacy URLs */}
+                <Route path="vault-deposits" element={<Navigate to="/admin/deposit-allocate" replace />} />
+                <Route path="cash-in-out" element={<Navigate to="/admin/expenses" replace />} />
+                <Route path="add-money" element={<Navigate to="/admin/deposit-allocate" replace />} />
+                <Route path="users" element={<Navigate to="/admin/team" replace />} />
               </Route>
             </Route>
 

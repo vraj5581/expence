@@ -3,8 +3,8 @@ import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
-const UserManagement = () => {
-  const { users, addUser, updateUser, deleteUser, toggleUserStatus } = useExpense();
+const TeamAccounts = () => {
+  const { users, addUser, updateUser, deleteUser, toggleUserStatus, getUserStats, settings, allocateMoneyToUser } = useExpense();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -66,11 +66,12 @@ const UserManagement = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">User Management</h1>
+          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">Team Accounts & Credentials</h1>
         </div>
 
         <button
@@ -169,17 +170,57 @@ const UserManagement = () => {
               <tr>
                 <th className="py-3 px-4 font-bold">Sr. No.</th>
                 <th className="py-3 px-4 font-bold">User Name</th>
+                <th className="py-3 px-4 font-bold">Allocated</th>
+                <th className="py-3 px-4 font-bold">Spent</th>
+                <th className="py-3 px-4 font-bold">Balance / Status</th>
                 <th className="py-3 px-4 font-bold">Password</th>
-                <th className="py-3 px-4 font-bold">Status</th>
-                <th className="py-3 px-4 font-bold">Created Date</th>
-                <th className="py-3 px-4 text-right font-bold">Actions</th>
+                <th className="py-3 px-4 font-bold">Account Status</th>
+                <th className="py-3 px-4 text-right font-bold no-print">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map((u, index) => (
-                <tr key={u.id || index} className="hover:bg-slate-50 transition">
+              {users.map((u, index) => {
+                const stats = u.id !== 'admin' ? getUserStats(u.name) : null;
+                const isOverBudget = stats && stats.needFromCompany > 0;
+
+                return (
+                <tr key={u.id || index} className={`hover:bg-slate-50 transition ${isOverBudget ? 'bg-rose-50/40' : ''}`}>
                   <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                  <td className="py-3.5 px-4 font-bold text-[#002B49]">{u.name}</td>
+                  <td className="py-3.5 px-4">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-extrabold ${isOverBudget ? 'bg-rose-100 text-rose-700' : 'bg-[#002B49]/10 text-[#002B49]'}`}>
+                        {u.name.charAt(0)}
+                      </div>
+                      <span className={`font-bold ${isOverBudget ? 'text-rose-800' : 'text-[#002B49]'}`}>{u.name}</span>
+                      {isOverBudget && (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-extrabold">OVER</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 text-xs font-semibold text-slate-700">
+                    {stats ? `${settings.currency}${stats.allocated.toLocaleString('en-IN')}` : '—'}
+                  </td>
+                  <td className={`py-3.5 px-4 text-xs font-bold ${isOverBudget ? 'text-rose-700' : 'text-slate-700'}`}>
+                    {stats ? `${settings.currency}${stats.spent.toLocaleString('en-IN')}` : '—'}
+                  </td>
+                  <td className="py-3.5 px-4">
+                    {stats ? (
+                      isOverBudget ? (
+                        <div>
+                          <span className="flex items-center space-x-1 text-[11px] font-extrabold text-rose-700">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span>Needs {settings.currency}{stats.needFromCompany.toLocaleString('en-IN')} more</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-bold text-emerald-700">
+                          {settings.currency}{stats.remaining.toLocaleString('en-IN')} left
+                        </span>
+                      )
+                    ) : '—'}
+                  </td>
                   <td className="py-3.5 px-4">
                     <div className="flex items-center space-x-2">
                       <span className="font-mono text-xs text-slate-600">
@@ -216,8 +257,7 @@ const UserManagement = () => {
                       {u.status}
                     </button>
                   </td>
-                  <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">{u.createdAt}</td>
-                  <td className="py-3.5 px-4 text-right space-x-2">
+                  <td className="py-3.5 px-4 text-right space-x-2 no-print">
                     <button
                       onClick={() => handleOpenEditModal(u)}
                       title="Edit User"
@@ -240,7 +280,8 @@ const UserManagement = () => {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -264,7 +305,6 @@ const UserManagement = () => {
             </h3>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* 1. User Name */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">User Name</label>
                 <input
@@ -276,7 +316,6 @@ const UserManagement = () => {
                 {errors.name && <p className="text-xs text-rose-500 mt-1">{errors.name.message}</p>}
               </div>
 
-              {/* 2. ID/Name (Fully Editable) */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">ID/Name</label>
                 <input
@@ -288,7 +327,6 @@ const UserManagement = () => {
                 {errors.id && <p className="text-xs text-rose-500 mt-1">{errors.id.message}</p>}
               </div>
 
-              {/* 3. Password */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Password</label>
                 <input
@@ -300,7 +338,6 @@ const UserManagement = () => {
                 {errors.password && <p className="text-xs text-rose-500 mt-1">{errors.password.message}</p>}
               </div>
 
-              {/* 4. Status */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Status</label>
                 <select
@@ -335,4 +372,4 @@ const UserManagement = () => {
   );
 };
 
-export default UserManagement;
+export default TeamAccounts;

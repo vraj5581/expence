@@ -4,7 +4,7 @@ import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
-const UserPortal = () => {
+const MyExpenses = () => {
   const { user } = useAuth();
   const {
     transactions,
@@ -61,9 +61,9 @@ const UserPortal = () => {
   const handleStatusChange = (txn, newStatus) => {
     updateTransaction(txn.id, { ...txn, status: newStatus });
     if (newStatus === 'Done') {
-      toast.success(`Transaction ${txn.id} marked as Done (Deducted from balance)`, { theme: 'light' });
+      toast.success(`Transaction ${txn.id} marked as Done`, { theme: 'light' });
     } else {
-      toast.info(`Transaction ${txn.id} marked as Due (No deduction)`, { theme: 'light' });
+      toast.info(`Transaction ${txn.id} marked as Due`, { theme: 'light' });
     }
   };
 
@@ -101,8 +101,8 @@ const UserPortal = () => {
         </button>
       </div>
 
-      {/* 1-Line Search Bar & Filter Button */}
-      <div className="glass-card p-3 sm:p-4 rounded-2xl">
+      {/* 1-Line Search Bar & Filter Button (Hidden in Print) */}
+      <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,7 +137,6 @@ const UserPortal = () => {
       {isFilterOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
           <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5">
-            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-[#c69255]/30">
@@ -161,7 +160,6 @@ const UserPortal = () => {
               </button>
             </div>
 
-            {/* Filter Form Options */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
@@ -184,7 +182,6 @@ const UserPortal = () => {
               </div>
             </div>
 
-            {/* Footer Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
               <button
                 onClick={() => { setStartDate(''); setEndDate(''); setSearchTerm(''); setIsFilterOpen(false); }}
@@ -207,7 +204,6 @@ const UserPortal = () => {
       <div className="glass-card p-3.5 sm:p-6 rounded-2xl">
         <h2 className="text-base sm:text-lg font-extrabold text-[#002B49] mb-3 sm:mb-4">My Submitted Expense Receipts</h2>
 
-        {/* Mobile View Card List (No Scrollbar - Native App Style) */}
         <div className="block md:hidden space-y-3">
           {filteredMyTransactions.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
@@ -256,7 +252,6 @@ const UserPortal = () => {
           )}
         </div>
 
-        {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200">
@@ -329,7 +324,6 @@ const UserPortal = () => {
             </div>
 
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
-              {/* User Name (Disabled / Locked to current user) */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Submitted By</label>
                 <input
@@ -340,7 +334,6 @@ const UserPortal = () => {
                 />
               </div>
 
-              {/* Amount */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Amount ({settings.currency})</label>
                 <input
@@ -353,7 +346,6 @@ const UserPortal = () => {
                 {errors.amount && <p className="text-xs text-rose-500 mt-1">{errors.amount.message}</p>}
               </div>
 
-              {/* Date */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Date</label>
                 <input
@@ -364,7 +356,6 @@ const UserPortal = () => {
                 {errors.date && <p className="text-xs text-rose-500 mt-1">{errors.date.message}</p>}
               </div>
 
-              {/* Status (Done / Due) */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Status</label>
                 <select
@@ -372,12 +363,11 @@ const UserPortal = () => {
                   defaultValue="Done"
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                 >
-                  <option value="Done">Done (Paid / Completed)</option>
-                  <option value="Due">Due (Pending - No Deduction)</option>
+                  <option value="Done">Done</option>
+                  <option value="Due">Due</option>
                 </select>
               </div>
 
-              {/* Description / Notes */}
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Description / Notes</label>
                 <textarea
@@ -407,96 +397,8 @@ const UserPortal = () => {
           </div>
         </div>
       )}
-
-      {/* Money Received / Allocations Modal */}
-      {isAllocationsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-2xl p-6 sm:p-8 rounded-3xl border border-slate-200 relative shadow-2xl">
-            <button
-              onClick={() => setIsAllocationsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <h3 className="text-xl font-extrabold text-[#002B49] mb-4">Money Received from Admin</h3>
-
-            {/* Mobile View Card List */}
-            <div className="block md:hidden space-y-3 max-h-80 overflow-y-auto pr-1">
-              {myAllocations.length === 0 ? (
-                <div className="py-6 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
-                  No money allocations received from Company yet.
-                </div>
-              ) : (
-                myAllocations.map((a, index) => (
-                  <div key={a.id || index} className="p-3 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
-                      <span className="text-[11px] text-slate-500 font-semibold">{a.date}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                      <span className="text-xs text-slate-600 font-medium">{a.notes || 'Company Money Allocation'}</span>
-                      <span className="text-sm font-extrabold text-emerald-600">
-                        +{settings.currency}{a.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto max-h-80 border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-sm text-slate-700">
-                <thead className="text-xs uppercase bg-slate-100 text-slate-600 border-b border-slate-200 sticky top-0">
-                  <tr>
-                    <th className="py-3 px-4 font-bold">Sr. No.</th>
-                    <th className="py-3 px-4 font-bold">Date</th>
-                    <th className="py-3 px-4 font-bold">Amount Received</th>
-                    <th className="py-3 px-4 font-bold">Notes / Purpose</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {myAllocations.length === 0 ? (
-                    <tr>
-                      <td colSpan="4" className="py-6 text-center text-slate-500 text-xs font-medium">
-                        No money allocations received from Admin yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    myAllocations.map((a, index) => (
-                      <tr key={a.id || index} className="hover:bg-slate-50 transition">
-                        <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                        <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">{a.date}</td>
-                        <td className="py-3.5 px-4 font-bold text-emerald-600">
-                          +{settings.currency}{a.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600 text-xs font-medium">
-                          {a.notes || 'Admin Money Allocation'}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end pt-4 mt-2">
-              <button
-                type="button"
-                onClick={() => setIsAllocationsModalOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300 text-xs font-bold transition cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default UserPortal;
+export default MyExpenses;

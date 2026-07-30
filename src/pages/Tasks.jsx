@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
-const AssignTask = () => {
+const Tasks = () => {
   const { tasks, addTask, updateTask, deleteTask, updateTaskStatus, users } = useExpense();
   const { user: currentUser } = useAuth();
 
@@ -25,19 +25,14 @@ const AssignTask = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   // Filter Tasks
   const filteredTasks = (tasks || []).filter(task => {
-    // Status Filter
     if (activeStatusTab !== 'All' && task.status !== activeStatusTab) return false;
-    // Category Filter
     if (selectedCategory !== 'All' && task.category !== selectedCategory) return false;
-    // Priority Filter
     if (selectedPriority !== 'All' && task.priority !== selectedPriority) return false;
-    // User Filter
     if (selectedUser !== 'All' && task.assignedTo !== selectedUser) return false;
-    // Search Term
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       const matchTitle = (task.title || '').toLowerCase().includes(term);
@@ -110,7 +105,6 @@ const AssignTask = () => {
     window.print();
   };
 
-  // Helper styling for priority badges
   const getPriorityBadgeClass = (priority) => {
     switch (priority) {
       case 'Urgent':
@@ -124,7 +118,6 @@ const AssignTask = () => {
     }
   };
 
-  // Helper styling for status badges
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'Completed':
@@ -133,7 +126,7 @@ const AssignTask = () => {
         return 'bg-sky-100 text-sky-900 border-sky-300 font-extrabold';
       case 'On Hold':
         return 'bg-purple-100 text-purple-900 border-purple-300 font-extrabold';
-      default: // Pending
+      default:
         return 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold';
     }
   };
@@ -159,47 +152,46 @@ const AssignTask = () => {
 
           <button
             onClick={handlePrint}
-            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold border border-slate-300 shadow-xs transition cursor-pointer whitespace-nowrap"
+            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
           >
-            <svg className="w-4 h-4 mr-1.5 text-[#002B49] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            Export PDF / Print
+            Print Task Report
           </button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 print:grid-cols-4">
-        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-[#002B49]">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">Total Tasks</p>
-          <p className="text-xl sm:text-3xl font-extrabold text-[#002B49] mt-1">{totalCount}</p>
-          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">All Assigned Duties</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 print:grid-cols-4 print:gap-2">
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Total Tasks</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-[#002B49] mt-1 print:text-base print:font-black print:text-black print:mt-0">{totalCount}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5 print:text-[9px] print:text-slate-700 print:mt-0">All Assigned Duties</p>
         </div>
 
-        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-amber-500">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">Pending Tasks</p>
-          <p className="text-xl sm:text-3xl font-extrabold text-amber-700 mt-1">{pendingCount}</p>
-          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">Awaiting Action</p>
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-amber-500 print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Pending Tasks</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-amber-700 mt-1 print:text-base print:font-black print:text-black print:mt-0">{pendingCount}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5 print:text-[9px] print:text-slate-700 print:mt-0">Awaiting Action</p>
         </div>
 
-        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-sky-500">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">In Progress</p>
-          <p className="text-xl sm:text-3xl font-extrabold text-sky-700 mt-1">{inProgressCount}</p>
-          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">Active Execution</p>
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-sky-500 print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">In Progress</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-sky-700 mt-1 print:text-base print:font-black print:text-black print:mt-0">{inProgressCount}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5 print:text-[9px] print:text-slate-700 print:mt-0">Active Execution</p>
         </div>
 
-        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-emerald-500">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate">Completed</p>
-          <p className="text-xl sm:text-3xl font-extrabold text-emerald-700 mt-1">{completedCount}</p>
-          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">Finished Duties</p>
+        <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-emerald-500 print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Completed</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-emerald-700 mt-1 print:text-base print:font-black print:text-black print:mt-0">{completedCount}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5 print:text-[9px] print:text-slate-700 print:mt-0">Finished Duties</p>
         </div>
       </div>
 
       {/* Search & Filter Bar */}
       <div className="glass-card p-3.5 sm:p-4 rounded-2xl print:hidden">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-          {/* Search Input & Filter Button */}
           <div className="flex items-center gap-2.5 w-full md:w-auto flex-1">
             <div className="relative flex-1 md:max-w-md">
               <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,7 +221,6 @@ const AssignTask = () => {
             </button>
           </div>
 
-          {/* Status Quick Tabs */}
           <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 w-full md:w-auto">
             {['All', 'Pending', 'In Progress', 'Completed', 'On Hold'].map((status) => (
               <button
@@ -252,7 +243,6 @@ const AssignTask = () => {
       {isFilterOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
           <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5">
-            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-[#c69255]/30">
@@ -276,7 +266,6 @@ const AssignTask = () => {
               </button>
             </div>
 
-            {/* Filter Form Options */}
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Task Status</label>
@@ -341,7 +330,6 @@ const AssignTask = () => {
               </div>
             </div>
 
-            {/* Footer Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
               <button
                 onClick={() => { setActiveStatusTab('All'); setSelectedUser('All'); setSelectedCategory('All'); setSelectedPriority('All'); setSearchTerm(''); }}
@@ -416,7 +404,7 @@ const AssignTask = () => {
                       className="p-1.5 text-slate-500 hover:text-[#002B49] rounded-lg hover:bg-slate-100"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 012.828 0L20 4.828a2 2 0 010 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 0L20 4.828a2 2 0 010 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button
@@ -496,7 +484,7 @@ const AssignTask = () => {
                           title="Edit Task"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 012.828 0L20 4.828a2 2 0 010 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 0L20 4.828a2 2 0 010 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         <button
@@ -645,4 +633,4 @@ const AssignTask = () => {
   );
 };
 
-export default AssignTask;
+export default Tasks;
