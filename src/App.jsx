@@ -70,7 +70,7 @@ function App() {
           </Routes>
         </BrowserRouter>
 
-        <ToastContainer position="top-right" autoClose={3000} theme="dark" />
+        <ToastContainer position="top-right" autoClose={1200} theme="dark" />
       </ExpenseProvider>
     </AuthProvider>
   );

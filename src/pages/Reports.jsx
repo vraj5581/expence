@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import {
   exportTransferLogPDF,
@@ -7,6 +8,7 @@ import {
 } from '../utils/reportPdfGenerator';
 
 const Reports = () => {
+  const navigate = useNavigate();
   const {
     adminVaultBalance,
     allocationsHistory,
@@ -263,28 +265,24 @@ const Reports = () => {
   return (
     <div className="space-y-8">
       {/* Header & Primary Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-row items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">
-            Shukan Packaging Audit Reports
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
+            Reports
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Comprehensive money transfer logs, expense receipt records, and report-wise exports
-          </p>
         </div>
 
         {/* Global Action Toolbar with Filter Button */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Main Filter Button */}
+        <div className="flex items-center space-x-2 shrink-0 overflow-x-auto">
           <button
             onClick={() => setIsFilterModalOpen(true)}
-            className={`flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer border ${
+            className={`inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer border whitespace-nowrap shrink-0 ${
               hasActiveFilters
                 ? 'bg-[#002B49] text-white border-[#002B49] shadow-sm hover:bg-[#001D33]'
                 : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-xs'
             }`}
           >
-            <svg className="w-4 h-4 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-[#c69255] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
             Filter Reports {hasActiveFilters && <span className="ml-1 text-[#c69255] font-extrabold">●</span>}
@@ -292,10 +290,10 @@ const Reports = () => {
 
           <button
             onClick={() => handlePrint('all')}
-            className="flex items-center justify-center px-4 py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition"
+            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition whitespace-nowrap shrink-0"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
             </svg>
             Print Full Audit
           </button>
@@ -392,7 +390,11 @@ const Reports = () => {
 
       {/* KPI Highlights Header */}
       <div id="reports-kpi-summary" className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#002B49]">
+        <div
+          onClick={() => navigate('/admin/deposit-allocate', { state: { activeTab: 'Add Money' } })}
+          className="glass-card p-5 rounded-2xl border-l-4 border-l-[#002B49] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all"
+          title="Click to view Vault Deposits"
+        >
           <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Admin Vault Reserve</p>
           <p className="text-2xl font-extrabold text-[#002B49] mt-2">
             {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -400,7 +402,11 @@ const Reports = () => {
           <p className="text-xs text-slate-500 mt-1 font-medium">Available in Master Vault</p>
         </div>
 
-        <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#c69255]">
+        <div
+          onClick={() => navigate('/admin/deposit-allocate', { state: { activeTab: 'Give Money' } })}
+          className="glass-card p-5 rounded-2xl border-l-4 border-l-[#c69255] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all"
+          title="Click to view Money Allocations"
+        >
           <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Filtered Money Transferred</p>
           <p className="text-2xl font-extrabold text-[#9e6e34] mt-2">
             {settings.currency}{totalFilteredTransfers.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -408,7 +414,11 @@ const Reports = () => {
           <p className="text-xs text-slate-500 mt-1 font-medium">{filteredAllocations.length} Transfer Logs</p>
         </div>
 
-        <div className="glass-card p-5 rounded-2xl border-l-4 border-l-[#d4a359]">
+        <div
+          onClick={() => navigate('/admin/expenses')}
+          className="glass-card p-5 rounded-2xl border-l-4 border-l-[#d4a359] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all"
+          title="Click to view Expense Logs"
+        >
           <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Filtered Expenses Spent</p>
           <p className="text-2xl font-extrabold text-slate-800 mt-2">
             {settings.currency}{totalFilteredExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}

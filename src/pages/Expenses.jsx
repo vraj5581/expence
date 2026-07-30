@@ -18,27 +18,42 @@ const Expenses = () => {
     deleteTransaction
   } = useExpense();
 
-  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState(location.state?.selectedStatus || 'All');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(location.state?.selectedUser || 'All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  const hasActiveFilters = Boolean(
+    selectedStatus !== 'All' ||
+    selectedUser !== 'All' ||
+    startDate ||
+    endDate ||
+    minAmount ||
+    maxAmount ||
+    searchTerm
+  );
+
   useEffect(() => {
-    if (location.state?.selectedUser) {
+    if (location.state?.selectedUser !== undefined) {
       setSelectedUser(location.state.selectedUser);
+    }
+    if (location.state?.selectedStatus !== undefined) {
+      setSelectedStatus(location.state.selectedStatus);
     }
   }, [location.state]);
 
-  const hasActiveFilters = Boolean(selectedUser !== 'All' || selectedStatus !== 'All' || startDate || endDate || searchTerm);
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGiveMoneyOpen, setIsGiveMoneyOpen] = useState(false);
   const [editingTxn, setEditingTxn] = useState(null);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
   const { register: regGive, handleSubmit: subGive, reset: resetGive, formState: { errors: errGive } } = useForm();
+  const selectedSpender = watch('userName', 'Shukan Company');
 
   const handleOpenAddModal = (type = 'Cash In') => {
     setEditingTxn(null);
@@ -127,6 +142,10 @@ const Expenses = () => {
       if (startDate && t.date < startDate) return false;
       if (endDate && t.date > endDate) return false;
 
+      const num = parseFloat(t.amount) || 0;
+      if (minAmount && parseFloat(minAmount) > 0 && num < parseFloat(minAmount)) return false;
+      if (maxAmount && parseFloat(maxAmount) > 0 && num > parseFloat(maxAmount)) return false;
+
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
         const matchId = t.id.toLowerCase().includes(query);
@@ -137,7 +156,7 @@ const Expenses = () => {
       }
       return true;
     });
-  }, [transactions, selectedStatus, selectedUser, startDate, endDate, searchTerm]);
+  }, [transactions, selectedStatus, selectedUser, startDate, endDate, minAmount, maxAmount, searchTerm]);
 
   // Total Expense Calculations
   const totalFilteredExpenseAmount = useMemo(() => {
@@ -173,45 +192,35 @@ const Expenses = () => {
       </div>
 
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
+      <div className="flex flex-row items-center justify-between gap-3 print:hidden">
         <div>
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">
-              {selectedUser !== 'All' ? `${selectedUser}'s Expenses` : 'Shukan Packaging Ledger'}
-            </h1>
-            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#002B49] text-white shadow-xs">
-              Total: {settings.currency}{totalFilteredExpenseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            {selectedUser !== 'All'
-              ? `Filtered expense records and status breakdown for ${selectedUser}`
-              : 'Real-time expense logs, pending dues, and company expenditure summary'}
-          </p>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
+            Expenses
+          </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-          {/* Print Report Button */}
-          <button
-            onClick={() => window.print()}
-            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition w-full sm:w-auto cursor-pointer"
-            title="Print Current Expense View"
-          >
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print Report
-          </button>
-
+        <div className="flex items-center space-x-2 shrink-0 overflow-x-auto">
           {/* Add Expense Button */}
           <button
             onClick={() => handleOpenAddModal('Cash Out')}
-            className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition w-full sm:w-auto cursor-pointer"
+            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Expense
+          </button>
+
+          {/* Print Report Button */}
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            title="Print Current Expense View"
+          >
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print Report
           </button>
         </div>
       </div>
@@ -236,6 +245,11 @@ const Expenses = () => {
                 Status: {selectedStatus}
               </span>
             )}
+            {(minAmount || maxAmount) && (
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white font-bold">
+                Amount: {minAmount ? `${settings.currency}${minAmount}` : 'Min'} - {maxAmount ? `${settings.currency}${maxAmount}` : 'Max'}
+              </span>
+            )}
             {(startDate || endDate) && (
               <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
                 Date: {startDate || 'Beginning'} to {endDate || 'Today'}
@@ -248,7 +262,7 @@ const Expenses = () => {
             )}
           </div>
           <button
-            onClick={() => { setSelectedUser('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setSearchTerm(''); }}
+            onClick={() => { setSelectedUser('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setMinAmount(''); setMaxAmount(''); setSearchTerm(''); }}
             className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
           >
             Clear Filter
@@ -403,6 +417,7 @@ const Expenses = () => {
                 </select>
               </div>
 
+              {/* Date Filter */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
@@ -424,12 +439,37 @@ const Expenses = () => {
                   />
                 </div>
               </div>
+
+              {/* Amount Range Filter */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Min Amount ({settings.currency})</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 100"
+                    value={minAmount}
+                    onChange={(e) => setMinAmount(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Max Amount ({settings.currency})</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 5000"
+                    value={maxAmount}
+                    onChange={(e) => setMaxAmount(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Footer Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
               <button
-                onClick={() => { setSelectedUser('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setSearchTerm(''); }}
+                onClick={() => { setSelectedUser('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setMinAmount(''); setMaxAmount(''); setSearchTerm(''); setIsFilterOpen(false); }}
                 className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
               >
                 Reset All
@@ -446,16 +486,16 @@ const Expenses = () => {
       )}
 
       {/* Transactions Table / Mobile Card List */}
-      <div className="glass-card p-3.5 sm:p-6 rounded-2xl">
+      <div className="glass-card p-3.5 sm:p-6 rounded-xl sm:rounded-2xl">
         {/* Mobile View Card List (No Scrollbar - Native App Style) */}
-        <div className="block md:hidden space-y-3">
+        <div className="block md:hidden space-y-2.5">
           {filteredTransactions.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
               No transaction records match your query.
             </div>
           ) : (
             filteredTransactions.map((t, index) => (
-              <div key={t.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2.5">
+              <div key={t.id || index} className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
@@ -717,12 +757,44 @@ const Expenses = () => {
                   {...register('userName', { required: 'Spender Account is required' })}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                 >
-                  <option value="Shukan Company">🏢 Shukan Company (Direct Expense)</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
-                  ))}
+                  <option value="Shukan Company">
+                    🏢 Shukan Company (Vault Bal: {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                  </option>
+                  {users.map((u) => {
+                    const stats = getUserStats(u.name);
+                    const isOver = stats.remaining < 0;
+                    return (
+                      <option key={u.id} value={u.name}>
+                        {u.name} ({u.role || 'Staff'}) — {isOver ? `Company Owes: ${settings.currency}${Math.abs(stats.remaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : `Cash Bal: ${settings.currency}${stats.remaining.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                      </option>
+                    );
+                  })}
                 </select>
                 {errors.userName && <p className="text-xs text-rose-500 mt-1">{errors.userName.message}</p>}
+
+                {selectedSpender && (
+                  <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-medium">Selected Account Balance:</span>
+                    {selectedSpender === 'Shukan Company' ? (
+                      <span className="font-extrabold text-[#002B49]">
+                        {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (Company Vault)
+                      </span>
+                    ) : (
+                      (() => {
+                        const stats = getUserStats(selectedSpender);
+                        return stats.remaining < 0 ? (
+                          <span className="font-extrabold text-rose-700">
+                            Company Owes {settings.currency}{Math.abs(stats.remaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })} (Overdrawn)
+                          </span>
+                        ) : (
+                          <span className="font-extrabold text-emerald-700">
+                            {settings.currency}{stats.remaining.toLocaleString('en-IN', { minimumFractionDigits: 2 })} In Hand
+                          </span>
+                        );
+                      })()
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>

@@ -45,7 +45,7 @@ const initialVaultDeposits = [
     date: '2026-07-28',
     userName: 'Shukan Admin',
     amount: 2000,
-    notes: 'Initial Admin Capital Deposit'
+    notes: ''
   }
 ];
 
@@ -188,7 +188,7 @@ export const ExpenseProvider = ({ children }) => {
       date: depositData.date || new Date().toISOString().split('T')[0],
       userName: depositData.userName || 'Shukan Admin',
       amount: numAmount,
-      notes: depositData.notes || 'Admin Capital Deposit'
+      notes: depositData.notes || ''
     };
 
     setVaultDeposits(prev => [newDeposit, ...prev]);
@@ -237,7 +237,7 @@ export const ExpenseProvider = ({ children }) => {
       type: 'User Transfer',
       amount: numAmount,
       date: new Date().toISOString().split('T')[0],
-      notes: notes || `Admin allocated ${settings.currency}${numAmount} to ${userName}`
+      notes: notes || ''
     };
 
     setAllocationsHistory(prev => [allocationLog, ...prev]);

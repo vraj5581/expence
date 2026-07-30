@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -6,6 +7,7 @@ import { toast } from 'react-toastify';
 const shukanPartners = ['Vraj', 'Raj', 'Teerth', 'Mayank'];
 
 const DepositAllocate = () => {
+  const location = useLocation();
   const {
     adminVaultBalance,
     totalVaultDeposited,
@@ -22,25 +24,36 @@ const DepositAllocate = () => {
     getUserStats
   } = useExpense();
 
-  const [activeTab, setActiveTab] = useState('All');
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGiveMoneyOpen, setIsGiveMoneyOpen] = useState(false);
   const [editingDeposit, setEditingDeposit] = useState(null);
   const [editingAllocation, setEditingAllocation] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUser, setSelectedUser] = useState('All');
+  const [selectedUser, setSelectedUser] = useState(location.state?.selectedUser || 'All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  useEffect(() => {
+    if (location.state?.selectedUser) {
+      setSelectedUser(location.state.selectedUser);
+    }
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
+
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const { register: regGive, handleSubmit: subGive, reset: resetGive, formState: { errors: errGive } } = useForm();
 
-  const handleOpenGiveMoneyModal = () => {
+  const handleOpenGiveMoneyModal = (targetUser = '', targetAmount = '') => {
     setEditingAllocation(null);
+    const resolvedUser = typeof targetUser === 'string' && targetUser ? targetUser : (users[0]?.name || 'Raj');
+    const resolvedAmount = targetAmount ? targetAmount.toString() : '';
     resetGive({
-      userName: users[0]?.name || 'Raj',
-      amount: '',
+      userName: resolvedUser,
+      amount: resolvedAmount,
       notes: ''
     });
     setIsGiveMoneyOpen(true);
@@ -198,24 +211,19 @@ const DepositAllocate = () => {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
+      <div className="flex flex-row items-center justify-between gap-3 print:hidden">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">
-            {selectedUser !== 'All' ? `${selectedUser}'s Deposits & Allocations` : 'Deposit & Allocate'}
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
+            Deposit & Allocate
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            {selectedUser !== 'All'
-              ? `Filtered vault deposits and user allocations for ${selectedUser}`
-              : 'Manage partner capital deposits and petty cash user allocations'}
-          </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:flex sm:flex-row flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center space-x-2 shrink-0 overflow-x-auto">
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <svg className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Deposit
@@ -223,9 +231,9 @@ const DepositAllocate = () => {
 
           <button
             onClick={handleOpenGiveMoneyModal}
-            className="flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <svg className="w-4 h-4 mr-1 sm:mr-1.5 text-[#e6b875] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-[#e6b875] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Allocate
@@ -233,9 +241,9 @@ const DepositAllocate = () => {
 
           <button
             onClick={handleExportPDF}
-            className="col-span-2 sm:col-span-1 flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold border border-slate-300 shadow-xs transition cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold border border-slate-300 shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <svg className="w-4 h-4 mr-1 sm:mr-1.5 text-[#002B49] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-[#002B49] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             Print
@@ -301,44 +309,78 @@ const DepositAllocate = () => {
         </div>
       </div>
 
-      {/* Compact Over-Budget Alert Strip */}
+      {/* Team Balances & Status Bar (Shows All Users!) */}
       {(() => {
-        const overBudgetUsers = users.filter(u => {
-          if (u.id === 'admin') return false;
-          const s = getUserStats(u.name);
-          return s.needFromCompany > 0;
-        });
-        if (overBudgetUsers.length === 0) return null;
-        const totalNeeded = overBudgetUsers.reduce((sum, u) => sum + getUserStats(u.name).needFromCompany, 0);
+        const teamUsers = users.filter(u => u.id !== 'admin');
+        if (teamUsers.length === 0) return null;
+        
+        const totalNeeded = teamUsers.reduce((sum, u) => sum + getUserStats(u.name).needFromCompany, 0);
+        const totalInHand = teamUsers.reduce((sum, u) => sum + Math.max(0, getUserStats(u.name).remaining), 0);
+
         return (
-          <div className="flex flex-wrap items-center gap-2 px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 print:hidden">
-            <div className="flex items-center space-x-1.5 shrink-0">
-              <svg className="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span className="text-[11px] font-extrabold text-rose-700 uppercase tracking-wide">Top-up Needed:</span>
+          <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden shadow-xs space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-xl bg-[#002B49]/10 flex items-center justify-center text-[#002B49] shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <span className="text-xs font-black uppercase tracking-wider text-[#002B49]">
+                  Team Balances
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] font-extrabold flex-wrap">
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-800 border border-emerald-300 shadow-2xs">
+                  Team In Hand: {settings.currency}{totalInHand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+                {totalNeeded > 0 && (
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-800 border border-rose-300 shadow-2xs">
+                    Due: {settings.currency}{totalNeeded.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
             </div>
-            {overBudgetUsers.map(u => {
-              const s = getUserStats(u.name);
-              return (
-                <button
-                  key={u.id}
-                  onClick={handleOpenGiveMoneyModal}
-                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-white border border-rose-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition group cursor-pointer"
-                >
-                  <span className="w-4 h-4 rounded-full bg-rose-100 group-hover:bg-rose-500 flex items-center justify-center text-[9px] font-black text-rose-700 group-hover:text-white shrink-0">
-                    {u.name.charAt(0)}
-                  </span>
-                  <span className="text-[11px] font-bold text-rose-800 group-hover:text-white">{u.name}</span>
-                  <span className="text-[11px] font-extrabold text-rose-600 group-hover:text-rose-100">
-                    +{settings.currency}{s.needFromCompany.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
-                  </span>
-                </button>
-              );
-            })}
-            <span className="ml-auto text-[11px] font-extrabold text-rose-800 shrink-0">
-              Total: {settings.currency}{totalNeeded.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
+
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-2 border-t border-slate-100">
+              {teamUsers.map(u => {
+                const s = getUserStats(u.name);
+                const isNeed = s.needFromCompany > 0;
+                const hasBal = s.remaining > 0;
+
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => handleOpenGiveMoneyModal(u.name, isNeed ? s.needFromCompany : '')}
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition border cursor-pointer whitespace-nowrap shrink-0 ${
+                      isNeed
+                        ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-600 hover:text-white'
+                        : hasBal
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-[#002B49] hover:text-white'
+                    }`}
+                    title={`Click to allocate money to ${u.name}`}
+                  >
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${
+                      isNeed
+                        ? 'bg-rose-200 text-rose-800'
+                        : hasBal
+                          ? 'bg-emerald-200 text-emerald-800'
+                          : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {u.name.charAt(0)}
+                    </span>
+                    <span>{u.name}</span>
+                    <span className="font-extrabold">
+                      {isNeed
+                        ? `Need: +${settings.currency}${s.needFromCompany.toLocaleString('en-IN')}`
+                        : `Bal: ${settings.currency}${s.remaining.toLocaleString('en-IN')}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
@@ -483,15 +525,15 @@ const DepositAllocate = () => {
         </div>
       )}
 
-      <div className="glass-card p-3.5 sm:p-6 rounded-2xl">
-        <div className="block md:hidden space-y-3">
+      <div className="glass-card p-3.5 sm:p-6 rounded-xl sm:rounded-2xl">
+        <div className="block md:hidden space-y-2.5">
           {filteredTransactions.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
               No transaction entries found. Click "Deposit" or "Allocate" to record entries.
             </div>
           ) : (
             filteredTransactions.map((t, index) => (
-              <div key={t.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2.5">
+              <div key={t.id || index} className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>

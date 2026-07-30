@@ -187,9 +187,8 @@ const Settings = () => {
 
   return (
     <div className="space-y-8 max-w-5xl">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-extrabold text-[#002B49] tracking-tight">Shukan Packaging Settings</h1>
+        <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">Settings</h1>
       </div>
 
       {/* Settings Tab Selector */}
