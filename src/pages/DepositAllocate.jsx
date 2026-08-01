@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
+import { formatDate } from '../utils/dateUtils';
+import DateInput from '../components/DateInput';
 
 const shukanPartners = ['Vraj', 'Raj', 'Teerth', 'Mayank'];
 
@@ -44,7 +46,7 @@ const DepositAllocate = () => {
     }
   }, [location.state]);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
   const { register: regGive, handleSubmit: subGive, reset: resetGive, formState: { errors: errGive } } = useForm();
 
   const handleOpenGiveMoneyModal = (targetUser = '', targetAmount = '') => {
@@ -191,7 +193,9 @@ const DepositAllocate = () => {
     return (
       (t.userName || '').toLowerCase().includes(query) ||
       (t.notes || '').toLowerCase().includes(query) ||
-      (t.txnCategory || '').toLowerCase().includes(query)
+      (t.txnCategory || '').toLowerCase().includes(query) ||
+      t.date.includes(query) ||
+      formatDate(t.date).includes(query)
     );
   });
 
@@ -204,10 +208,10 @@ const DepositAllocate = () => {
           {selectedUser !== 'All' ? `${selectedUser} - Deposit & Allocation Statement` : 'Company Vault Deposit Logs & Capital Audit Report'}
         </h2>
         <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center justify-center space-x-3">
-          <span>Printed: {new Date().toLocaleDateString('en-IN')}</span>
+          <span>Printed: {formatDate(new Date())}</span>
           {selectedUser !== 'All' && <span>| User: <strong>{selectedUser}</strong></span>}
           {activeTab !== 'All' && <span>| Type: <strong>{activeTab === 'Add Money' ? 'Deposit' : 'Allocate'}</strong></span>}
-          {(startDate || endDate) && <span>| Date Range: <strong>{startDate || 'Start'} to {endDate || 'Today'}</strong></span>}
+          {(startDate || endDate) && <span>| Date Range: <strong>{formatDate(startDate) || 'Start'} to {formatDate(endDate) || 'Today'}</strong></span>}
         </div>
       </div>
 
@@ -492,7 +496,12 @@ const DepositAllocate = () => {
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    max={endDate || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStartDate(val);
+                      if (endDate && val > endDate) setEndDate('');
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                   />
                 </div>
@@ -501,7 +510,12 @@ const DepositAllocate = () => {
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEndDate(val);
+                      if (startDate && val < startDate) setStartDate('');
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                   />
                 </div>
@@ -547,7 +561,7 @@ const DepositAllocate = () => {
                       {t.txnCategory === 'Add Money' ? 'Deposit' : 'Allocate'}
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-500 font-semibold">{t.date}</span>
+                  <span className="text-[11px] text-slate-500 font-semibold">{formatDate(t.date)}</span>
                 </div>
 
                 <div className="flex items-center justify-between pt-1 border-t border-slate-100">
@@ -645,7 +659,7 @@ const DepositAllocate = () => {
                 filteredTransactions.map((t, index) => (
                   <tr key={t.id || index} className="hover:bg-slate-50 transition">
                     <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                    <td className="py-3.5 px-4 text-xs text-slate-600 font-semibold">{t.date}</td>
+                    <td className="py-3.5 px-4 text-xs text-slate-600 font-semibold">{formatDate(t.date)}</td>
                     <td className="py-3.5 px-4">
                       <span
                         className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-extrabold ${
@@ -746,9 +760,9 @@ const DepositAllocate = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#002B49] mb-1">Partner Name</label>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Deposit By</label>
                 <select
-                  {...register('userName', { required: 'Partner Name is required' })}
+                  {...register('userName', { required: 'Deposit By is required' })}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                 >
                   {shukanPartners.map((partner) => (

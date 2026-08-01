@@ -327,7 +327,12 @@ const Settings = () => {
                   <input
                     type="date"
                     value={backupStartDate}
-                    onChange={(e) => setBackupStartDate(e.target.value)}
+                    max={backupEndDate || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setBackupStartDate(val);
+                      if (backupEndDate && val > backupEndDate) setBackupEndDate('');
+                    }}
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-900 focus:outline-none"
                   />
                 </div>
@@ -338,7 +343,12 @@ const Settings = () => {
                   <input
                     type="date"
                     value={backupEndDate}
-                    onChange={(e) => setBackupEndDate(e.target.value)}
+                    min={backupStartDate || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setBackupEndDate(val);
+                      if (backupStartDate && val < backupStartDate) setBackupStartDate('');
+                    }}
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-900 focus:outline-none"
                   />
                 </div>

@@ -14,8 +14,8 @@ const adminNavItems = [
     )
   },
   {
-    name: 'Expenses',
-    path: '/admin/expenses',
+    name: 'Credit & Debit',
+    path: '/admin/credit-debit',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -81,8 +81,8 @@ const staffNavItems = [
     )
   },
   {
-    name: 'Expense',
-    path: '/admin/my-expenses',
+    name: 'My Credit & Debit',
+    path: '/admin/my-credit-debit',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

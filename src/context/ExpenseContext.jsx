@@ -320,9 +320,9 @@ export const ExpenseProvider = ({ children }) => {
       .filter(t => t.userName === userName && t.type === 'Cash Out' && t.status !== 'Due')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    // Additional Cash In received directly by user
+    // Additional Cash In received directly by user (in My Hand)
     const cashInReceived = transactions
-      .filter(t => t.userName === userName && t.type === 'Cash In')
+      .filter(t => t.userName === userName && t.type === 'Cash In' && t.depositTo !== 'Company Wallet')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
 
     const remaining = (allocated + cashInReceived) - spent;
@@ -342,6 +342,10 @@ export const ExpenseProvider = ({ children }) => {
     const numAmount = parseFloat(txnData.amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return { success: false, message: 'Please enter a valid amount' };
+    }
+
+    if (!txnData.description || !txnData.description.trim()) {
+      return { success: false, message: 'Description is required for expense entries' };
     }
 
     const isCompanyTxn = txnData.userName === 'Shukan Company' || txnData.userName === 'Shukan Packaging (Company)' || txnData.userName === 'Company Vault';

@@ -3,6 +3,7 @@ import { useExpense } from '../context/ExpenseContext';
 import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
+import { formatDate } from '../utils/dateUtils';
 
 const Tasks = () => {
   const { tasks, addTask, updateTask, deleteTask, updateTaskStatus, users } = useExpense();
@@ -384,7 +385,7 @@ const Tasks = () => {
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase text-slate-400 block">Due Date</span>
-                    <span className="font-semibold text-slate-700">{t.dueDate || 'N/A'}</span>
+                    <span className="font-semibold text-slate-700">{formatDate(t.dueDate)}</span>
                   </div>
                 </div>
 
@@ -465,7 +466,7 @@ const Tasks = () => {
                         {t.priority}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-xs font-medium text-slate-600 whitespace-nowrap">{t.dueDate || 'N/A'}</td>
+                    <td className="py-3.5 px-4 text-xs font-medium text-slate-600 whitespace-nowrap">{formatDate(t.dueDate)}</td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <select
                         value={t.status}

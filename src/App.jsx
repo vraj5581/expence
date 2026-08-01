@@ -12,11 +12,11 @@ import AdminLayout from './components/Layout/AdminLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import DepositAllocate from './pages/DepositAllocate';
-import Expenses from './pages/Expenses';
+import CreditDebit from './pages/CreditDebit';
 import Reports from './pages/Reports';
 import TeamAccounts from './pages/TeamAccounts';
 import Settings from './pages/Settings';
-import MyExpenses from './pages/MyExpenses';
+import MyCreditDebit from './pages/MyCreditDebit';
 import MoneyReceived from './pages/MoneyReceived';
 import Tasks from './pages/Tasks';
 
@@ -48,18 +48,20 @@ function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<DefaultRedirect />} />
                 <Route path="dashboard" element={<Dashboard />} />
-                <Route path="expenses" element={<AdminOnlyRoute><Expenses /></AdminOnlyRoute>} />
+                <Route path="credit-debit" element={<AdminOnlyRoute><CreditDebit /></AdminOnlyRoute>} />
                 <Route path="deposit-allocate" element={<AdminOnlyRoute><DepositAllocate /></AdminOnlyRoute>} />
                 <Route path="team" element={<AdminOnlyRoute><TeamAccounts /></AdminOnlyRoute>} />
                 <Route path="tasks" element={<AdminOnlyRoute><Tasks /></AdminOnlyRoute>} />
                 <Route path="reports" element={<AdminOnlyRoute><Reports /></AdminOnlyRoute>} />
                 <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
-                <Route path="my-expenses" element={<MyExpenses />} />
+                <Route path="my-credit-debit" element={<MyCreditDebit />} />
                 <Route path="money-received" element={<MoneyReceived />} />
 
                 {/* Backward Compatible Redirects for Legacy URLs */}
+                <Route path="expenses" element={<Navigate to="/admin/credit-debit" replace />} />
+                <Route path="my-expenses" element={<Navigate to="/admin/my-credit-debit" replace />} />
                 <Route path="vault-deposits" element={<Navigate to="/admin/deposit-allocate" replace />} />
-                <Route path="cash-in-out" element={<Navigate to="/admin/expenses" replace />} />
+                <Route path="cash-in-out" element={<Navigate to="/admin/credit-debit" replace />} />
                 <Route path="add-money" element={<Navigate to="/admin/deposit-allocate" replace />} />
                 <Route path="users" element={<Navigate to="/admin/team" replace />} />
               </Route>

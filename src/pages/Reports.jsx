@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
+import { formatDate } from '../utils/dateUtils';
 import {
   exportTransferLogPDF,
   exportExpenseLogPDF,
@@ -415,7 +416,7 @@ const Reports = () => {
         </div>
 
         <div
-          onClick={() => navigate('/admin/expenses')}
+          onClick={() => navigate('/admin/credit-debit')}
           className="glass-card p-5 rounded-2xl border-l-4 border-l-[#d4a359] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all"
           title="Click to view Expense Logs"
         >
@@ -472,7 +473,7 @@ const Reports = () => {
                       <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
                       <span className="text-sm font-extrabold text-[#002B49]">{log.userName}</span>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-semibold">{log.date}</span>
+                    <span className="text-[11px] text-slate-500 font-semibold">{formatDate(log.date)}</span>
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100">
@@ -511,7 +512,7 @@ const Reports = () => {
                   filteredAllocations.map((log, index) => (
                     <tr key={log.id || index} className="hover:bg-slate-50 transition">
                       <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                      <td className="py-3.5 px-4 text-xs font-medium text-slate-500">{log.date}</td>
+                      <td className="py-3.5 px-4 text-xs font-medium text-slate-500">{formatDate(log.date)}</td>
                       <td className="py-3.5 px-4 font-bold text-[#002B49]">{log.userName}</td>
                       <td className="py-3.5 px-4 text-slate-600 text-xs font-medium">{log.notes || '-'}</td>
                       <td className="py-3.5 px-4 font-bold text-right text-[#9e6e34]">
@@ -581,7 +582,7 @@ const Reports = () => {
                       <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
                       <span className="text-sm font-extrabold text-[#002B49]">{t.userName}</span>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-semibold">{t.date}</span>
+                    <span className="text-[11px] text-slate-500 font-semibold">{formatDate(t.date)}</span>
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100">
@@ -620,7 +621,7 @@ const Reports = () => {
                   filteredTransactions.map((t, index) => (
                     <tr key={t.id || index} className="hover:bg-slate-50 transition">
                       <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                      <td className="py-3.5 px-4 text-xs font-medium text-slate-500">{t.date}</td>
+                      <td className="py-3.5 px-4 text-xs font-medium text-slate-500">{formatDate(t.date)}</td>
                       <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>
                       <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate">{t.description || '-'}</td>
                       <td className="py-3.5 px-4 font-bold text-right text-[#002B49]">
@@ -701,7 +702,12 @@ const Reports = () => {
                     <input
                       type="date"
                       value={customStartDate}
-                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      max={customEndDate || undefined}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomStartDate(val);
+                        if (customEndDate && val > customEndDate) setCustomEndDate('');
+                      }}
                       className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white"
                     />
                   </div>
@@ -710,7 +716,12 @@ const Reports = () => {
                     <input
                       type="date"
                       value={customEndDate}
-                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      min={customStartDate || undefined}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomEndDate(val);
+                        if (customStartDate && val < customStartDate) setCustomStartDate('');
+                      }}
                       className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white"
                     />
                   </div>

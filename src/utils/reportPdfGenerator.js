@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatDate } from './dateUtils';
 
 const PRIMARY_COLOR = [0, 43, 73]; // #002B49
 const ACCENT_COLOR = [158, 110, 52]; // #9e6e34
@@ -33,11 +34,7 @@ export const exportTransferLogPDF = ({ logs, currency = '₹', filterUser = 'All
   doc.text('Company Money Transfer Log', 14, 21);
 
   // Metadata Right Aligned
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+  const todayStr = formatDate(new Date());
   doc.setFontSize(9);
   doc.text(`Generated: ${todayStr}`, 196, 13, { align: 'right' });
   doc.text(`User: ${filterUser} | Period: ${filterPeriod}`, 196, 21, { align: 'right' });
@@ -65,7 +62,7 @@ export const exportTransferLogPDF = ({ logs, currency = '₹', filterUser = 'All
   // Table Data Preparation
   const tableRows = logs.map((log, index) => [
     index + 1,
-    log.date || '-',
+    formatDate(log.date),
     log.userName || '-',
     log.notes || 'Petty Cash Allowance',
     `+${formatCurrency(log.amount, currency)}`
@@ -139,11 +136,7 @@ export const exportExpenseLogPDF = ({ transactions, currency = '₹', filterUser
   doc.text('User Expense Receipts & Payment Log', 14, 21);
 
   // Metadata Right Aligned
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+  const todayStr = formatDate(new Date());
   doc.setFontSize(9);
   doc.text(`Generated: ${todayStr}`, 196, 13, { align: 'right' });
   doc.text(`Account: ${filterUser} | Period: ${filterPeriod}`, 196, 21, { align: 'right' });
@@ -195,7 +188,7 @@ export const exportExpenseLogPDF = ({ transactions, currency = '₹', filterUser
   // Table Data Preparation
   const tableRows = transactions.map((t, index) => [
     index + 1,
-    t.date || '-',
+    formatDate(t.date),
     t.userName || '-',
     t.description || 'Expense Entry',
     (t.status || 'Done') === 'Done' ? 'Done' : 'Due',
@@ -279,11 +272,7 @@ export const exportCombinedAuditPDF = ({
   doc.text('Comprehensive Financial Audit Report', 14, 21);
 
   // Metadata Right Aligned
-  const todayStr = new Date().toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+  const todayStr = formatDate(new Date());
   doc.setFontSize(9);
   doc.text(`Generated: ${todayStr}`, 196, 13, { align: 'right' });
   doc.text(`User: ${filterUser} | Period: ${filterPeriod}`, 196, 21, { align: 'right' });
@@ -325,7 +314,7 @@ export const exportCombinedAuditPDF = ({
 
   const transferRows = logs.map((log, index) => [
     index + 1,
-    log.date || '-',
+    formatDate(log.date),
     log.userName || '-',
     log.notes || 'Petty Cash Allowance',
     `+${formatCurrency(log.amount, currency)}`
@@ -361,7 +350,7 @@ export const exportCombinedAuditPDF = ({
 
   const expenseRows = transactions.map((t, index) => [
     index + 1,
-    t.date || '-',
+    formatDate(t.date),
     t.userName || '-',
     t.description || 'Expense Entry',
     formatCurrency(t.amount, currency)

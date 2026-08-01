@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useExpense } from '../context/ExpenseContext';
+import { formatDate } from '../utils/dateUtils';
+import DateInput from '../components/DateInput';
 
 const MoneyReceived = () => {
   const { user } = useAuth();
@@ -26,7 +28,8 @@ const MoneyReceived = () => {
       !searchTerm.trim() ||
       item.id.toLowerCase().includes(query) ||
       (item.notes || '').toLowerCase().includes(query) ||
-      item.date.includes(query);
+      item.date.includes(query) ||
+      formatDate(item.date).includes(query);
 
     // Date range filter
     let matchesDate = true;
@@ -58,9 +61,9 @@ const MoneyReceived = () => {
           {user?.name ? `${user.name} - Money Received & Allocation Statement` : 'User Money Received Ledger'}
         </h2>
         <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center justify-center space-x-3">
-          <span>Printed: {new Date().toLocaleDateString('en-IN')}</span>
+          <span>Printed: {formatDate(new Date())}</span>
           <span>| User: <strong>{user?.name}</strong></span>
-          {(startDate || endDate) && <span>| Date Range: <strong>{startDate || 'Start'} to {endDate || 'Today'}</strong></span>}
+          {(startDate || endDate) && <span>| Date Range: <strong>{formatDate(startDate) || 'Start'} to {formatDate(endDate) || 'Today'}</strong></span>}
         </div>
       </div>
 
@@ -85,42 +88,42 @@ const MoneyReceived = () => {
 
       {/* KPI Cards Summary Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5 print:grid-cols-4 print:gap-1.5">
-        {/* 1. Total Money Received */}
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Total Money Received</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
-            {settings.currency}{stats.allocated.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-[#b88548] mt-0.5 sm:mt-1 font-semibold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">{myAllocations.length} Transfers</p>
-        </div>
-
-        {/* 2. Total Spent Expenses */}
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Total Spent Expenses</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
-            {settings.currency}{stats.spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">Logged Expenses</p>
-        </div>
-
-        {/* 3. Current Remaining Balance */}
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#d4a359] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Remaining Balance</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
-            {settings.currency}{stats.remaining.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 font-bold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">Cash In Hand</p>
-        </div>
-
-        {/* 4. Reimbursement Due (PROMINENT METRIC) */}
+        {/* 1. Reimbursement Due (PROMINENT METRIC) */}
         <div className={`glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white ${stats.needFromCompany > 0 ? 'border-l-rose-500 bg-rose-50/50' : 'border-l-emerald-500'}`}>
           <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Reimbursement Due</p>
           <p className={`text-base sm:text-2xl font-extrabold mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none ${stats.needFromCompany > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-            {settings.currency}{stats.needFromCompany.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {settings.currency}{stats.needFromCompany.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </p>
           <p className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 font-bold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none ${stats.needFromCompany > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
             {stats.needFromCompany > 0 ? 'Pending Amount Owed' : 'No Balance Pending'}
           </p>
+        </div>
+
+        {/* 2. Cash In Hand */}
+        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-emerald-500 print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Cash In Hand</p>
+          <p className="text-base sm:text-2xl font-extrabold text-emerald-700 mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
+            {settings.currency}{Math.max(0, stats.remaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-[10px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 font-bold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">Available Balance</p>
+        </div>
+
+        {/* 3. Total Spent Expenses */}
+        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Total Spent Expenses</p>
+          <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
+            {settings.currency}{stats.spent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">Logged Expenses</p>
+        </div>
+
+        {/* 4. Total Money Received */}
+        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
+          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Total Money Received</p>
+          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
+            {settings.currency}{stats.allocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-[10px] sm:text-xs text-[#b88548] mt-0.5 sm:mt-1 font-semibold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">{myAllocations.length} Transfers</p>
         </div>
       </div>
 
@@ -188,21 +191,29 @@ const MoneyReceived = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
-                <input
-                  type="date"
+                <DateInput
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  max={endDate || undefined}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStartDate(val);
+                    if (endDate && val > endDate) setEndDate('');
+                  }}
+                  className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
-                <input
-                  type="date"
+                <DateInput
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  min={startDate || undefined}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEndDate(val);
+                    if (startDate && val < startDate) setStartDate('');
+                  }}
+                  className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                 />
               </div>
             </div>
@@ -248,7 +259,7 @@ const MoneyReceived = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
-                    <span className="text-[11px] font-semibold text-slate-500">{a.date}</span>
+                    <span className="text-[11px] font-semibold text-slate-500">{formatDate(a.date)}</span>
                   </div>
                   <span className="text-sm font-extrabold text-emerald-600">
                     +{settings.currency}{parseFloat(a.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
@@ -287,7 +298,7 @@ const MoneyReceived = () => {
                 filteredAllocations.map((a, index) => (
                   <tr key={a.id || index} className="hover:bg-slate-50 transition print:hover:bg-transparent">
                     <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">{index + 1}</td>
-                    <td className="py-3.5 px-4 text-xs font-semibold text-slate-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-semibold print:border print:border-slate-300">{a.date}</td>
+                    <td className="py-3.5 px-4 text-xs font-semibold text-slate-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-semibold print:border print:border-slate-300">{formatDate(a.date)}</td>
                     <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">Shukan Company</td>
                     <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-medium print:truncate-none print:border print:border-slate-300">
                       {a.notes || 'Company Money Allocation'}
