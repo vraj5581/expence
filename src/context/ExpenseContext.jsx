@@ -307,7 +307,9 @@ export const ExpenseProvider = ({ children }) => {
       return {
         allocated: totalVaultDeposited,
         spent: totalCompanyDirectExpenses,
+        dueSpent: 0,
         cashInReceived: 0,
+        totalCashAvailable: totalVaultDeposited,
         remaining: adminVaultBalance,
         needFromCompany: 0
       };
@@ -315,23 +317,32 @@ export const ExpenseProvider = ({ children }) => {
 
     const allocated = userAllocations[userName] || 0;
     
-    // User Expenses (Cash Out submitted by user - Due entries do NOT deduct balance)
+    // User Completed Expenses (Cash Out / Debit submitted by user - Done status)
     const spent = transactions
-      .filter(t => t.userName === userName && t.type === 'Cash Out' && t.status !== 'Due')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+      .filter(t => t.userName === userName && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-    // Additional Cash In received directly by user (in My Hand)
+    // User Due Expenses (Unpaid bills)
+    const dueSpent = transactions
+      .filter(t => t.userName === userName && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    // Additional Credit / Cash In received directly by user in My Hand (Done status)
     const cashInReceived = transactions
-      .filter(t => t.userName === userName && t.type === 'Cash In' && t.depositTo !== 'Company Wallet')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+      .filter(t => t.userName === userName && (t.type === 'Cash In' || t.type === 'Credit') && t.depositTo !== 'Company Wallet' && (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-    const remaining = (allocated + cashInReceived) - spent;
-    const needFromCompany = remaining < 0 ? Math.abs(remaining) : 0;
+    const totalCashAvailable = allocated + cashInReceived;
+    const remainingNet = totalCashAvailable - spent;
+    const remaining = Math.max(0, remainingNet);
+    const needFromCompany = dueSpent + (remainingNet < 0 ? Math.abs(remainingNet) : 0);
 
     return {
       allocated,
       spent,
+      dueSpent,
       cashInReceived,
+      totalCashAvailable,
       remaining,
       needFromCompany
     };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useExpense } from '../context/ExpenseContext';
 import { formatDate } from '../utils/dateUtils';
@@ -6,41 +6,65 @@ import DateInput from '../components/DateInput';
 
 const MoneyReceived = () => {
   const { user } = useAuth();
-  const { allocationsHistory, settings, getUserStats } = useExpense();
+  const { allocationsHistory, transactions, settings, getUserStats } = useExpense();
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const stats = getUserStats(user?.name || '');
-
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const hasActiveFilters = Boolean(startDate || endDate);
 
+  const stats = useMemo(() => {
+    return getUserStats(user?.name || '');
+  }, [getUserStats, user?.name, transactions, allocationsHistory]);
+
   // Filter money allocations received from Company for this logged in user
-  const myAllocations = allocationsHistory.filter(a => a.userName === user?.name);
+  const myAllocations = useMemo(() => {
+    return allocationsHistory.filter(a => a.userName === user?.name);
+  }, [allocationsHistory, user?.name]);
+
+  const myDebitTxns = useMemo(() => {
+    return transactions.filter(t => t.userName === user?.name && t.type !== 'Cash In' && t.type !== 'Credit');
+  }, [transactions, user?.name]);
+
+  const totalSpent = useMemo(() => {
+    return myDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myDebitTxns]);
+
+  const doneSpent = useMemo(() => {
+    return myDebitTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myDebitTxns]);
+
+  const dueSpent = useMemo(() => {
+    return myDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myDebitTxns]);
 
   // Date-wise and search filtering
-  const filteredAllocations = myAllocations.filter((item) => {
-    // Search query match
-    const query = searchTerm.toLowerCase();
-    const matchesSearch =
-      !searchTerm.trim() ||
-      item.id.toLowerCase().includes(query) ||
-      (item.notes || '').toLowerCase().includes(query) ||
-      item.date.includes(query) ||
-      formatDate(item.date).includes(query);
+  const filteredAllocations = useMemo(() => {
+    return myAllocations.filter((item) => {
+      // Search query match
+      const query = searchTerm.toLowerCase();
+      const matchesSearch =
+        !searchTerm.trim() ||
+        item.id.toLowerCase().includes(query) ||
+        (item.notes || '').toLowerCase().includes(query) ||
+        item.date.includes(query) ||
+        formatDate(item.date).includes(query);
 
-    // Date range filter
-    let matchesDate = true;
-    if (startDate && item.date < startDate) matchesDate = false;
-    if (endDate && item.date > endDate) matchesDate = false;
+      // Date range filter
+      let matchesDate = true;
+      if (startDate && item.date < startDate) matchesDate = false;
+      if (endDate && item.date > endDate) matchesDate = false;
 
-    return matchesSearch && matchesDate;
-  });
+      return matchesSearch && matchesDate;
+    });
+  }, [myAllocations, searchTerm, startDate, endDate]);
 
   // Calculate total filtered received amount
-  const totalFilteredReceived = filteredAllocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+  const totalFilteredReceived = useMemo(() => {
+    return filteredAllocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+  }, [filteredAllocations]);
 
   const handlePrint = () => {
     window.print();
@@ -53,7 +77,7 @@ const MoneyReceived = () => {
   };
 
   return (
-    <div className="space-y-6 print:space-y-4">
+    <div className="space-y-4 print:space-y-3">
       {/* Print-Only Header with Filter & User Details */}
       <div className="hidden print:block text-center border-b border-slate-300 pb-3 mb-4">
         <h1 className="text-2xl font-black uppercase text-[#002B49] tracking-wider">SHUKAN PACKAGING</h1>
@@ -71,64 +95,103 @@ const MoneyReceived = () => {
       <div className="flex flex-row items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">Money Received</h1>
+          <p className="text-xs text-slate-500 font-medium">History of cash allocations transferred to you by Company</p>
         </div>
 
         <div className="flex items-center space-x-2 shrink-0 overflow-x-auto">
           <button
             onClick={handlePrint}
-            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            <svg className="w-3.5 h-3.5 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 00-2 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             Print Money Log
           </button>
         </div>
       </div>
 
-      {/* KPI Cards Summary Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5 print:grid-cols-4 print:gap-1.5">
-        {/* 1. Reimbursement Due (PROMINENT METRIC) */}
-        <div className={`glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white ${stats.needFromCompany > 0 ? 'border-l-rose-500 bg-rose-50/50' : 'border-l-emerald-500'}`}>
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Reimbursement Due</p>
-          <p className={`text-base sm:text-2xl font-extrabold mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none ${stats.needFromCompany > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-            {settings.currency}{stats.needFromCompany.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </p>
-          <p className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 font-bold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none ${stats.needFromCompany > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-            {stats.needFromCompany > 0 ? 'Pending Amount Owed' : 'No Balance Pending'}
-          </p>
+      {/* Restructured Compact KPI Summary Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 print:grid-cols-4 print:gap-1.5">
+        {/* 1. TOTAL MONEY RECEIVED */}
+        <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/60 border border-amber-200/90 shadow-2xs flex flex-col justify-between space-y-1 print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-amber-900 tracking-wide print:text-[9.5px] print:font-black print:text-black print:tracking-wider">Total Received</span>
+            <div className="w-6 h-6 rounded-lg bg-amber-200/80 text-amber-900 flex items-center justify-center text-xs font-black print:hidden">
+              💰
+            </div>
+          </div>
+          <div>
+            <div className="text-lg sm:text-xl font-black text-amber-900 tracking-tight print:text-base print:font-black print:text-black print:leading-tight print:my-0.5">
+              {settings.currency}{stats.totalCashAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-[10px] font-bold text-amber-800 mt-0.5 print:text-[9.5px] print:font-black print:text-black">
+              Allocations & My Hand Credits
+            </div>
+          </div>
         </div>
 
-        {/* 2. Cash In Hand */}
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-emerald-500 print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Cash In Hand</p>
-          <p className="text-base sm:text-2xl font-extrabold text-emerald-700 mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
-            {settings.currency}{Math.max(0, stats.remaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 font-bold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">Available Balance</p>
+        {/* 2. TOTAL SPENT EXPENSES */}
+        <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/80 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-1 print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-[#002B49] tracking-wide print:text-[9.5px] print:font-black print:text-black print:tracking-wider">Total Spent</span>
+            <div className="w-6 h-6 rounded-lg bg-[#002B49]/10 text-[#002B49] flex items-center justify-center text-xs font-black print:hidden">
+              🧾
+            </div>
+          </div>
+          <div>
+            <div className="text-lg sm:text-xl font-black text-[#002B49] tracking-tight print:text-base print:font-black print:text-black print:leading-tight print:my-0.5">
+              {settings.currency}{totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-[10px] font-bold text-slate-600 mt-0.5 print:text-[9.5px] print:font-black print:text-black">
+              Done: {settings.currency}{doneSpent.toLocaleString('en-IN')}  •  Due: {settings.currency}{dueSpent.toLocaleString('en-IN')}
+            </div>
+          </div>
         </div>
 
-        {/* 3. Total Spent Expenses */}
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Total Spent Expenses</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
-            {settings.currency}{stats.spent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">Logged Expenses</p>
+        {/* 3. CASH IN HAND */}
+        <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/60 border border-emerald-200/90 shadow-2xs flex flex-col justify-between space-y-1 print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase text-emerald-800 tracking-wide print:text-[9.5px] print:font-black print:text-black print:tracking-wider">Cash In Hand</span>
+            <div className="w-6 h-6 rounded-lg bg-emerald-200/80 text-emerald-800 flex items-center justify-center text-xs font-black print:hidden">
+              💵
+            </div>
+          </div>
+          <div>
+            <div className="text-lg sm:text-xl font-black text-emerald-700 tracking-tight print:text-base print:font-black print:text-black print:leading-tight print:my-0.5">
+              {settings.currency}{stats.remaining.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-[10px] font-bold text-emerald-700 mt-0.5 print:text-[9.5px] print:font-black print:text-black">
+              Available cash balance
+            </div>
+          </div>
         </div>
 
-        {/* 4. Total Money Received */}
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-md print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[9px] print:text-slate-800 print:font-black print:truncate-none">Total Money Received</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-xs print:font-black print:text-black print:mt-0.5 print:truncate-none">
-            {settings.currency}{stats.allocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-[#b88548] mt-0.5 sm:mt-1 font-semibold truncate print:text-[8px] print:text-slate-700 print:mt-0 print:truncate-none">{myAllocations.length} Transfers</p>
+        {/* 4. REIMBURSEMENT DUE */}
+        <div className={`p-2.5 sm:p-3 rounded-xl border shadow-2xs flex flex-col justify-between space-y-1 print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none ${
+          stats.needFromCompany > 0
+            ? 'bg-gradient-to-br from-rose-50 to-rose-100/60 border-rose-200/90'
+            : 'bg-gradient-to-br from-slate-50 to-slate-100/80 border-slate-200/90'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-[11px] font-black uppercase tracking-wide print:text-[9.5px] print:font-black print:text-black print:tracking-wider ${stats.needFromCompany > 0 ? 'text-rose-900' : 'text-slate-700'}`}>Reimbursement Due</span>
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black print:hidden ${stats.needFromCompany > 0 ? 'bg-rose-200/80 text-rose-800' : 'bg-slate-200/80 text-slate-700'}`}>
+              ⚠️
+            </div>
+          </div>
+          <div>
+            <div className={`text-lg sm:text-xl font-black tracking-tight print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 ${stats.needFromCompany > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+              {settings.currency}{stats.needFromCompany.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <div className={`text-[10px] font-bold mt-0.5 print:text-[9.5px] print:font-black print:text-black ${stats.needFromCompany > 0 ? 'text-rose-700' : 'text-slate-600'}`}>
+              {stats.needFromCompany > 0 ? 'Company payback needed' : 'Settled'}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* 1-Line Search Bar & Filter Button */}
-      <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden">
+      <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden space-y-2">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +210,7 @@ const MoneyReceived = () => {
             onClick={() => setIsFilterOpen(true)}
             className={`flex items-center justify-center px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 border ${
               hasActiveFilters
-                ? 'bg-[#002B49] text-white border-[#002B49] shadow-sm'
+                ? 'bg-[#002B49] text-white border-[#002B49] shadow-xs'
                 : 'bg-white text-[#002B49] border-slate-300 hover:bg-slate-50'
             }`}
           >
@@ -157,6 +220,23 @@ const MoneyReceived = () => {
             Filter {hasActiveFilters && <span className="ml-1 text-[#c69255] font-extrabold">●</span>}
           </button>
         </div>
+
+        {/* Active Filters Banner */}
+        {hasActiveFilters && (
+          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-slate-800">
+              <span className="font-extrabold text-[#002B49]">Active Filters:</span>
+              {(startDate || endDate) && (
+                <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[11px]">
+                  Date: {formatDate(startDate) || 'Start'} to {formatDate(endDate) || 'Today'}
+                </span>
+              )}
+            </div>
+            <button onClick={handleResetFilters} className="text-[11px] font-bold text-rose-600 hover:underline">
+              Reset Filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter Popup Modal */}
@@ -238,31 +318,23 @@ const MoneyReceived = () => {
       )}
 
       {/* Money Received List (Mobile App Cards + Desktop Table) */}
-      <div className="glass-card p-3.5 sm:p-6 rounded-2xl print:p-0 print:border-none print:shadow-none print:bg-transparent">
-        <div className="flex items-center justify-between mb-3 sm:mb-4 print:hidden">
-          <div>
-            <p className="text-xs text-slate-500 font-medium">
-              Total Filtered Amount: <span className="font-bold text-[#9e6e34]">{settings.currency}{totalFilteredReceived.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </p>
-          </div>
-        </div>
-
+      <div className="glass-card p-3.5 sm:p-5 rounded-2xl print:p-0 print:border-none print:shadow-none print:bg-transparent">
         {/* Mobile View Card List (No Scrollbar - App Style) */}
         <div className="block md:hidden print:hidden space-y-3">
           {filteredAllocations.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
-              No money received records found for the selected date range.
+              No money received records found for the selected criteria.
             </div>
           ) : (
             filteredAllocations.map((a, index) => (
-              <div key={a.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div key={a.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
                     <span className="text-[11px] font-semibold text-slate-500">{formatDate(a.date)}</span>
                   </div>
                   <span className="text-sm font-extrabold text-emerald-600">
-                    +{settings.currency}{parseFloat(a.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    +{settings.currency}{parseFloat(a.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
@@ -278,44 +350,46 @@ const MoneyReceived = () => {
         {/* Desktop & Print Table View */}
         <div className="hidden md:block print:block overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700 print:text-black print:border-collapse print:border print:border-slate-400">
-            <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200 print:bg-slate-200 print:text-black print:font-black print:border-b-2 print:border-slate-400">
+            <thead className="text-xs uppercase bg-amber-50/80 text-amber-900 border-b border-amber-200 print:bg-slate-100 print:text-black print:font-black print:border-b-2 print:border-black">
               <tr>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Sr. No.</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Date</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Transferred By</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Notes / Purpose</th>
-                <th className="py-3 px-4 font-bold print:py-1.5 print:px-2.5 print:text-[11px] print:font-black print:text-black print:border print:border-slate-300">Received Amount</th>
+                <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Sr. No.</th>
+                <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Date</th>
+                <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Transferred By</th>
+                <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Notes / Purpose</th>
+                <th className="py-3 px-4 font-bold text-right print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Received Amount</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 print:divide-slate-300">
+            <tbody className="divide-y divide-slate-100 print:divide-y-0">
               {filteredAllocations.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black">
-                    No money received records found for the selected date range.
+                  <td colSpan="5" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-slate-300">
+                    No money received records found for the selected criteria.
                   </td>
                 </tr>
               ) : (
                 filteredAllocations.map((a, index) => (
-                  <tr key={a.id || index} className="hover:bg-slate-50 transition print:hover:bg-transparent">
-                    <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">{index + 1}</td>
-                    <td className="py-3.5 px-4 text-xs font-semibold text-slate-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-semibold print:border print:border-slate-300">{formatDate(a.date)}</td>
-                    <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-bold print:border print:border-slate-300">Shukan Company</td>
-                    <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-medium print:truncate-none print:border print:border-slate-300">
+                  <tr key={a.id || index} className="hover:bg-amber-50/30 transition print:bg-white">
+                    <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{index + 1}</td>
+                    <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{formatDate(a.date)}</td>
+                    <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">Shukan Company</td>
+                    <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:max-w-none print:whitespace-normal print:break-words">
                       {a.notes || 'Company Money Allocation'}
                     </td>
-                    <td className="py-3.5 px-4 font-extrabold text-emerald-600 print:py-1.5 print:px-2.5 print:text-[11px] print:text-black print:font-black print:border print:border-slate-300">
-                      +{settings.currency}{parseFloat(a.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    <td className="py-3.5 px-4 font-black text-right text-emerald-600 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:font-black">
+                      +{settings.currency}{parseFloat(a.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
             {filteredAllocations.length > 0 && (
-              <tfoot className="border-t-2 border-slate-400 font-extrabold text-xs text-slate-900 bg-slate-50 print:bg-slate-100">
+              <tfoot className="bg-amber-50/50 font-bold text-xs text-amber-900 border-t-2 border-amber-200 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
                 <tr>
-                  <td colSpan="4" className="py-2.5 px-4 print:py-1.5 print:px-2.5 text-right font-black uppercase text-slate-700 print:text-black print:border print:border-slate-300">Total Received Amount:</td>
-                  <td className="py-2.5 px-4 print:py-1.5 print:px-2.5 font-black text-emerald-700 print:text-black print:border print:border-slate-300">
-                    +{settings.currency}{totalFilteredReceived.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  <td colSpan="4" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black">
+                    {hasActiveFilters ? 'Total Filtered Received Amount:' : 'Total Received Amount:'}
+                  </td>
+                  <td className="py-3 px-4 text-right font-black text-emerald-700 text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black">
+                    +{settings.currency}{totalFilteredReceived.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               </tfoot>

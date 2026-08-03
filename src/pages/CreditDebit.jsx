@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -8,74 +9,276 @@ import DateInput from '../components/DateInput';
 
 const CreditDebit = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const {
-    adminVaultBalance,
     transactions,
     users,
+    allocationsHistory,
     settings,
-    allocateMoneyToUser,
-    getUserStats,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     addVaultDeposit
   } = useExpense();
 
-  const [selectedStatus, setSelectedStatus] = useState(
-    location.state?.selectedStatus || location.state?.statusFilter || 'All'
-  );
-  const [selectedType, setSelectedType] = useState(
-    location.state?.selectedType || location.state?.typeFilter || 'All'
-  );
-  const [selectedDepositTo, setSelectedDepositTo] = useState(
-    location.state?.selectedDepositTo || location.state?.depositToFilter || 'All'
-  );
-  const [searchTerm, setSearchTerm] = useState('');
+  // Tab & Print View State
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'debit' | 'credit'
+  const [printTarget, setPrintTarget] = useState('all'); // 'all' | 'debit' | 'credit'
+
+  // Admin User Filter
   const [selectedUser, setSelectedUser] = useState(location.state?.selectedUser || 'All');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [minAmount, setMinAmount] = useState('');
-  const [maxAmount, setMaxAmount] = useState('');
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const hasActiveFilters = Boolean(
-    selectedStatus !== 'All' ||
-    selectedType !== 'All' ||
-    selectedDepositTo !== 'All' ||
-    selectedUser !== 'All' ||
-    startDate ||
-    endDate ||
-    minAmount ||
-    maxAmount ||
-    searchTerm
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTxn, setEditingTxn] = useState(null);
+  const [modalTxnType, setModalTxnType] = useState('Cash Out');
+
+  // Independent Debit Filter State
+  const [debitSearch, setDebitSearch] = useState('');
+  const [debitStatus, setDebitStatus] = useState(
+    location.state?.typeFilter === 'Debit' ? (location.state?.statusFilter || 'All') : 'All'
   );
+  const [debitStartDate, setDebitStartDate] = useState('');
+  const [debitEndDate, setDebitEndDate] = useState('');
+  const [debitMinAmt, setDebitMinAmt] = useState('');
+  const [debitMaxAmt, setDebitMaxAmt] = useState('');
+  const [isDebitFilterOpen, setIsDebitFilterOpen] = useState(false);
 
+  // Independent Credit Filter State
+  const [creditSearch, setCreditSearch] = useState('');
+  const [creditDepositTo, setCreditDepositTo] = useState(
+    location.state?.depositToFilter || location.state?.selectedDepositTo || 'All'
+  );
+  const [creditStatus, setCreditStatus] = useState(
+    location.state?.typeFilter === 'Credit' ? (location.state?.statusFilter || 'All') : 'All'
+  );
+  const [creditStartDate, setCreditStartDate] = useState('');
+  const [creditEndDate, setCreditEndDate] = useState('');
+  const [creditMinAmt, setCreditMinAmt] = useState('');
+  const [creditMaxAmt, setCreditMaxAmt] = useState('');
+  const [isCreditFilterOpen, setIsCreditFilterOpen] = useState(false);
+
+  // Handle location state changes
   useEffect(() => {
     if (location.state?.selectedUser !== undefined) {
       setSelectedUser(location.state.selectedUser);
     }
-    const statusVal = location.state?.selectedStatus || location.state?.statusFilter;
-    if (statusVal !== undefined) {
-      setSelectedStatus(statusVal);
-    }
-    const typeVal = location.state?.selectedType || location.state?.typeFilter;
-    if (typeVal !== undefined) {
-      setSelectedType(typeVal);
-    }
-    const depositToVal = location.state?.selectedDepositTo || location.state?.depositToFilter;
-    if (depositToVal !== undefined) {
-      setSelectedDepositTo(depositToVal);
+    const typeFromState = location.state?.typeFilter || location.state?.selectedType;
+    const statusFromState = location.state?.statusFilter || location.state?.selectedStatus;
+    const depositToFromState = location.state?.depositToFilter || location.state?.selectedDepositTo;
+
+    if (typeFromState === 'Debit') {
+      setActiveTab('debit');
+      if (statusFromState) setDebitStatus(statusFromState);
+    } else if (typeFromState === 'Credit') {
+      setActiveTab('credit');
+      if (statusFromState) setCreditStatus(statusFromState);
+      if (depositToFromState) setCreditDepositTo(depositToFromState);
+    } else if (statusFromState) {
+      setDebitStatus(statusFromState);
+      setCreditStatus(statusFromState);
     }
   }, [location.state, location.key]);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTxn, setEditingTxn] = useState(null);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
   const selectedSpender = watch('userName', 'Shukan Company');
 
-  const [modalTxnType, setModalTxnType] = useState('Cash Out');
+  // Separate raw arrays
+  const rawDebitTxns = useMemo(() => {
+    return transactions.filter(t => t.type !== 'Cash In' && t.type !== 'Credit');
+  }, [transactions]);
 
+  const rawCreditTxns = useMemo(() => {
+    const directCredits = transactions.filter(t => t.type === 'Cash In' || t.type === 'Credit');
+    const mappedAllocations = (allocationsHistory || []).map(a => ({
+      id: a.id,
+      type: 'Credit',
+      depositTo: 'My Hand',
+      userName: a.userName,
+      amount: parseFloat(a.amount) || 0,
+      date: a.date,
+      description: a.notes || `Company Cash Allocation (${a.userName})`,
+      status: 'Done',
+      isAllocation: true
+    }));
+    return [...mappedAllocations, ...directCredits].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [transactions, allocationsHistory]);
+
+  // Filtered Debit Transactions
+  const filteredDebitTxns = useMemo(() => {
+    return rawDebitTxns.filter((t) => {
+      if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
+      if (debitSearch.trim()) {
+        const query = debitSearch.toLowerCase();
+        const matchId = (t.id || '').toLowerCase().includes(query);
+        const matchUser = (t.userName || '').toLowerCase().includes(query);
+        const matchDesc = (t.description || '').toLowerCase().includes(query);
+        const matchDate = (t.date || '').includes(query) || formatDate(t.date).toLowerCase().includes(query);
+        if (!matchId && !matchUser && !matchDesc && !matchDate) return false;
+      }
+      if (debitStatus !== 'All' && (t.status || 'Done') !== debitStatus) return false;
+      if (debitStartDate && t.date < debitStartDate) return false;
+      if (debitEndDate && t.date > debitEndDate) return false;
+
+      const num = parseFloat(t.amount) || 0;
+      if (debitMinAmt && parseFloat(debitMinAmt) > 0 && num < parseFloat(debitMinAmt)) return false;
+      if (debitMaxAmt && parseFloat(debitMaxAmt) > 0 && num > parseFloat(debitMaxAmt)) return false;
+
+      return true;
+    });
+  }, [rawDebitTxns, selectedUser, debitSearch, debitStatus, debitStartDate, debitEndDate, debitMinAmt, debitMaxAmt]);
+
+  // Filtered Credit Transactions
+  const filteredCreditTxns = useMemo(() => {
+    return rawCreditTxns.filter((t) => {
+      if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
+      if (creditSearch.trim()) {
+        const query = creditSearch.toLowerCase();
+        const matchId = (t.id || '').toLowerCase().includes(query);
+        const matchUser = (t.userName || '').toLowerCase().includes(query);
+        const matchDesc = (t.description || '').toLowerCase().includes(query);
+        const matchDate = (t.date || '').includes(query) || formatDate(t.date).toLowerCase().includes(query);
+        if (!matchId && !matchUser && !matchDesc && !matchDate) return false;
+      }
+      if (creditDepositTo !== 'All') {
+        const target = t.depositTo || 'My Hand';
+        if (target !== creditDepositTo) return false;
+      }
+      if (creditStatus !== 'All' && (t.status || 'Done') !== creditStatus) return false;
+      if (creditStartDate && t.date < creditStartDate) return false;
+      if (creditEndDate && t.date > creditEndDate) return false;
+
+      const num = parseFloat(t.amount) || 0;
+      if (creditMinAmt && parseFloat(creditMinAmt) > 0 && num < parseFloat(creditMinAmt)) return false;
+      if (creditMaxAmt && parseFloat(creditMaxAmt) > 0 && num > parseFloat(creditMaxAmt)) return false;
+
+      return true;
+    });
+  }, [rawCreditTxns, selectedUser, creditSearch, creditDepositTo, creditStatus, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
+
+  // Debit Summary Stats (Always calculated from raw debit transactions for 100% accurate totals)
+  const debitSummary = useMemo(() => {
+    let total = 0;
+    let doneTotal = 0;
+    let dueTotal = 0;
+
+    rawDebitTxns.forEach(t => {
+      const amt = parseFloat(t.amount) || 0;
+      const isDone = (t.status || 'Done') === 'Done';
+      total += amt;
+      if (isDone) doneTotal += amt;
+      else dueTotal += amt;
+    });
+
+    return { total, doneTotal, dueTotal };
+  }, [rawDebitTxns]);
+
+  // Credit Summary Stats (Always calculated from raw credit transactions for 100% accurate totals)
+  const creditSummary = useMemo(() => {
+    let total = 0;
+    let doneTotal = 0;
+    let dueTotal = 0;
+    let myHandTotal = 0;
+    let myHandDone = 0;
+    let myHandDue = 0;
+
+    let walletTotal = 0;
+    let walletDone = 0;
+    let walletDue = 0;
+
+    rawCreditTxns.forEach(t => {
+      const amt = parseFloat(t.amount) || 0;
+      const isDone = (t.status || 'Done') === 'Done';
+      total += amt;
+      if (isDone) doneTotal += amt;
+      else dueTotal += amt;
+
+      if (t.depositTo === 'Company Wallet') {
+        walletTotal += amt;
+        if (isDone) walletDone += amt;
+        else walletDue += amt;
+      } else {
+        myHandTotal += amt;
+        if (isDone) myHandDone += amt;
+        else myHandDue += amt;
+      }
+    });
+
+    return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue };
+  }, [rawCreditTxns]);
+
+  // Filtered Debit Total for Table Footer (exact sum of displayed filtered rows)
+  const filteredDebitTotal = useMemo(() => {
+    return filteredDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredDebitTxns]);
+
+  // Filtered Credit Total for Table Footer (exact sum of displayed filtered rows)
+  const filteredCreditTotal = useMemo(() => {
+    return filteredCreditTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredCreditTxns]);
+
+  // Active filter checks
+  const hasActiveDebitFilters = Boolean(debitSearch || debitStatus !== 'All' || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
+  const hasActiveCreditFilters = Boolean(creditSearch || creditDepositTo !== 'All' || creditStatus !== 'All' || creditStartDate || creditEndDate || creditMinAmt || creditMaxAmt);
+
+  // Dynamic Debit Display Metrics (reflects filters if active)
+  const displayDebitTitle = useMemo(() => {
+    if (debitStatus !== 'All') return `Total Debit (${debitStatus})`;
+    if (hasActiveDebitFilters) return 'Filtered Debit';
+    return 'Total Debit';
+  }, [debitStatus, hasActiveDebitFilters]);
+
+  const displayDebitTotal = useMemo(() => {
+    return hasActiveDebitFilters ? filteredDebitTotal : debitSummary.total;
+  }, [hasActiveDebitFilters, filteredDebitTotal, debitSummary.total]);
+
+  const displayDebitDone = useMemo(() => {
+    return filteredDebitTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredDebitTxns]);
+
+  const displayDebitDue = useMemo(() => {
+    return filteredDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredDebitTxns]);
+
+  // Dynamic Credit Display Metrics (reflects filters if active)
+  const displayCreditTotalTitle = useMemo(() => {
+    if (creditStatus !== 'All' && creditDepositTo === 'All') return `Total Credit (${creditStatus})`;
+    if (hasActiveCreditFilters && creditDepositTo === 'All') return 'Filtered Credit';
+    return 'Total Credit';
+  }, [creditStatus, creditDepositTo, hasActiveCreditFilters]);
+
+  const displayCreditTotalAmount = useMemo(() => {
+    return hasActiveCreditFilters && creditDepositTo === 'All' ? filteredCreditTotal : creditSummary.total;
+  }, [hasActiveCreditFilters, creditDepositTo, filteredCreditTotal, creditSummary.total]);
+
+  const displayCreditDone = useMemo(() => {
+    return filteredCreditTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredCreditTxns]);
+
+  const displayCreditDue = useMemo(() => {
+    return filteredCreditTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredCreditTxns]);
+
+  const resetDebitFilters = () => {
+    setDebitSearch('');
+    setDebitStatus('All');
+    setDebitStartDate('');
+    setDebitEndDate('');
+    setDebitMinAmt('');
+    setDebitMaxAmt('');
+  };
+
+  const resetCreditFilters = () => {
+    setCreditSearch('');
+    setCreditDepositTo('All');
+    setCreditStatus('All');
+    setCreditStartDate('');
+    setCreditEndDate('');
+    setCreditMinAmt('');
+    setCreditMaxAmt('');
+  };
+
+  // Form Submission
   const handleOpenAddModal = (defaultType = 'Cash Out') => {
     setEditingTxn(null);
     setModalTxnType(defaultType);
@@ -144,200 +347,110 @@ const CreditDebit = () => {
 
       toast.success(`New ${finalType === 'Cash In' ? 'Credit' : 'Debit'} entry of ${settings.currency}${parseFloat(data.amount).toLocaleString()} recorded!`, { theme: 'light' });
 
-      // Auto clear active filters so newly added entry is guaranteed to display
-      if (hasActiveFilters) {
-        setSelectedUser('All');
-        setSelectedType('All');
-        setSelectedDepositTo('All');
-        setSelectedStatus('All');
-        setStartDate('');
-        setEndDate('');
-        setMinAmount('');
-        setMaxAmount('');
-        setSearchTerm('');
-      }
+      if (finalType === 'Cash In') resetCreditFilters();
+      else resetDebitFilters();
     }
     setIsModalOpen(false);
     reset();
   };
 
   const handleStatusChange = (txn, newStatus) => {
-    const res = updateTransaction(txn.id, { ...txn, status: newStatus });
-    if (res && res.success === false) {
-      toast.error(res.message, { theme: 'light' });
+    if (txn.isAllocation) {
+      toast.info('Company allocation status is fixed as Done', { theme: 'light' });
       return;
     }
+    updateTransaction(txn.id, { ...txn, status: newStatus });
     if (newStatus === 'Done') {
-      toast.success(`Transaction ${txn.id} marked as Done`, { theme: 'light' });
+      toast.success(`Transaction marked as Done`, { theme: 'light' });
     } else {
-      toast.info(`Transaction ${txn.id} marked as Due`, { theme: 'light' });
+      toast.info(`Transaction marked as Due`, { theme: 'light' });
     }
   };
 
   const handleDelete = (id) => {
     if (window.confirm(`Delete transaction record ${id}?`)) {
       deleteTransaction(id);
-      toast.info(`Transaction ${id} removed.`, { theme: 'light' });
+      toast.info(`Transaction removed.`, { theme: 'light' });
     }
   };
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      if (selectedStatus !== 'All' && (t.status || 'Done') !== selectedStatus) return false;
-      if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
-      if (selectedType !== 'All') {
-        const isCredit = t.type === 'Cash In' || t.type === 'Credit';
-        if (selectedType === 'Credit' && !isCredit) return false;
-        if (selectedType === 'Debit' && isCredit) return false;
-      }
-      if (selectedType === 'Credit' && selectedDepositTo !== 'All') {
-        const target = t.depositTo || 'My Hand';
-        if (target !== selectedDepositTo) return false;
-      }
-      if (startDate && t.date < startDate) return false;
-      if (endDate && t.date > endDate) return false;
-
-      const num = parseFloat(t.amount) || 0;
-      if (minAmount && parseFloat(minAmount) > 0 && num < parseFloat(minAmount)) return false;
-      if (maxAmount && parseFloat(maxAmount) > 0 && num > parseFloat(maxAmount)) return false;
-
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchId = t.id.toLowerCase().includes(query);
-        const matchUser = (t.userName || '').toLowerCase().includes(query);
-        const matchDesc = (t.description || '').toLowerCase().includes(query);
-        const matchDate = (t.date || '').includes(query);
-        return matchId || matchUser || matchDesc || matchDate;
-      }
-      return true;
-    });
-  }, [transactions, selectedStatus, selectedType, selectedDepositTo, selectedUser, startDate, endDate, minAmount, maxAmount, searchTerm]);
-
-  // Calculations
-  const totalFilteredExpenseAmount = useMemo(() => {
-    return filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-  }, [filteredTransactions]);
-
-  const totalFilteredDoneAmount = useMemo(() => {
-    return filteredTransactions
-      .filter((t) => (t.status || 'Done') === 'Done')
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-  }, [filteredTransactions]);
-
-  const totalFilteredDueAmount = useMemo(() => {
-    return filteredTransactions
-      .filter((t) => (t.status || 'Done') === 'Due')
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-  }, [filteredTransactions]);
-
-  const filteredSummary = useMemo(() => {
-    let creditTotal = 0;
-    let myHandCreditTotal = 0;
-    let myHandCreditDone = 0;
-    let myHandCreditDue = 0;
-
-    let companyWalletCreditTotal = 0;
-    let companyWalletCreditDone = 0;
-    let companyWalletCreditDue = 0;
-
-    let debitTotal = 0;
-    let debitDoneTotal = 0;
-    let debitDueTotal = 0;
-
-    filteredTransactions.forEach(t => {
-      const amt = parseFloat(t.amount) || 0;
-      const isCredit = t.type === 'Cash In' || t.type === 'Credit';
-      const isDone = (t.status || 'Done') === 'Done';
-
-      if (isCredit) {
-        creditTotal += amt;
-        if (t.depositTo === 'Company Wallet') {
-          companyWalletCreditTotal += amt;
-          if (isDone) companyWalletCreditDone += amt;
-          else companyWalletCreditDue += amt;
-        } else {
-          myHandCreditTotal += amt;
-          if (isDone) myHandCreditDone += amt;
-          else myHandCreditDue += amt;
-        }
-      } else {
-        debitTotal += amt;
-        if (isDone) {
-          debitDoneTotal += amt;
-        } else {
-          debitDueTotal += amt;
-        }
-      }
-    });
-
-    return {
-      creditTotal,
-      myHandCreditTotal,
-      myHandCreditDone,
-      myHandCreditDue,
-      companyWalletCreditTotal,
-      companyWalletCreditDone,
-      companyWalletCreditDue,
-      debitTotal,
-      debitDoneTotal,
-      debitDueTotal
-    };
-  }, [filteredTransactions]);
+  // Dedicated Print Handlers
+  const triggerPrint = (target) => {
+    setPrintTarget(target);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Print-Only Header with Filter & User Details */}
-      <div className="hidden print:block text-center border-b border-slate-300 pb-3 mb-4">
-        <h1 className="text-2xl font-black uppercase text-[#002B49] tracking-wider">SHUKAN PACKAGING</h1>
-        <h2 className="text-sm font-extrabold text-[#c69255] uppercase mt-0.5">
-          {selectedUser !== 'All' ? `${selectedUser} - Credit & Debit Statement` : 'Company Credit & Debit Audit Ledger'}
+    <div className="space-y-6 print:space-y-4 print:bg-white print:text-black">
+      {/* High-Contrast Black & White Print Header */}
+      <div className="hidden print:block text-center border-b-2 border-black pb-3 mb-4">
+        <h1 className="text-2xl font-black uppercase text-black tracking-wider">SHUKAN PACKAGING</h1>
+        <h2 className="text-sm font-bold text-black uppercase mt-1">
+          {selectedUser !== 'All' ? `${selectedUser} - ` : ''}
+          {printTarget === 'debit' ? 'Debit Statement Audit' : printTarget === 'credit' ? 'Credit Statement Audit' : 'Debit & Credit Audit Ledger'}
         </h2>
-        <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center justify-center space-x-3">
-          <span>Printed: {formatDate(new Date())}</span>
-          {selectedUser !== 'All' && <span>| User: <strong>{selectedUser}</strong></span>}
-          {selectedStatus !== 'All' && <span>| Status: <strong>{selectedStatus}</strong></span>}
-          {(startDate || endDate) && <span>| Date Range: <strong>{formatDate(startDate) || 'Start'} to {formatDate(endDate) || 'Today'}</strong></span>}
+        <div className="text-xs font-semibold text-black mt-1 flex items-center justify-center space-x-3">
+          <span>Date Printed: {formatDate(new Date())}</span>
+          {selectedUser !== 'All' && <span>| User: {selectedUser}</span>}
+          {printTarget === 'debit' && debitStatus !== 'All' && <span>| Status: {debitStatus}</span>}
+          {printTarget === 'credit' && creditStatus !== 'All' && <span>| Status: {creditStatus}</span>}
         </div>
       </div>
 
-      {/* Page Header */}
-      <div className="flex flex-row items-center justify-between gap-3 print:hidden">
+      {/* Page Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
-            Credit & Debit
-          </h1>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">Debit & Credit</h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">Company debit and credit transaction audit log</p>
         </div>
 
-        <div className="flex items-center space-x-2 shrink-0 overflow-x-auto">
-          {/* Add Credit Button */}
-          <button
-            onClick={() => handleOpenAddModal('Cash In')}
-            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Credit
-          </button>
+        <div className="flex items-center space-x-2 shrink-0 overflow-x-auto pb-1 md:pb-0">
+          {/* User Selector Dropdown */}
+          <div className="mr-1">
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-bold border border-slate-300 focus:outline-none"
+            >
+              <option value="All">All Users & Co.</option>
+              <option value="Shukan Company">🏢 Shukan Co.</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.name}>{u.name}</option>
+              ))}
+            </select>
+          </div>
 
-          {/* Add Debit Button */}
+          {/* Add Debit Button (First) */}
           <button
             onClick={() => handleOpenAddModal('Cash Out')}
-            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-center px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Debit
           </button>
 
+          {/* Add Credit Button (Second) */}
+          <button
+            onClick={() => handleOpenAddModal('Cash In')}
+            className="inline-flex items-center justify-center px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+          >
+            <svg className="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Credit
+          </button>
+
           {/* Print Report Button */}
           <button
-            onClick={() => window.print()}
-            className="inline-flex items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
-            title="Print Current Ledger"
+            onClick={() => triggerPrint('all')}
+            className="inline-flex items-center justify-center px-3.5 py-2 rounded-xl bg-[#002B49] text-white hover:bg-[#001D33] text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            title="Print Report"
           >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
             </svg>
             Print Report
@@ -345,186 +458,846 @@ const CreditDebit = () => {
         </div>
       </div>
 
-      {/* Active Filter Indicator Banner */}
-      {hasActiveFilters && (
-        <div className="p-3 rounded-xl bg-amber-50/80 border border-[#c69255]/30 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
-          <div className="flex flex-wrap items-center gap-2 text-slate-800">
-            <span className="font-extrabold text-[#002B49] flex items-center">
-              <svg className="w-4 h-4 mr-1 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              Active Filter:
-            </span>
-            {selectedUser !== 'All' && (
-              <span className="px-2.5 py-0.5 rounded-md bg-[#002B49] text-white font-bold">
-                User: {selectedUser}
-              </span>
+      {/* View Switcher Tabs (Debit First, Credit Second) */}
+      <div className="flex items-center space-x-1 bg-slate-200/70 p-1.5 rounded-2xl w-max border border-slate-300/50 print:hidden">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+            activeTab === 'all'
+              ? 'bg-white text-[#002B49] shadow-md'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          All Tables ({rawDebitTxns.length + rawCreditTxns.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('debit')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer ${
+            activeTab === 'debit'
+              ? 'bg-[#c69255] text-white shadow-md'
+              : 'text-slate-600 hover:text-[#c69255]'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-300"></span>
+          <span>Debit Table ({rawDebitTxns.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('credit')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer ${
+            activeTab === 'credit'
+              ? 'bg-emerald-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-emerald-700'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Credit Table ({rawCreditTxns.length})</span>
+        </button>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 🟠 SECTION 1: DEBIT TRANSACTIONS TABLE & FILTERS (FIRST)  */}
+      {/* ======================================================== */}
+      {(activeTab === 'all' || activeTab === 'debit') && (
+        <div className={`space-y-4 ${printTarget === 'credit' ? 'print:hidden' : ''}`}>
+          {/* Section Header Card */}
+          <div className="glass-card p-4 rounded-2xl border-l-4 border-l-[#c69255] space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 print:border-b-2 print:border-black pb-3 print:pb-1">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm print:hidden">
+                  🧾
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#002B49] print:text-lg print:text-black print:font-black flex items-center gap-2">
+                    Debit Transactions (Cash Out)
+                    <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-semibold">
+                      {filteredDebitTxns.length} Entries
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-slate-500 font-medium print:text-black print:font-semibold">Expenses and payments made</p>
+                </div>
+              </div>
+
+              {/* Dedicated Debit Filter Trigger & Print Button */}
+              <div className="flex items-center space-x-2 print:hidden">
+                <button
+                  onClick={() => setIsDebitFilterOpen(true)}
+                  className={`flex items-center justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                    hasActiveDebitFilters
+                      ? 'bg-[#c69255] text-white border-[#c69255] shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  Filter Debit {hasActiveDebitFilters && <span className="ml-1 text-emerald-300 font-extrabold">●</span>}
+                </button>
+
+                <button
+                  onClick={() => triggerPrint('debit')}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#c69255] hover:bg-[#b88548] text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center"
+                >
+                  <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Debit
+                </button>
+              </div>
+            </div>
+
+            {/* Quick 1-Line Search Bar for Debit */}
+            <div className="flex items-center gap-2 print:hidden">
+              <div className="relative flex-1">
+                <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={debitSearch}
+                  onChange={(e) => setDebitSearch(e.target.value)}
+                  placeholder="Search debit entries (user, description, date, amount)..."
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input text-slate-800 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+              {debitSearch && (
+                <button
+                  onClick={() => setDebitSearch('')}
+                  className="text-xs text-rose-600 font-bold hover:underline px-2"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Active Debit Filter Badge Banner */}
+            {hasActiveDebitFilters && (
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+                <div className="flex flex-wrap items-center gap-2 text-slate-800">
+                  <span className="font-extrabold text-[#002B49]">Active Debit Filters:</span>
+                  {debitStatus !== 'All' && (
+                    <span className="px-2 py-0.5 rounded bg-[#002B49] text-white font-bold text-[11px]">
+                      Status: {debitStatus}
+                    </span>
+                  )}
+                  {(debitStartDate || debitEndDate) && (
+                    <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[11px]">
+                      Date: {debitStartDate || 'Start'} to {debitEndDate || 'Today'}
+                    </span>
+                  )}
+                  {(debitMinAmt || debitMaxAmt) && (
+                    <span className="px-2 py-0.5 rounded bg-[#c69255] text-white font-bold text-[11px]">
+                      Amount: {debitMinAmt ? `${settings.currency}${debitMinAmt}` : 'Min'} - {debitMaxAmt ? `${settings.currency}${debitMaxAmt}` : 'Max'}
+                    </span>
+                  )}
+                </div>
+                <button onClick={resetDebitFilters} className="text-[11px] font-bold text-rose-600 hover:underline">
+                  Reset Debit Filters
+                </button>
+              </div>
             )}
-            {selectedType !== 'All' && (
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-700 text-white font-bold">
-                Type: {selectedType}
-              </span>
-            )}
-            {selectedStatus !== 'All' && (
-              <span className="px-2.5 py-0.5 rounded-md bg-[#c69255] text-white font-bold">
-                Status: {selectedStatus}
-              </span>
-            )}
-            {(minAmount || maxAmount) && (
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white font-bold">
-                Amount: {minAmount ? `${settings.currency}${minAmount}` : 'Min'} - {maxAmount ? `${settings.currency}${maxAmount}` : 'Max'}
-              </span>
-            )}
-            {(startDate || endDate) && (
-              <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
-                Date: {startDate || 'Beginning'} to {endDate || 'Today'}
-              </span>
-            )}
-            {searchTerm && (
-              <span className="px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-800 font-bold">
-                Search: "{searchTerm}"
-              </span>
-            )}
+
+            {/* Debit Summary Card (Interactive Single Combined Compact Card) */}
+            <div className="pt-1 print:pt-0.5">
+              <div
+                onClick={() => setDebitStatus('All')}
+                className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/90 border transition-all cursor-pointer shadow-2xs hover:shadow-md w-full sm:w-fit min-w-[210px] sm:min-w-[240px] max-w-[270px] print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
+                  debitStatus === 'All' && !hasActiveDebitFilters ? 'border-[#002B49] ring-2 ring-[#002B49]/15' : 'border-slate-200/90'
+                }`}
+                title="Click to show all debit transactions"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-[#002B49] print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">{displayDebitTitle}</span>
+                  <div className="flex items-center space-x-1.5">
+                    {hasActiveDebitFilters && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); resetDebitFilters(); }}
+                        className="text-[10px] font-extrabold text-rose-600 hover:underline print:hidden"
+                      >
+                        Show All ✕
+                      </span>
+                    )}
+                    <div className="w-6 h-6 rounded-lg bg-[#002B49]/10 text-[#002B49] flex items-center justify-center text-xs font-black print:hidden">
+                      🧾
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg sm:text-xl font-black text-[#002B49] print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
+                    {settings.currency}{displayDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+
+                  {/* Web View Interactive Pill Badges */}
+                  <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDebitStatus(debitStatus === 'Done' ? 'All' : 'Done'); }}
+                      className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                        debitStatus === 'Done'
+                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+                          : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
+                      }`}
+                      title="Click to filter Done expenses"
+                    >
+                      <span>Done:</span>
+                      <span>{settings.currency}{displayDebitDone.toLocaleString('en-IN')}</span>
+                    </button>
+                    {displayDebitDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setDebitStatus(debitStatus === 'Due' ? 'All' : 'Due'); }}
+                        className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                          debitStatus === 'Due'
+                            ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                            : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
+                        }`}
+                        title="Click to filter Due expenses"
+                      >
+                        <span>Due:</span>
+                        <span>{settings.currency}{displayDebitDue.toLocaleString('en-IN')}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Print View Clean Text Line */}
+                  <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
+                    Done: {settings.currency}{displayDebitDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayDebitDue.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => { setSelectedUser('All'); setSelectedType('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setMinAmount(''); setMaxAmount(''); setSearchTerm(''); }}
-            className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
-          >
-            Clear Filter
-          </button>
+
+          {/* Debit Table (Desktop & Mobile) */}
+          <div className="glass-card p-3.5 sm:p-5 rounded-2xl print:p-0 print:border-none print:shadow-none print:bg-transparent">
+            {/* Mobile View */}
+            <div className="block md:hidden space-y-3 print:hidden">
+              {filteredDebitTxns.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
+                  No debit entries match your filter.
+                </div>
+              ) : (
+                filteredDebitTxns.map((t, index) => {
+                  const isDone = (t.status || 'Done') === 'Done';
+                  return (
+                    <div key={t.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5 flex-wrap">
+                          <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
+                          <span className="text-xs font-extrabold text-[#002B49]">{t.userName}</span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900">
+                            Debit
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-semibold">{formatDate(t.date)}</span>
+                      </div>
+
+                      <div className="text-xs text-slate-600 font-medium line-clamp-2">
+                        {t.description || '-'}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <div className="text-sm font-extrabold text-[#002B49]">
+                          {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <select
+                            value={t.status || 'Done'}
+                            onChange={(e) => handleStatusChange(t, e.target.value)}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
+                              isDone
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300'
+                            }`}
+                          >
+                            <option value="Done">Done</option>
+                            <option value="Due">Due</option>
+                          </select>
+
+                          <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                          <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop Table View & High-Contrast Print View */}
+            <div className="hidden md:block overflow-x-auto print:block">
+              <table className="w-full text-left text-sm text-slate-700 print:text-black print:text-xs border-collapse">
+                <thead className="text-xs uppercase bg-amber-50/80 text-amber-900 border-b border-amber-200 print:bg-slate-100 print:text-black print:border-b-2 print:border-black">
+                  <tr>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Sr. No.</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Date</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Type</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">User Name</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Description / Notes</th>
+                    <th className="py-3 px-4 font-bold text-right print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Amount</th>
+                    <th className="py-3 px-4 font-bold text-center print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Status</th>
+                    <th className="py-3 px-4 font-bold text-center print:hidden">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 print:divide-y-0">
+                  {filteredDebitTxns.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-slate-300">
+                        No debit transactions match the criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDebitTxns.map((t, index) => {
+                      const isDone = (t.status || 'Done') === 'Done';
+                      return (
+                        <tr key={t.id || index} className="hover:bg-amber-50/30 transition print:bg-white">
+                          <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{index + 1}</td>
+                          <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{formatDate(t.date)}</td>
+                          <td className="py-3.5 px-4 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-extrabold print:text-[11px]">
+                              Debit
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-[#002B49] whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{t.userName}</td>
+                          <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:max-w-none print:whitespace-normal print:break-words">{t.description || '-'}</td>
+                          <td className="py-3.5 px-4 font-black text-right text-[#002B49] whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:font-black">
+                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
+                            <span className="hidden print:inline-block text-black font-extrabold text-[11px] uppercase print:border-none print:p-0">
+                              {t.status || 'Done'}
+                            </span>
+                            <select
+                              value={t.status || 'Done'}
+                              onChange={(e) => handleStatusChange(t, e.target.value)}
+                              className={`print:hidden text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
+                                isDone
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+                              }`}
+                            >
+                              <option value="Done">Done</option>
+                              <option value="Due">Due</option>
+                            </select>
+                          </td>
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:hidden">
+                            <div className="flex items-center justify-center space-x-1.5">
+                              <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700" title="Edit Entry">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              </button>
+                              <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600" title="Delete Entry">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {filteredDebitTxns.length > 0 && (
+                  <tfoot className="bg-amber-50/50 font-bold text-xs text-amber-900 border-t-2 border-amber-200 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
+                    <tr>
+                      <td colSpan="5" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black">
+                        {(hasActiveDebitFilters || selectedUser !== 'All') ? 'Total Filtered Debit:' : 'Total Debit:'}
+                      </td>
+                      <td className="py-3 px-4 text-right font-black text-[#002B49] text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black">
+                        {settings.currency}{filteredDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td colSpan="2" className="print:border print:border-black"></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Dynamic Filtered Summary Cards Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-        {/* 1. CREDIT (MY HAND) */}
-        {(selectedType !== 'Debit' && (selectedDepositTo === 'All' || selectedDepositTo === 'My Hand')) && (
-          <div className="glass-card p-3.5 sm:p-4 rounded-2xl border-l-4 border-l-emerald-500 flex flex-col justify-between shadow-xs">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase text-slate-600">
-                  {hasActiveFilters ? 'Filtered Credit (Hand)' : 'Credit (My Hand)'}
-                </span>
-                <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px]">✋</span>
+      {/* ======================================================== */}
+      {/* 🟢 SECTION 2: CREDIT TRANSACTIONS TABLE & FILTERS (SECOND)*/}
+      {/* ======================================================== */}
+      {(activeTab === 'all' || activeTab === 'credit') && (
+        <div className={`space-y-4 ${printTarget === 'debit' ? 'print:hidden' : ''}`}>
+          {/* Section Banner Header */}
+          <div className="glass-card p-4 rounded-2xl border-l-4 border-l-emerald-500 space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 print:border-b-2 print:border-black pb-3 print:pb-1">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm print:hidden">
+                  💰
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#002B49] print:text-lg print:text-black print:font-black flex items-center gap-2">
+                    Credit Transactions (Cash In)
+                    <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-semibold">
+                      {filteredCreditTxns.length} Entries
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-slate-500 font-medium print:text-black print:font-semibold">Deposits to My Hand or Company Wallet</p>
+                </div>
               </div>
-              <div className="text-lg sm:text-xl font-black text-emerald-700 mt-1">
-                {settings.currency}{filteredSummary.myHandCreditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+              {/* Dedicated Credit Filter Trigger & Print Button */}
+              <div className="flex items-center space-x-2 print:hidden">
+                <button
+                  onClick={() => setIsCreditFilterOpen(true)}
+                  className={`flex items-center justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                    hasActiveCreditFilters
+                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5 mr-1.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  Filter Credit {hasActiveCreditFilters && <span className="ml-1 text-amber-300 font-extrabold">●</span>}
+                </button>
+
+                <button
+                  onClick={() => triggerPrint('credit')}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center"
+                >
+                  <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Credit
+                </button>
               </div>
             </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-extrabold">
-              {selectedStatus !== 'Due' && (
-                <span className="text-emerald-700">Done: {settings.currency}{filteredSummary.myHandCreditDone.toLocaleString('en-IN')}</span>
+
+            {/* Quick 1-Line Search Bar for Credit */}
+            <div className="flex items-center gap-2 print:hidden">
+              <div className="relative flex-1">
+                <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={creditSearch}
+                  onChange={(e) => setCreditSearch(e.target.value)}
+                  placeholder="Search credit entries (user, description, date, amount)..."
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input text-slate-800 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+              {creditSearch && (
+                <button
+                  onClick={() => setCreditSearch('')}
+                  className="text-xs text-rose-600 font-bold hover:underline px-2"
+                >
+                  Clear
+                </button>
               )}
-              {selectedStatus !== 'Done' && (
-                <span className="text-amber-700">Due: {settings.currency}{filteredSummary.myHandCreditDue.toLocaleString('en-IN')}</span>
-              )}
+            </div>
+
+            {/* Active Credit Filter Badge Banner */}
+            {hasActiveCreditFilters && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+                <div className="flex flex-wrap items-center gap-2 text-slate-800">
+                  <span className="font-extrabold text-emerald-900">Active Credit Filters:</span>
+                  {creditDepositTo !== 'All' && (
+                    <span className="px-2 py-0.5 rounded bg-purple-700 text-white font-bold text-[11px]">
+                      Account: {creditDepositTo}
+                    </span>
+                  )}
+                  {creditStatus !== 'All' && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-800 text-white font-bold text-[11px]">
+                      Status: {creditStatus}
+                    </span>
+                  )}
+                  {(creditStartDate || creditEndDate) && (
+                    <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[11px]">
+                      Date: {creditStartDate || 'Start'} to {creditEndDate || 'Today'}
+                    </span>
+                  )}
+                  {(creditMinAmt || creditMaxAmt) && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-[11px]">
+                      Amount: {creditMinAmt ? `${settings.currency}${creditMinAmt}` : 'Min'} - {creditMaxAmt ? `${settings.currency}${creditMaxAmt}` : 'Max'}
+                    </span>
+                  )}
+                </div>
+                <button onClick={resetCreditFilters} className="text-[11px] font-bold text-rose-600 hover:underline">
+                  Reset Credit Filters
+                </button>
+              </div>
+            )}
+
+            {/* Credit Summary Cards (Print High-Contrast Black & White Compact) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 print:gap-1.5 print:pt-1">
+              {/* Total Credit Card */}
+              <div
+                onClick={() => { setCreditDepositTo('All'); setCreditStatus('All'); }}
+                className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
+                  creditDepositTo === 'All' && creditStatus === 'All' ? 'border-emerald-600 ring-2 ring-emerald-500/15' : 'border-emerald-200/90'
+                }`}
+                title="Click to show all credit transactions"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-emerald-800 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">{displayCreditTotalTitle}</span>
+                  <div className="flex items-center space-x-1.5">
+                    {hasActiveCreditFilters && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); resetCreditFilters(); }}
+                        className="text-[10px] font-extrabold text-rose-600 hover:underline print:hidden"
+                      >
+                        Show All ✕
+                      </span>
+                    )}
+                    <div className="w-6 h-6 rounded-lg bg-emerald-200/80 text-emerald-800 flex items-center justify-center text-xs font-black print:hidden">
+                      💰
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg sm:text-xl font-black text-emerald-700 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
+                    {settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                        creditDepositTo === 'All' && creditStatus === 'Done'
+                          ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
+                          : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
+                      }`}
+                    >
+                      <span>Done:</span>
+                      <span>{settings.currency}{displayCreditDone.toLocaleString('en-IN')}</span>
+                    </button>
+                    {displayCreditDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus(creditStatus === 'Due' ? 'All' : 'Due'); }}
+                        className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                          creditDepositTo === 'All' && creditStatus === 'Due'
+                            ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                            : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
+                        }`}
+                      >
+                        <span>Due:</span>
+                        <span>{settings.currency}{displayCreditDue.toLocaleString('en-IN')}</span>
+                      </button>
+                    )}
+                  </div>
+                  {/* Print View Clean Text Line */}
+                  <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
+                    Done: {settings.currency}{displayCreditDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayCreditDue.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* My Hand Card */}
+              <div
+                onClick={() => { setCreditDepositTo(creditDepositTo === 'My Hand' && creditStatus === 'All' ? 'All' : 'My Hand'); setCreditStatus('All'); }}
+                className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
+                  creditDepositTo === 'My Hand' ? 'border-blue-600 ring-2 ring-blue-500/15' : 'border-blue-200/90'
+                }`}
+                title="Click to filter My Hand transactions"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-blue-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">My Hand</span>
+                  <div className="w-6 h-6 rounded-lg bg-blue-200/80 text-blue-800 flex items-center justify-center text-xs font-black print:hidden">
+                    ✋
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg sm:text-xl font-black text-blue-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
+                    {settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'My Hand' ? filteredCreditTotal : creditSummary.myHandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                        creditDepositTo === 'My Hand' && creditStatus === 'Done'
+                          ? 'bg-blue-700 text-white border-blue-800 shadow-xs'
+                          : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
+                      }`}
+                    >
+                      <span>Done:</span>
+                      <span>{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}</span>
+                    </button>
+                    {creditSummary.myHandDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus(creditStatus === 'Due' ? 'All' : 'Due'); }}
+                        className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                          creditDepositTo === 'My Hand' && creditStatus === 'Due'
+                            ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                            : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
+                        }`}
+                      >
+                        <span>Due:</span>
+                        <span>{settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}</span>
+                      </button>
+                    )}
+                  </div>
+                  {/* Print View Clean Text Line */}
+                  <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
+                    Done: {settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Wallet Card */}
+              <div
+                onClick={() => { setCreditDepositTo(creditDepositTo === 'Company Wallet' && creditStatus === 'All' ? 'All' : 'Company Wallet'); setCreditStatus('All'); }}
+                className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
+                  creditDepositTo === 'Company Wallet' ? 'border-purple-600 ring-2 ring-purple-500/15' : 'border-purple-200/90'
+                }`}
+                title="Click to filter Company Wallet transactions"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-purple-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">Co. Wallet</span>
+                  <div className="w-6 h-6 rounded-lg bg-purple-200/80 text-purple-800 flex items-center justify-center text-xs font-black print:hidden">
+                    🏢
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg sm:text-xl font-black text-purple-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
+                    {settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'Company Wallet' ? filteredCreditTotal : creditSummary.walletTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                        creditDepositTo === 'Company Wallet' && creditStatus === 'Done'
+                          ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
+                          : 'bg-purple-100/90 text-purple-900 border-purple-200/80 hover:bg-purple-200'
+                      }`}
+                    >
+                      <span>Done:</span>
+                      <span>{settings.currency}{creditSummary.walletDone.toLocaleString('en-IN')}</span>
+                    </button>
+                    {creditSummary.walletDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus(creditStatus === 'Due' ? 'All' : 'Due'); }}
+                        className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
+                          creditDepositTo === 'Company Wallet' && creditStatus === 'Due'
+                            ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                            : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
+                        }`}
+                      >
+                        <span>Due:</span>
+                        <span>{settings.currency}{creditSummary.walletDue.toLocaleString('en-IN')}</span>
+                      </button>
+                    )}
+                  </div>
+                  {/* Print View Clean Text Line */}
+                  <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
+                    Done: {settings.currency}{creditSummary.walletDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.walletDue.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* 2. CREDIT (COMPANY WALLET) */}
-        {(selectedType !== 'Debit' && (selectedDepositTo === 'All' || selectedDepositTo === 'Company Wallet')) && (
-          <div className="glass-card p-3.5 sm:p-4 rounded-2xl border-l-4 border-l-purple-600 flex flex-col justify-between shadow-xs">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase text-slate-600">
-                  {hasActiveFilters ? 'Filtered Credit (Co. Wallet)' : 'Credit (Co. Wallet)'}
-                </span>
-                <span className="w-5 h-5 rounded-md bg-purple-100 text-purple-700 flex items-center justify-center text-[10px]">🏢</span>
-              </div>
-              <div className="text-lg sm:text-xl font-black text-purple-800 mt-1">
-                {settings.currency}{filteredSummary.companyWalletCreditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
+          {/* Credit Table (Desktop & Mobile) */}
+          <div className="glass-card p-3.5 sm:p-5 rounded-2xl print:p-0 print:border-none print:shadow-none print:bg-transparent">
+            {/* Mobile View */}
+            <div className="block md:hidden space-y-3 print:hidden">
+              {filteredCreditTxns.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
+                  No credit entries match your filter.
+                </div>
+              ) : (
+                filteredCreditTxns.map((t, index) => {
+                  const isDone = (t.status || 'Done') === 'Done';
+                  const accountLabel = t.depositTo === 'Company Wallet' ? '🏢 Company Wallet' : '✋ My Hand';
+                  return (
+                    <div key={t.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5 flex-wrap">
+                          <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
+                          <span className="text-xs font-extrabold text-[#002B49]">{t.userName}</span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
+                            Credit
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${t.depositTo === 'Company Wallet' ? 'bg-purple-100 text-purple-800' : 'bg-blue-50 text-blue-800'}`}>
+                            {accountLabel}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-semibold">{formatDate(t.date)}</span>
+                      </div>
+
+                      <div className="text-xs text-slate-600 font-medium line-clamp-2">
+                        {t.description || '-'}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <div className="text-sm font-extrabold text-emerald-700">
+                          {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <select
+                            value={t.status || 'Done'}
+                            onChange={(e) => handleStatusChange(t, e.target.value)}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
+                              isDone
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300'
+                            }`}
+                          >
+                            <option value="Done">Done</option>
+                            <option value="Due">Due</option>
+                          </select>
+
+                          <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                          <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-extrabold">
-              {selectedStatus !== 'Due' && (
-                <span className="text-purple-700">Done: {settings.currency}{filteredSummary.companyWalletCreditDone.toLocaleString('en-IN')}</span>
-              )}
-              {selectedStatus !== 'Done' && (
-                <span className="text-amber-700">Due: {settings.currency}{filteredSummary.companyWalletCreditDue.toLocaleString('en-IN')}</span>
-              )}
+
+            {/* Desktop Table View & High-Contrast Print View */}
+            <div className="hidden md:block overflow-x-auto print:block">
+              <table className="w-full text-left text-sm text-slate-700 print:text-black print:text-xs border-collapse">
+                <thead className="text-xs uppercase bg-emerald-50/80 text-emerald-900 border-b border-emerald-200 print:bg-slate-100 print:text-black print:border-b-2 print:border-black">
+                  <tr>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Sr. No.</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Date</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Type</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">User Name</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Account / Deposit To</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Description / Notes</th>
+                    <th className="py-3 px-4 font-bold text-right print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Amount</th>
+                    <th className="py-3 px-4 font-bold text-center print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Status</th>
+                    <th className="py-3 px-4 font-bold text-center print:hidden">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 print:divide-y-0">
+                  {filteredCreditTxns.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-slate-300">
+                        No credit transactions match the criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCreditTxns.map((t, index) => {
+                      const isDone = (t.status || 'Done') === 'Done';
+                      const accountLabel = t.depositTo === 'Company Wallet' ? 'Company Wallet' : 'My Hand';
+                      return (
+                        <tr key={t.id || index} className="hover:bg-emerald-50/40 transition print:bg-white">
+                          <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{index + 1}</td>
+                          <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{formatDate(t.date)}</td>
+                          <td className="py-3.5 px-4 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-extrabold print:text-[11px]">
+                              Credit
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-[#002B49] whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{t.userName}</td>
+                          <td className="py-3.5 px-4 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
+                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:text-xs ${
+                              t.depositTo === 'Company Wallet'
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                : 'bg-blue-50 text-blue-800 border border-blue-200'
+                            }`}>
+                              {accountLabel}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:max-w-none print:whitespace-normal print:break-words">
+                            {t.isAllocation && (
+                              <span className="mr-1.5 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 print:bg-transparent print:border-none print:p-0 print:text-black">
+                                Company Allocation
+                              </span>
+                            )}
+                            {t.description || '-'}
+                          </td>
+                          <td className="py-3.5 px-4 font-black text-right text-emerald-700 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:font-black">
+                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
+                            <span className="hidden print:inline-block text-black font-extrabold text-[11px] uppercase print:border-none print:p-0">
+                              {t.status || 'Done'}
+                            </span>
+                            {t.isAllocation ? (
+                              <span className="print:hidden text-xs font-bold px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 inline-block">
+                                Done
+                              </span>
+                            ) : (
+                              <select
+                                value={t.status || 'Done'}
+                                onChange={(e) => handleStatusChange(t, e.target.value)}
+                                className={`print:hidden text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
+                                  isDone
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                }`}
+                              >
+                                <option value="Done">Done</option>
+                                <option value="Due">Due</option>
+                              </select>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:hidden">
+                            <div className="flex items-center justify-center space-x-1.5">
+                              <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700" title="Edit Entry">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              </button>
+                              <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600" title="Delete Entry">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {filteredCreditTxns.length > 0 && (
+                  <tfoot className="bg-emerald-50/50 font-bold text-xs text-emerald-900 border-t-2 border-emerald-200 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
+                    <tr>
+                      <td colSpan="6" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black">
+                        {(hasActiveCreditFilters || selectedUser !== 'All') ? 'Total Filtered Credit:' : 'Total Credit:'}
+                      </td>
+                      <td className="py-3 px-4 text-right font-black text-emerald-700 text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black">
+                        {settings.currency}{filteredCreditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td colSpan="2" className="print:border print:border-black"></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
           </div>
-        )}
-
-        {/* 3. TOTAL DEBIT (COMBINED DONE & DUE) */}
-        {(selectedType !== 'Credit') && (
-          <div className="glass-card p-3.5 sm:p-4 rounded-2xl border-l-4 border-l-[#002B49] flex flex-col justify-between shadow-xs">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase text-slate-600">
-                  {hasActiveFilters ? 'Filtered Debit' : 'Total Debit'}
-                </span>
-                <span className="w-5 h-5 rounded-md bg-[#002B49]/10 text-[#002B49] flex items-center justify-center text-[10px]">🧾</span>
-              </div>
-              <div className="text-lg sm:text-xl font-black text-[#002B49] mt-1">
-                {settings.currency}{filteredSummary.debitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-extrabold">
-              {selectedStatus !== 'Due' && (
-                <span className="text-[#002B49]">Done: {settings.currency}{filteredSummary.debitDoneTotal.toLocaleString('en-IN')}</span>
-              )}
-              {selectedStatus !== 'Done' && (
-                <span className="text-amber-700">Due: {settings.currency}{filteredSummary.debitDueTotal.toLocaleString('en-IN')}</span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 1-Line Search Bar & Filter Button (Hidden in Print) */}
-      <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search transactions (ID, user, description, date)..."
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input text-slate-800 placeholder-slate-400 focus:outline-none"
-            />
-          </div>
-
-          <button
-            onClick={() => setIsFilterOpen(true)}
-            className={`flex items-center justify-center px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 border ${
-              hasActiveFilters
-                ? 'bg-[#002B49] text-white border-[#002B49] shadow-sm'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-            }`}
-          >
-            <svg className="w-4 h-4 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            Filter {hasActiveFilters && <span className="ml-1 text-[#c69255] font-extrabold">●</span>}
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* Filter Popup Modal */}
-      {isFilterOpen && (
+      {/* ======================================================== */}
+      {/* 🟠 DEBIT FILTER MODAL                                    */}
+      {/* ======================================================== */}
+      {isDebitFilterOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
-          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5">
-            {/* Modal Header */}
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-[#c69255]/30">
-                  <svg className="w-5 h-5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center border border-amber-300">
+                  <svg className="w-5 h-5 text-amber-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-[#002B49]">Filter Credit & Debit Entries</h3>
-                  <p className="text-[11px] text-slate-500 font-medium">Refine entries by user, type, status & date</p>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Filter Debit Entries</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Refine debit expenses by status, amount & date</p>
                 </div>
               </div>
 
               <button
-                onClick={() => setIsFilterOpen(false)}
+                onClick={() => setIsDebitFilterOpen(false)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -533,82 +1306,27 @@ const CreditDebit = () => {
               </button>
             </div>
 
-            {/* Filter Form Options */}
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Select User</label>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Status</label>
                 <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
+                  value={debitStatus}
+                  onChange={(e) => setDebitStatus(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
                 >
-                  <option value="All">All Users & Company</option>
-                  <option value="Shukan Company">🏢 Shukan Company</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
-                  ))}
+                  <option value="All">All Statuses</option>
+                  <option value="Done">Done</option>
+                  <option value="Due">Due</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Type</label>
-                  <select
-                    value={selectedType}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedType(val);
-                      if (val !== 'Credit') setSelectedDepositTo('All');
-                    }}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
-                  >
-                    <option value="All">All Types</option>
-                    <option value="Debit">Debit (Cash Out)</option>
-                    <option value="Credit">Credit (Cash In)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Status</label>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="Done">Done</option>
-                    <option value="Due">Due</option>
-                  </select>
-                </div>
-              </div>
-
-              {selectedType === 'Credit' && (
-                <div>
-                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Account / Deposit To</label>
-                  <select
-                    value={selectedDepositTo}
-                    onChange={(e) => setSelectedDepositTo(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none font-semibold border border-slate-200"
-                  >
-                    <option value="All">All Accounts</option>
-                    <option value="My Hand">✋ My Hand</option>
-                    <option value="Company Wallet">🏢 Company Wallet</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Date Filter */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
                   <DateInput
-                    value={startDate}
-                    max={endDate || undefined}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setStartDate(val);
-                      if (endDate && val > endDate) setEndDate('');
-                    }}
+                    value={debitStartDate}
+                    max={debitEndDate || undefined}
+                    onChange={(e) => setDebitStartDate(e.target.value)}
                     className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                   />
                 </div>
@@ -616,27 +1334,22 @@ const CreditDebit = () => {
                 <div>
                   <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
                   <DateInput
-                    value={endDate}
-                    min={startDate || undefined}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEndDate(val);
-                      if (startDate && val < startDate) setStartDate('');
-                    }}
+                    value={debitEndDate}
+                    min={debitStartDate || undefined}
+                    onChange={(e) => setDebitEndDate(e.target.value)}
                     className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                   />
                 </div>
               </div>
 
-              {/* Amount Range Filter */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Min Amount ({settings.currency})</label>
                   <input
                     type="number"
                     placeholder="e.g. 100"
-                    value={minAmount}
-                    onChange={(e) => setMinAmount(e.target.value)}
+                    value={debitMinAmt}
+                    onChange={(e) => setDebitMinAmt(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                   />
                 </div>
@@ -646,25 +1359,24 @@ const CreditDebit = () => {
                   <input
                     type="number"
                     placeholder="e.g. 5000"
-                    value={maxAmount}
-                    onChange={(e) => setMaxAmount(e.target.value)}
+                    value={debitMaxAmt}
+                    onChange={(e) => setDebitMaxAmt(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Footer Modal Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
               <button
-                onClick={() => { setSelectedUser('All'); setSelectedType('All'); setSelectedStatus('All'); setStartDate(''); setEndDate(''); setMinAmount(''); setMaxAmount(''); setSearchTerm(''); setIsFilterOpen(false); }}
+                onClick={() => { resetDebitFilters(); setIsDebitFilterOpen(false); }}
                 className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
               >
-                Reset All
+                Reset
               </button>
               <button
-                onClick={() => setIsFilterOpen(false)}
-                className="px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer"
+                onClick={() => setIsDebitFilterOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#c69255] hover:bg-[#b88548] text-white text-xs font-bold shadow-md transition cursor-pointer"
               >
                 Apply Filters
               </button>
@@ -673,186 +1385,134 @@ const CreditDebit = () => {
         </div>
       )}
 
-      {/* Main Content Table & Mobile Cards */}
-      <div className="glass-card p-4 sm:p-6 rounded-2xl print:p-0 print:border-none print:shadow-none print:bg-transparent">
-        {/* Mobile View Cards */}
-        <div className="block md:hidden space-y-3 print:hidden">
-          {filteredTransactions.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
-              No transaction entries match the selected filters.
-            </div>
-          ) : (
-            filteredTransactions.map((t, index) => {
-              const isDone = (t.status || 'Done') === 'Done';
-              const isCredit = t.type === 'Cash In' || t.type === 'Credit';
-              return (
-                <div key={t.id} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
-                      <span className="text-xs font-extrabold text-[#002B49]">{t.userName}</span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${isCredit ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                        {isCredit ? 'Credit' : 'Debit'}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-500 font-semibold">{formatDate(t.date)}</span>
-                  </div>
-
-                  <div className="text-xs text-slate-600 font-medium line-clamp-2">
-                    {t.description || '-'}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div className="text-sm font-extrabold text-[#002B49]">
-                      {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <select
-                        value={t.status || 'Done'}
-                        onChange={(e) => handleStatusChange(t, e.target.value)}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
-                          isDone
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : 'bg-amber-100 text-amber-800 border border-amber-300'
-                        }`}
-                      >
-                        <option value="Done">Done</option>
-                        <option value="Due">Due</option>
-                      </select>
-
-                      <button
-                        onClick={() => handleOpenEditModal(t)}
-                        className="p-1.5 text-slate-400 hover:text-slate-700 transition"
-                        title="Edit Entry"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-
-                      <button
-                        onClick={() => handleDelete(t.id)}
-                        className="p-1.5 text-rose-400 hover:text-rose-600 transition"
-                        title="Delete Entry"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+      {/* ======================================================== */}
+      {/* 🟢 CREDIT FILTER MODAL                                   */}
+      {/* ======================================================== */}
+      {isCreditFilterOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center border border-emerald-300">
+                  <svg className="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
                 </div>
-              );
-            })
-          )}
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Filter Credit Entries</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Refine credit records by account, status & date</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsCreditFilterOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Account / Deposit To</label>
+                  <select
+                    value={creditDepositTo}
+                    onChange={(e) => setCreditDepositTo(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Accounts</option>
+                    <option value="My Hand">✋ My Hand</option>
+                    <option value="Company Wallet">🏢 Company Wallet</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Status</label>
+                  <select
+                    value={creditStatus}
+                    onChange={(e) => setCreditStatus(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Done">Done</option>
+                    <option value="Due">Due</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
+                  <DateInput
+                    value={creditStartDate}
+                    max={creditEndDate || undefined}
+                    onChange={(e) => setCreditStartDate(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
+                  <DateInput
+                    value={creditEndDate}
+                    min={creditStartDate || undefined}
+                    onChange={(e) => setCreditEndDate(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Min Amount ({settings.currency})</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 100"
+                    value={creditMinAmt}
+                    onChange={(e) => setCreditMinAmt(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Max Amount ({settings.currency})</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 5000"
+                    value={creditMaxAmt}
+                    onChange={(e) => setCreditMaxAmt(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
+              <button
+                onClick={() => { resetCreditFilters(); setIsCreditFilterOpen(false); }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => setIsCreditFilterOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto print:block">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="text-xs uppercase bg-slate-100/80 text-slate-600 border-b border-slate-200">
-              <tr>
-                <th className="py-3 px-4 font-bold">Sr. No.</th>
-                <th className="py-3 px-4 font-bold">Date</th>
-                <th className="py-3 px-4 font-bold">Type</th>
-                <th className="py-3 px-4 font-bold">User Name</th>
-                <th className="py-3 px-4 font-bold">Description / Notes</th>
-                <th className="py-3 px-4 font-bold text-right">Amount</th>
-                <th className="py-3 px-4 font-bold text-center">Status</th>
-                <th className="py-3 px-4 font-bold text-center print:hidden">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan="8" className="py-8 text-center text-slate-500 text-xs font-medium">
-                    No transactions match the selected filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredTransactions.map((t, index) => {
-                  const isDone = (t.status || 'Done') === 'Done';
-                  const isCredit = t.type === 'Cash In' || t.type === 'Credit';
-                  return (
-                    <tr key={t.id} className="hover:bg-slate-50 transition">
-                      <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                      <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap">{formatDate(t.date)}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="flex flex-col space-y-1">
-                          <span className={`w-max px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${isCredit ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-800 border border-slate-300'}`}>
-                            {isCredit ? 'Credit' : 'Debit'}
-                          </span>
-                          <span className="text-[11px] font-bold text-slate-600">
-                            {isCredit ? (t.depositTo === 'Company Wallet' ? '🏢 Company Wallet' : '✋ My Hand') : '💸 Expense'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>
-                      <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate">{t.description || '-'}</td>
-                      <td className="py-3.5 px-4 font-bold text-right text-[#002B49] whitespace-nowrap">
-                        {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <select
-                          value={t.status || 'Done'}
-                          onChange={(e) => handleStatusChange(t, e.target.value)}
-                          className={`text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition print:appearance-none ${
-                            isDone
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-amber-100 text-amber-800 border border-amber-300'
-                          }`}
-                        >
-                          <option value="Done">Done</option>
-                          <option value="Due">Due</option>
-                        </select>
-                      </td>
-                      <td className="py-3.5 px-4 text-center print:hidden whitespace-nowrap">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          <button
-                            onClick={() => handleOpenEditModal(t)}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 transition rounded-lg hover:bg-slate-100"
-                            title="Edit Entry"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-
-                          <button
-                            onClick={() => handleDelete(t.id)}
-                            className="p-1.5 text-rose-400 hover:text-rose-600 transition rounded-lg hover:bg-rose-50"
-                            title="Delete Entry"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-            {filteredTransactions.length > 0 && (
-              <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-200">
-                <tr>
-                  <td colSpan="5" className="py-3 px-4 text-right text-xs uppercase text-slate-600">Total Filtered Amount:</td>
-                  <td className="py-3 px-4 text-right text-sm text-[#002B49]">
-                    {settings.currency}{totalFilteredExpenseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td colSpan="2"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-
-      {/* Add / Edit Transaction Modal */}
+      {/* ======================================================== */}
+      {/* 📝 ADD / EDIT ENTRY MODAL                                 */}
+      {/* ======================================================== */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
           <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-4">
             <button
               onClick={() => setIsModalOpen(false)}
@@ -864,13 +1524,10 @@ const CreditDebit = () => {
             </button>
 
             <h3 className="text-xl font-extrabold text-[#002B49] mb-4">
-              {editingTxn
-                ? (watch('type') === 'Cash In' ? 'Edit Credit Entry' : 'Edit Debit Entry')
-                : (watch('type') === 'Cash In' ? 'Add Credit Entry' : 'Add Debit Entry')}
+              {editingTxn ? 'Edit Transaction' : (watch('type') === 'Cash In' ? 'Add Credit Entry' : 'Add Debit Entry')}
             </h3>
 
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
-              {/* Fixed Entry Type Badge (Set via Credit/Debit Button) */}
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Entry Type</span>
                 <span className={`px-3 py-1 rounded-lg text-xs font-extrabold uppercase ${
@@ -882,17 +1539,16 @@ const CreditDebit = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#002B49] mb-1">Account / User Name</label>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">User / Account Holder</label>
                 <select
-                  {...register('userName', { required: 'User name is required' })}
+                  {...register('userName')}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                 >
                   <option value="Shukan Company">🏢 Shukan Company</option>
                   {users.map((u) => (
-                    <option key={u.id} value={u.name}>{u.name} ({u.role || 'Staff'})</option>
+                    <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
                   ))}
                 </select>
-                {errors.userName && <p className="text-xs text-rose-500 mt-1">{errors.userName.message}</p>}
               </div>
 
               <div>
@@ -947,7 +1603,7 @@ const CreditDebit = () => {
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Description / Notes <span className="text-rose-500">*</span></label>
                 <textarea
                   rows="3"
-                  placeholder="Describe transaction details..."
+                  placeholder="Describe details..."
                   {...register('description', { required: 'Description is required' })}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none resize-none"
                 ></textarea>
@@ -966,7 +1622,7 @@ const CreditDebit = () => {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-[#c69255] hover:bg-[#d4a359] text-white text-xs font-bold shadow-md"
                 >
-                  {editingTxn ? 'Update Entry' : 'Save Entry'}
+                  {editingTxn ? 'Save Changes' : 'Submit Entry'}
                 </button>
               </div>
             </form>
