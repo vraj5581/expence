@@ -188,14 +188,31 @@ const Dashboard = () => {
 
   const myStats = getUserStats(currentUser?.name || '');
 
+  // Extract user allocations from allocationsHistory (Money Received from Company)
+  const myAllocations = useMemo(() => {
+    return (allocationsHistory || []).filter(a => a.userName === currentUser?.name);
+  }, [allocationsHistory, currentUser?.name]);
+
   // Staff User Financial Totals (Strictly Matching My Debit & Credit Page)
   const myDebitTxns = useMemo(() => {
     return userTransactions.filter(t => t.type !== 'Cash In' && t.type !== 'Credit');
   }, [userTransactions]);
 
   const myCreditTxns = useMemo(() => {
-    return userTransactions.filter(t => t.type === 'Cash In' || t.type === 'Credit');
-  }, [userTransactions]);
+    const directCredits = userTransactions.filter(t => t.type === 'Cash In' || t.type === 'Credit');
+    const mappedAllocations = myAllocations.map(a => ({
+      id: a.id,
+      type: 'Credit',
+      depositTo: 'My Hand',
+      userName: a.userName,
+      amount: parseFloat(a.amount) || 0,
+      date: a.date,
+      description: a.notes || `Company Cash Allocation (${a.userName})`,
+      status: 'Done',
+      isAllocation: true
+    }));
+    return [...mappedAllocations, ...directCredits].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [userTransactions, myAllocations]);
 
   const myDebitTotal = useMemo(() => {
     return myDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
@@ -203,6 +220,22 @@ const Dashboard = () => {
 
   const myCreditTotal = useMemo(() => {
     return myCreditTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myCreditTxns]);
+
+  const myDoneCredit = useMemo(() => {
+    return myCreditTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myCreditTxns]);
+
+  const myHandDoneCredit = useMemo(() => {
+    return myCreditTxns.filter(t => (t.status || 'Done') === 'Done' && t.depositTo !== 'Company Wallet').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myCreditTxns]);
+
+  const myWalletDoneCredit = useMemo(() => {
+    return myCreditTxns.filter(t => (t.status || 'Done') === 'Done' && t.depositTo === 'Company Wallet').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [myCreditTxns]);
+
+  const myDueCredit = useMemo(() => {
+    return myCreditTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [myCreditTxns]);
 
   const myDoneDebit = useMemo(() => {
@@ -255,18 +288,20 @@ const Dashboard = () => {
     .filter(t => (t.status || 'Done') === 'Due')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-  const doneTotal = isAdmin ? teamDoneTotal : userDoneTotal;
-  const dueTotal = isAdmin ? teamDueTotal : userDueTotal;
-  const moneyGiven = isAdmin ? totalAllocatedToTeam : myStats.allocated;
-  const neededFromAdmin = Math.max(0, (doneTotal + dueTotal) - moneyGiven);
+  const doneTotal = isAdmin ? teamDoneTotal : myDoneDebit;
+  const dueTotal = isAdmin ? teamDueTotal : myDueDebit;
+  const moneyGiven = isAdmin ? totalAllocatedToTeam : myHandDoneCredit;
+  const neededFromAdmin = isAdmin
+    ? Math.max(0, (doneTotal + dueTotal) - moneyGiven)
+    : Math.max(0, (myDoneDebit + myDueDebit) - myHandDoneCredit);
 
   const overviewBarChartLabels = isAdmin
-    ? [['Cash', 'Given'], ['Team', 'Spent'], ['Company', 'Spent'], ['Unpaid', 'Due'], ['Company', 'Owes']]
-    : [['Cash', 'Given'], ['My', 'Spent'], ['Unpaid', 'Due'], ['Company', 'Owes']];
+    ? [['Cash', 'Advanced'], ['Team', 'Spent'], ['Company', 'Spent'], ['Unpaid', 'Due'], ['Company', 'Owes']]
+    : [['Money', 'Received'], ['Total', 'Spent'], ['Unpaid', 'Due'], ['Company', 'Owes']];
 
   const overviewBarChartFullLabels = isAdmin
     ? ['Cash Advanced to Team', 'Approved Team Expenses', 'Company Spent Expenses', 'Unpaid / Pending Bills', 'Net Amount Owed by Company']
-    : ['Cash Given to Me', 'My Completed Expenses', 'Unpaid / Pending Bills', 'Net Amount Owed by Company'];
+    : ['Money Received in Hand', 'Total Spent Expenses', 'Unpaid / Pending Bills', 'Net Amount Owed by Company'];
 
   const overviewBarChartData = {
     labels: overviewBarChartLabels,
@@ -645,92 +680,168 @@ const Dashboard = () => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
-          {/* 1. MY TOTAL DEBIT */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
+          {/* 1. TOTAL CREDIT */}
           <div
-            onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit' } })}
-            className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-            title="Click to view My Debit Receipts"
+            onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
+            className="p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+            title="Click middle to view Money Received entries"
           >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-xs uppercase font-extrabold text-slate-600 truncate">MY TOTAL DEBIT</span>
-                <span className="w-6 h-6 rounded-lg bg-[#002B49]/10 text-[#002B49] flex items-center justify-center text-xs shrink-0">🧾</span>
-              </div>
-              <p className="text-base sm:text-2xl font-black text-[#002B49] mt-1 sm:mt-2 truncate">
-                {settings.currency}{myDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] font-black uppercase text-emerald-800 tracking-wider">TOTAL CREDIT</span>
+              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0 font-bold">💰</span>
             </div>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-1 font-semibold truncate">Logged Expenses & Debit</p>
+            <div className="my-1 text-center">
+              <div className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
+                {settings.currency}{myDoneCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[9px] font-black uppercase text-emerald-700/80 tracking-wider">Money Received</span>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                className="hover:text-emerald-700 hover:underline transition cursor-pointer"
+                title="Click to view My Hand Credit entries"
+              >
+                <span className="text-slate-400">In Hand: </span>
+                <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
+              </div>
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Company Wallet' } }); }}
+                className="hover:text-purple-700 hover:underline transition cursor-pointer"
+                title="Click to view Company Wallet Credit entries"
+              >
+                <span className="text-slate-400">In Wallet: </span>
+                <span className="text-purple-700">{settings.currency}{myWalletDoneCredit.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
           </div>
 
-          {/* 2. MY TOTAL CREDIT */}
+          {/* 2. TOTAL DEBIT */}
           <div
-            onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', depositToFilter: 'My Hand' } })}
-            className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-emerald-500 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-            title="Click to view My Hand Credit Entries"
+            onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+            className="p-2.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+            title="Click middle to view Total Spent entries"
           >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-xs uppercase font-extrabold text-slate-600 truncate">MY TOTAL CREDIT</span>
-                <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0">📥</span>
-              </div>
-              <p className="text-base sm:text-2xl font-black text-emerald-700 mt-1 sm:mt-2 truncate">
-                {settings.currency}{myCreditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] font-black uppercase text-amber-900 tracking-wider">TOTAL DEBIT</span>
+              <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center text-xs shrink-0 font-bold">🧾</span>
             </div>
-            <p className="text-[10px] sm:text-xs text-emerald-700 mt-1 font-semibold truncate">Cash Received & Credit</p>
+            <div className="my-1 text-center">
+              <div className="text-lg sm:text-xl font-black text-amber-900 tracking-tight">
+                {settings.currency}{myDoneDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[9px] font-black uppercase text-amber-800/80 tracking-wider">Total Spent</span>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                className="hover:text-amber-900 hover:underline transition cursor-pointer"
+                title="Click to view All Debit entries"
+              >
+                <span className="text-slate-400">All Bills: </span>
+                <span className="text-slate-800">{settings.currency}{myDebitTotal.toLocaleString('en-IN')}</span>
+              </div>
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                className="hover:text-amber-700 hover:underline transition cursor-pointer"
+                title="Click to view Unpaid Due Debit entries"
+              >
+                <span className="text-slate-400">Unpaid Due: </span>
+                <span className="text-amber-700">{settings.currency}{myDueDebit.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
           </div>
 
           {/* 3. CASH IN HAND */}
           <div
-            onClick={() => navigate('/admin/my-credit-debit')}
-            className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-            title="Click to view Cash In Hand"
+            onClick={() => navigate('/admin/my-credit-debit', { state: { statusFilter: 'Done' } })}
+            className="p-2.5 rounded-xl bg-white border border-blue-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+            title="Click middle to view Done entries"
           >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-xs uppercase font-extrabold text-slate-600 truncate">CASH IN HAND</span>
-                <span className="w-6 h-6 rounded-lg bg-[#c69255]/15 text-[#9e6e34] flex items-center justify-center text-xs shrink-0">💵</span>
-              </div>
-              <p className="text-base sm:text-2xl font-black text-[#9e6e34] mt-1 sm:mt-2 truncate">
-                {settings.currency}{Math.max(0, (myStats.allocated + myStats.cashInReceived) - myDoneDebit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] font-black uppercase text-blue-900 tracking-wider">CASH IN HAND</span>
+              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center text-xs shrink-0 font-bold">💵</span>
             </div>
-            <p className="text-[10px] sm:text-xs text-[#9e6e34] mt-1 font-semibold truncate">Available Cash Balance</p>
+            <div className="my-1 text-center">
+              <div className="text-lg sm:text-xl font-black text-blue-800 tracking-tight">
+                {settings.currency}{Math.max(0, myHandDoneCredit - myDoneDebit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[9px] font-black uppercase text-blue-700/80 tracking-wider">Available Balance</span>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                className="hover:text-emerald-700 hover:underline transition cursor-pointer"
+                title="Click to view Hand Received Credits"
+              >
+                <span className="text-slate-400">Hand In: </span>
+                <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
+              </div>
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
+                className="hover:text-slate-900 hover:underline transition cursor-pointer"
+                title="Click to view Spent Debits"
+              >
+                <span className="text-slate-400">Spent Out: </span>
+                <span className="text-slate-800">{settings.currency}{myDoneDebit.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
           </div>
 
           {/* 4. COMPANY OWES ME */}
-          <div
-            onClick={() => navigate('/admin/my-credit-debit', { state: { statusFilter: 'Due' } })}
-            className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 flex flex-col justify-between transition-all cursor-pointer hover:shadow-lg ${
-              (myDueDebit + myStats.needFromCompany) > 0
-                ? 'bg-rose-50 border border-rose-200 border-l-rose-500 shadow-xs'
-                : 'glass-card border-l-slate-400'
-            }`}
-            title="Click to view Pending Dues"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className={`text-[10px] sm:text-xs uppercase font-extrabold truncate ${
-                  (myDueDebit + myStats.needFromCompany) > 0 ? 'text-rose-700' : 'text-slate-600'
-                }`}>COMPANY OWES ME</span>
-                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs shrink-0 ${
-                  (myDueDebit + myStats.needFromCompany) > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
-                }`}>⚠️</span>
+          {(() => {
+            const availCash = Math.max(0, myHandDoneCredit - myDoneDebit);
+            const outOfPocket = Math.max(0, myDoneDebit - myHandDoneCredit);
+            const netDueOwed = Math.max(0, myDueDebit - availCash);
+            const companyOwesMe = outOfPocket + netDueOwed;
+            return (
+              <div
+                onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+                className={`p-2.5 rounded-xl bg-white border shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between ${
+                  companyOwesMe > 0 ? 'border-rose-200/90 bg-rose-50/20' : 'border-slate-200/80'
+                }`}
+                title="Click middle to view Done Out-of-pocket Expenses"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${companyOwesMe > 0 ? 'text-rose-900' : 'text-slate-600'}`}>
+                    COMPANY OWES ME
+                  </span>
+                  <span className={`w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0 font-bold ${
+                    companyOwesMe > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    ⚠️
+                  </span>
+                </div>
+                <div className="my-1 text-center">
+                  <div className={`text-lg sm:text-xl font-black tracking-tight ${outOfPocket > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+                    {settings.currency}{outOfPocket.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <span className={`text-[9px] font-black uppercase tracking-wider ${outOfPocket > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                    Payback Needed
+                  </span>
+                </div>
+                <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
+                  <div
+                    onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                    className="hover:text-rose-700 hover:underline transition cursor-pointer"
+                    title="Click to view All Debit entries"
+                  >
+                    <span className="text-slate-400">Total Owed: </span>
+                    <span className="text-slate-800">{settings.currency}{companyOwesMe.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div
+                    onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                    className="hover:text-amber-700 hover:underline transition cursor-pointer"
+                    title="Click to view Due Debit entries"
+                  >
+                    <span className="text-slate-400">Due Bills: </span>
+                    <span className="text-amber-700">{settings.currency}{netDueOwed.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
               </div>
-              <p className={`text-base sm:text-2xl font-black mt-1 sm:mt-2 truncate ${
-                (myDueDebit + myStats.needFromCompany) > 0 ? 'text-rose-700' : 'text-slate-700'
-              }`}>
-                {settings.currency}{(myDueDebit + myStats.needFromCompany).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-            <p className={`text-[10px] sm:text-xs mt-1 font-extrabold truncate ${
-              (myDueDebit + myStats.needFromCompany) > 0 ? 'text-rose-600' : 'text-slate-500'
-            }`}>
-              {(myDueDebit + myStats.needFromCompany) > 0 ? 'Pending Reimbursement' : 'No Balance Pending'}
-            </p>
-          </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1014,21 +1125,21 @@ const Dashboard = () => {
 
           <div className={`grid grid-cols-2 ${isAdmin ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2 sm:gap-2.5 mt-4 pt-3 border-t border-slate-100 text-center`}>
             <div
-              onClick={() => navigate('/admin/deposit-allocate', { state: { activeTab: 'Give Money' } })}
+              onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-center cursor-pointer hover:bg-amber-500/20 hover:scale-102 transition-all"
-              title="Click to view Cash Allocations"
+              title="Click to view Money Received in Hand"
             >
-              <span className="text-[10px] font-extrabold uppercase text-amber-900/70 block truncate">Cash Advanced</span>
+              <span className="text-[10px] font-extrabold uppercase text-amber-900/70 block truncate">{isAdmin ? 'Cash Advanced' : 'Money Received'}</span>
               <span className="text-xs sm:text-sm font-black text-[#9e6e34] mt-0.5 truncate">
                 {settings.currency}{moneyGiven.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { selectedStatus: 'Done' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col justify-center cursor-pointer hover:bg-emerald-500/20 hover:scale-102 transition-all"
               title="Click to view Completed Expenses"
             >
-              <span className="text-[10px] font-extrabold uppercase text-emerald-900/70 block truncate">{isAdmin ? 'Team Spent' : 'My Spent'}</span>
+              <span className="text-[10px] font-extrabold uppercase text-emerald-900/70 block truncate">{isAdmin ? 'Team Spent' : 'Total Spent'}</span>
               <span className="text-xs sm:text-sm font-black text-emerald-800 mt-0.5 truncate">
                 {settings.currency}{doneTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
@@ -1046,19 +1157,21 @@ const Dashboard = () => {
               </div>
             )}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { selectedStatus: 'Due' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-center cursor-pointer hover:bg-amber-500/20 hover:scale-102 transition-all"
               title="Click to view Unpaid Due Bills"
             >
-              <span className="text-[10px] font-extrabold uppercase text-amber-900/70 block truncate">Unpaid Bills</span>
+              <span className="text-[10px] font-extrabold uppercase text-amber-900/70 block truncate">Unpaid Due</span>
               <span className="text-xs sm:text-sm font-black text-amber-800 mt-0.5 truncate">
                 {settings.currency}{dueTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div
-              className={`p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 flex flex-col justify-center shadow-2xs transition-all ${isAdmin ? 'col-span-2 sm:col-span-1' : ''}`}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } })}
+              className={`p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 flex flex-col justify-center shadow-2xs transition-all cursor-pointer ${isAdmin ? 'col-span-2 sm:col-span-1' : ''}`}
+              title="Click to view Company Owes"
             >
-              <span className="text-[10px] font-extrabold uppercase text-rose-800 block truncate">Company Owes</span>
+              <span className="text-[10px] font-extrabold uppercase text-rose-800 block truncate">{isAdmin ? 'Company Owes' : 'Company Owes Me'}</span>
               <span className="text-xs sm:text-sm font-black text-rose-700 mt-0.5 truncate">
                 {settings.currency}{neededFromAdmin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>

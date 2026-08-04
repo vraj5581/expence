@@ -17,7 +17,6 @@ import Reports from './pages/Reports';
 import TeamAccounts from './pages/TeamAccounts';
 import Settings from './pages/Settings';
 import MyCreditDebit from './pages/MyCreditDebit';
-import MoneyReceived from './pages/MoneyReceived';
 import Tasks from './pages/Tasks';
 
 // Component to handle intelligent default redirection based on user role
@@ -55,9 +54,9 @@ function App() {
                 <Route path="reports" element={<AdminOnlyRoute><Reports /></AdminOnlyRoute>} />
                 <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
                 <Route path="my-credit-debit" element={<MyCreditDebit />} />
-                <Route path="money-received" element={<MoneyReceived />} />
 
                 {/* Backward Compatible Redirects for Legacy URLs */}
+                <Route path="money-received" element={<Navigate to="/admin/my-credit-debit" replace />} />
                 <Route path="expenses" element={<Navigate to="/admin/credit-debit" replace />} />
                 <Route path="my-expenses" element={<Navigate to="/admin/my-credit-debit" replace />} />
                 <Route path="vault-deposits" element={<Navigate to="/admin/deposit-allocate" replace />} />

@@ -599,14 +599,14 @@ const CreditDebit = () => {
             {/* Debit Summary Card (Interactive Single Combined Compact Card) */}
             <div className="pt-1 print:pt-0.5">
               <div
-                onClick={() => setDebitStatus('All')}
+                onClick={() => setDebitStatus('Done')}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/90 border transition-all cursor-pointer shadow-2xs hover:shadow-md w-full sm:w-fit min-w-[210px] sm:min-w-[240px] max-w-[270px] print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  debitStatus === 'All' && !hasActiveDebitFilters ? 'border-[#002B49] ring-2 ring-[#002B49]/15' : 'border-slate-200/90'
+                  debitStatus === 'Done' ? 'border-[#002B49] ring-2 ring-[#002B49]/15' : 'border-slate-200/90'
                 }`}
-                title="Click to show all debit transactions"
+                title="Click middle to filter Done Debit entries"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-[#002B49] print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">{displayDebitTitle}</span>
+                  <span className="text-[11px] font-black uppercase text-[#002B49] print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">TOTAL DONE DEBIT</span>
                   <div className="flex items-center space-x-1.5">
                     {hasActiveDebitFilters && (
                       <span
@@ -623,23 +623,23 @@ const CreditDebit = () => {
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-[#002B49] print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{displayDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{displayDebitDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
 
                   {/* Web View Interactive Pill Badges */}
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setDebitStatus(debitStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setDebitStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        debitStatus === 'Done'
-                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                          : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
+                        debitStatus === 'All'
+                          ? 'bg-[#002B49] text-white border-[#002B49] shadow-xs'
+                          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                       }`}
-                      title="Click to filter Done expenses"
+                      title="Click to show all debit transactions"
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{displayDebitDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{displayDebitTotal.toLocaleString('en-IN')}</span>
                     </button>
                     {displayDebitDue > 0 && (
                       <button
@@ -660,7 +660,7 @@ const CreditDebit = () => {
 
                   {/* Print View Clean Text Line */}
                   <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                    Done: {settings.currency}{displayDebitDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayDebitDue.toLocaleString('en-IN')}
+                    Total: {settings.currency}{displayDebitTotal.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayDebitDue.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
@@ -929,14 +929,14 @@ const CreditDebit = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 print:gap-1.5 print:pt-1">
               {/* Total Credit Card */}
               <div
-                onClick={() => { setCreditDepositTo('All'); setCreditStatus('All'); }}
+                onClick={() => { setCreditDepositTo('All'); setCreditStatus('Done'); }}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  creditDepositTo === 'All' && creditStatus === 'All' ? 'border-emerald-600 ring-2 ring-emerald-500/15' : 'border-emerald-200/90'
+                  creditDepositTo === 'All' && creditStatus === 'Done' ? 'border-emerald-600 ring-2 ring-emerald-500/15' : 'border-emerald-200/90'
                 }`}
-                title="Click to show all credit transactions"
+                title="Click middle to view Done Credit entries"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-emerald-800 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">{displayCreditTotalTitle}</span>
+                  <span className="text-[11px] font-black uppercase text-emerald-800 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">TOTAL DONE CREDIT</span>
                   <div className="flex items-center space-x-1.5">
                     {hasActiveCreditFilters && (
                       <span
@@ -953,20 +953,20 @@ const CreditDebit = () => {
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-emerald-700 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{displayCreditDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        creditDepositTo === 'All' && creditStatus === 'Done'
+                        creditDepositTo === 'All' && creditStatus === 'All'
                           ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
                           : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
                       }`}
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{displayCreditDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN')}</span>
                     </button>
                     {displayCreditDue > 0 && (
                       <button
@@ -985,41 +985,41 @@ const CreditDebit = () => {
                   </div>
                   {/* Print View Clean Text Line */}
                   <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                    Done: {settings.currency}{displayCreditDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayCreditDue.toLocaleString('en-IN')}
+                    Total: {settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayCreditDue.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
 
               {/* My Hand Card */}
               <div
-                onClick={() => { setCreditDepositTo(creditDepositTo === 'My Hand' && creditStatus === 'All' ? 'All' : 'My Hand'); setCreditStatus('All'); }}
+                onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  creditDepositTo === 'My Hand' ? 'border-blue-600 ring-2 ring-blue-500/15' : 'border-blue-200/90'
+                  creditDepositTo === 'My Hand' && creditStatus === 'Done' ? 'border-blue-600 ring-2 ring-blue-500/15' : 'border-blue-200/90'
                 }`}
-                title="Click to filter My Hand transactions"
+                title="Click middle to filter Done My Hand transactions"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-blue-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">My Hand</span>
+                  <span className="text-[11px] font-black uppercase text-blue-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">MY HAND (DONE)</span>
                   <div className="w-6 h-6 rounded-lg bg-blue-200/80 text-blue-800 flex items-center justify-center text-xs font-black print:hidden">
                     ✋
                   </div>
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-blue-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'My Hand' ? filteredCreditTotal : creditSummary.myHandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        creditDepositTo === 'My Hand' && creditStatus === 'Done'
+                        creditDepositTo === 'My Hand' && creditStatus === 'All'
                           ? 'bg-blue-700 text-white border-blue-800 shadow-xs'
                           : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
                       }`}
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'My Hand' ? filteredCreditTotal : creditSummary.myHandTotal).toLocaleString('en-IN')}</span>
                     </button>
                     {creditSummary.myHandDue > 0 && (
                       <button
@@ -1038,41 +1038,41 @@ const CreditDebit = () => {
                   </div>
                   {/* Print View Clean Text Line */}
                   <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                    Done: {settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}
+                    Total: {settings.currency}{creditSummary.myHandTotal.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
 
               {/* Company Wallet Card */}
               <div
-                onClick={() => { setCreditDepositTo(creditDepositTo === 'Company Wallet' && creditStatus === 'All' ? 'All' : 'Company Wallet'); setCreditStatus('All'); }}
+                onClick={() => { setCreditDepositTo('Company Wallet'); setCreditStatus('Done'); }}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  creditDepositTo === 'Company Wallet' ? 'border-purple-600 ring-2 ring-purple-500/15' : 'border-purple-200/90'
+                  creditDepositTo === 'Company Wallet' && creditStatus === 'Done' ? 'border-purple-600 ring-2 ring-purple-500/15' : 'border-purple-200/90'
                 }`}
-                title="Click to filter Company Wallet transactions"
+                title="Click middle to filter Done Company Wallet transactions"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-purple-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">Co. Wallet</span>
+                  <span className="text-[11px] font-black uppercase text-purple-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">CO. WALLET (DONE)</span>
                   <div className="w-6 h-6 rounded-lg bg-purple-200/80 text-purple-800 flex items-center justify-center text-xs font-black print:hidden">
                     🏢
                   </div>
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-purple-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'Company Wallet' ? filteredCreditTotal : creditSummary.walletTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{creditSummary.walletDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        creditDepositTo === 'Company Wallet' && creditStatus === 'Done'
+                        creditDepositTo === 'Company Wallet' && creditStatus === 'All'
                           ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
                           : 'bg-purple-100/90 text-purple-900 border-purple-200/80 hover:bg-purple-200'
                       }`}
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{creditSummary.walletDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'Company Wallet' ? filteredCreditTotal : creditSummary.walletTotal).toLocaleString('en-IN')}</span>
                     </button>
                     {creditSummary.walletDue > 0 && (
                       <button

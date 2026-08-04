@@ -16,12 +16,13 @@ const MyCreditDebit = () => {
     settings,
     addTransaction,
     updateTransaction,
-    addVaultDeposit
+    addVaultDeposit,
+    getUserStats
   } = useExpense();
 
   // Tab & Print View State
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'debit' | 'credit'
-  const [printTarget, setPrintTarget] = useState('all'); // 'all' | 'debit' | 'credit'
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'debit' | 'credit' | 'received'
+  const [printTarget, setPrintTarget] = useState('all'); // 'all' | 'debit' | 'credit' | 'received'
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,11 +53,18 @@ const MyCreditDebit = () => {
   const [creditMaxAmt, setCreditMaxAmt] = useState('');
   const [isCreditFilterOpen, setIsCreditFilterOpen] = useState(false);
 
+  // Independent Money Received Filter State
+  const [receivedSearch, setReceivedSearch] = useState('');
+  const [receivedStartDate, setReceivedStartDate] = useState('');
+  const [receivedEndDate, setReceivedEndDate] = useState('');
+  const [isReceivedFilterOpen, setIsReceivedFilterOpen] = useState(false);
+
   // Handle location state changes
   useEffect(() => {
     const typeFromState = location.state?.typeFilter || location.state?.selectedType;
     const statusFromState = location.state?.statusFilter || location.state?.selectedStatus;
     const depositToFromState = location.state?.depositToFilter || location.state?.selectedDepositTo;
+    const tabFromState = location.state?.tab;
 
     if (typeFromState === 'Debit') {
       setActiveTab('debit');
@@ -65,6 +73,8 @@ const MyCreditDebit = () => {
       setActiveTab('credit');
       if (statusFromState) setCreditStatus(statusFromState);
       if (depositToFromState) setCreditDepositTo(depositToFromState);
+    } else if (typeFromState === 'Received' || tabFromState === 'received') {
+      setActiveTab('received');
     } else if (statusFromState) {
       setDebitStatus(statusFromState);
       setCreditStatus(statusFromState);
@@ -152,6 +162,54 @@ const MyCreditDebit = () => {
     });
   }, [rawCreditTxns, creditSearch, creditDepositTo, creditStatus, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
 
+  // User Financial Stats for KPI Cards
+  const stats = useMemo(() => {
+    return getUserStats ? getUserStats(user?.name || '') : { totalCashAvailable: 0, remaining: 0, needFromCompany: 0, spent: 0, allocated: 0, cashInReceived: 0 };
+  }, [getUserStats, user?.name, transactions, allocationsHistory]);
+
+  const totalSpent = useMemo(() => {
+    return rawDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [rawDebitTxns]);
+
+  const doneSpent = useMemo(() => {
+    return rawDebitTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [rawDebitTxns]);
+
+  const dueSpent = useMemo(() => {
+    return rawDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [rawDebitTxns]);
+
+  // Filtered Received Money Allocations
+  const filteredAllocations = useMemo(() => {
+    return myAllocations.filter((item) => {
+      const query = receivedSearch.toLowerCase();
+      const matchesSearch =
+        !receivedSearch.trim() ||
+        (item.id || '').toLowerCase().includes(query) ||
+        (item.notes || '').toLowerCase().includes(query) ||
+        (item.date || '').includes(query) ||
+        formatDate(item.date).toLowerCase().includes(query);
+
+      let matchesDate = true;
+      if (receivedStartDate && item.date < receivedStartDate) matchesDate = false;
+      if (receivedEndDate && item.date > receivedEndDate) matchesDate = false;
+
+      return matchesSearch && matchesDate;
+    });
+  }, [myAllocations, receivedSearch, receivedStartDate, receivedEndDate]);
+
+  const totalFilteredReceived = useMemo(() => {
+    return filteredAllocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+  }, [filteredAllocations]);
+
+  const hasActiveReceivedFilters = Boolean(receivedSearch || receivedStartDate || receivedEndDate);
+
+  const resetReceivedFilters = () => {
+    setReceivedSearch('');
+    setReceivedStartDate('');
+    setReceivedEndDate('');
+  };
+
   // Debit Summary Stats (Always calculated from raw debit transactions for 100% accurate totals)
   const debitSummary = useMemo(() => {
     let total = 0;
@@ -202,6 +260,26 @@ const MyCreditDebit = () => {
 
     return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue };
   }, [rawCreditTxns]);
+
+  // Derived Overall Credit & Debit Financial Metrics (Only Hand credit is counted into hand & payback calculations)
+  const cashInHand = useMemo(() => {
+    return Math.max(0, creditSummary.myHandDone - debitSummary.doneTotal);
+  }, [creditSummary.myHandDone, debitSummary.doneTotal]);
+
+  // Out-of-pocket reimbursement payback needed for completed expenses exceeding credit in hand
+  const outOfPocketReimbursement = useMemo(() => {
+    return Math.max(0, debitSummary.doneTotal - creditSummary.myHandDone);
+  }, [debitSummary.doneTotal, creditSummary.myHandDone]);
+
+  // Uncovered due bills owed by company after accounting for remaining cash in hand
+  const netDueOwed = useMemo(() => {
+    return Math.max(0, debitSummary.dueTotal - cashInHand);
+  }, [debitSummary.dueTotal, cashInHand]);
+
+  // Total net amount company owes user (Out-of-pocket payback + Uncovered due bills)
+  const totalNetOwed = useMemo(() => {
+    return outOfPocketReimbursement + netDueOwed;
+  }, [outOfPocketReimbursement, netDueOwed]);
 
   // Filtered Debit Total for Table Footer (exact sum of displayed filtered rows)
   const filteredDebitTotal = useMemo(() => {
@@ -353,13 +431,22 @@ const MyCreditDebit = () => {
         <h1 className="text-2xl font-black uppercase text-black tracking-wider">SHUKAN PACKAGING</h1>
         <h2 className="text-sm font-bold text-black uppercase mt-1">
           {user?.name ? `${user.name} - ` : ''}
-          {printTarget === 'debit' ? 'My Debit Statement' : printTarget === 'credit' ? 'My Credit Statement' : 'My Debit & Credit Ledger'}
+          {printTarget === 'debit'
+            ? 'My Debit Statement'
+            : printTarget === 'credit'
+            ? 'My Credit Statement'
+            : printTarget === 'received'
+            ? 'Money Received & Allocation Statement'
+            : 'My Debit & Credit Ledger'}
         </h2>
         <div className="text-xs font-semibold text-black mt-1 flex items-center justify-center space-x-3">
           <span>Date Printed: {formatDate(new Date())}</span>
           <span>| User: {user?.name}</span>
           {printTarget === 'debit' && debitStatus !== 'All' && <span>| Status: {debitStatus}</span>}
           {printTarget === 'credit' && creditStatus !== 'All' && <span>| Status: {creditStatus}</span>}
+          {printTarget === 'received' && (receivedStartDate || receivedEndDate) && (
+            <span>| Date Range: {formatDate(receivedStartDate) || 'Start'} to {formatDate(receivedEndDate) || 'Today'}</span>
+          )}
         </div>
       </div>
 
@@ -407,11 +494,168 @@ const MyCreditDebit = () => {
         </div>
       </div>
 
-      {/* View Switcher Tabs (Debit First, Credit Second) */}
-      <div className="flex items-center space-x-1 bg-slate-200/70 p-1.5 rounded-2xl w-max border border-slate-300/50 print:hidden">
+      {/* Small, Compact & Sleek KPI Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 print:grid-cols-4 print:gap-1.5">
+        {/* 1. TOTAL CREDIT */}
+        <div
+          onClick={() => { setActiveTab('credit'); setCreditDepositTo('All'); setCreditStatus('Done'); }}
+          className="p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between print:p-1.5 print:border-2 print:border-black"
+          title="Click middle to view Money Received entries"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-black uppercase text-emerald-800 tracking-wider print:text-black">TOTAL CREDIT</span>
+            <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0 font-bold print:hidden">💰</span>
+          </div>
+          <div className="my-1 text-center">
+            <div className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight print:text-black">
+              {settings.currency}{creditSummary.doneTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[9px] font-black uppercase text-emerald-700/80 tracking-wider print:text-black">Money Received</span>
+          </div>
+          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold print:border-black">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('credit'); setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
+              className="hover:text-emerald-700 hover:underline transition cursor-pointer"
+              title="Click to view My Hand Credit entries"
+            >
+              <span className="text-slate-400 print:text-black">In Hand: </span>
+              <span className="text-emerald-700 print:text-black">{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}</span>
+            </div>
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('credit'); setCreditDepositTo('Company Wallet'); setCreditStatus('Done'); }}
+              className="hover:text-purple-700 hover:underline transition cursor-pointer"
+              title="Click to view Company Wallet Credit entries"
+            >
+              <span className="text-slate-400 print:text-black">In Wallet: </span>
+              <span className="text-purple-700 print:text-black">{settings.currency}{creditSummary.walletDone.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. TOTAL DEBIT */}
+        <div
+          onClick={() => { setActiveTab('debit'); setDebitStatus('Done'); }}
+          className="p-2.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between print:p-1.5 print:border-2 print:border-black"
+          title="Click middle to view Total Spent entries"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-black uppercase text-amber-900 tracking-wider print:text-black">TOTAL DEBIT</span>
+            <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center text-xs shrink-0 font-bold print:hidden">🧾</span>
+          </div>
+          <div className="my-1 text-center">
+            <div className="text-lg sm:text-xl font-black text-amber-900 tracking-tight print:text-black">
+              {settings.currency}{debitSummary.doneTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[9px] font-black uppercase text-amber-800/80 tracking-wider print:text-black">Total Spent</span>
+          </div>
+          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold print:border-black">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('debit'); setDebitStatus('All'); }}
+              className="hover:text-amber-900 hover:underline transition cursor-pointer"
+              title="Click to view All Debit entries"
+            >
+              <span className="text-slate-400 print:text-black">All Bills: </span>
+              <span className="text-slate-800 print:text-black">{settings.currency}{debitSummary.total.toLocaleString('en-IN')}</span>
+            </div>
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('debit'); setDebitStatus('Due'); }}
+              className="hover:text-amber-700 hover:underline transition cursor-pointer"
+              title="Click to view Unpaid Due Debit entries"
+            >
+              <span className="text-slate-400 print:text-black">Unpaid Due: </span>
+              <span className="text-amber-700 print:text-black">{settings.currency}{debitSummary.dueTotal.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. CASH IN HAND */}
+        <div
+          onClick={() => { setActiveTab('all'); setCreditStatus('Done'); setDebitStatus('Done'); }}
+          className="p-2.5 rounded-xl bg-white border border-blue-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between print:p-1.5 print:border-2 print:border-black"
+          title="Click middle to view Done entries"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-[11px] font-black uppercase text-blue-900 tracking-wider print:text-black">CASH IN HAND</span>
+            <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center text-xs shrink-0 font-bold print:hidden">💵</span>
+          </div>
+          <div className="my-1 text-center">
+            <div className="text-lg sm:text-xl font-black text-blue-800 tracking-tight print:text-black">
+              {settings.currency}{cashInHand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[9px] font-black uppercase text-blue-700/80 tracking-wider print:text-black">Available Balance</span>
+          </div>
+          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold print:border-black">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('credit'); setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
+              className="hover:text-emerald-700 hover:underline transition cursor-pointer"
+              title="Click to view Hand Received Credits"
+            >
+              <span className="text-slate-400 print:text-black">Hand In: </span>
+              <span className="text-emerald-700 print:text-black">{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}</span>
+            </div>
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('debit'); setDebitStatus('Done'); }}
+              className="hover:text-slate-900 hover:underline transition cursor-pointer"
+              title="Click to view Spent Debits"
+            >
+              <span className="text-slate-400 print:text-black">Spent Out: </span>
+              <span className="text-slate-800 print:text-black">{settings.currency}{debitSummary.doneTotal.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. COMPANY OWES ME */}
+        <div
+          onClick={() => { setActiveTab('debit'); setDebitStatus('Done'); }}
+          className={`p-2.5 rounded-xl bg-white border shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between print:p-1.5 print:border-2 print:border-black ${
+            totalNetOwed > 0 ? 'border-rose-200/90 bg-rose-50/20' : 'border-slate-200/80'
+          }`}
+          title="Click middle to view Done Out-of-pocket Expenses"
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider print:text-black ${totalNetOwed > 0 ? 'text-rose-900' : 'text-slate-600'}`}>
+              COMPANY OWES ME
+            </span>
+            <span className={`w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0 font-bold print:hidden ${
+              totalNetOwed > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              ⚠️
+            </span>
+          </div>
+          <div className="my-1 text-center">
+            <div className={`text-lg sm:text-xl font-black tracking-tight print:text-black ${outOfPocketReimbursement > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+              {settings.currency}{outOfPocketReimbursement.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className={`text-[9px] font-black uppercase tracking-wider print:text-black ${outOfPocketReimbursement > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+              Payback Needed
+            </span>
+          </div>
+          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold print:border-black">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('debit'); setDebitStatus('All'); }}
+              className="hover:text-rose-700 hover:underline transition cursor-pointer"
+              title="Click to view All Debit entries"
+            >
+              <span className="text-slate-400 print:text-black">Total Owed: </span>
+              <span className="text-slate-800 print:text-black">{settings.currency}{totalNetOwed.toLocaleString('en-IN')}</span>
+            </div>
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveTab('debit'); setDebitStatus('Due'); }}
+              className="hover:text-amber-700 hover:underline transition cursor-pointer"
+              title="Click to view Unpaid Due Debit entries"
+            >
+              <span className="text-slate-400 print:text-black">Due Bills: </span>
+              <span className="text-amber-700 print:text-black">{settings.currency}{netDueOwed.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* View Switcher Tabs */}
+      <div className="flex items-center space-x-1 bg-slate-200/70 p-1.5 rounded-2xl w-max border border-slate-300/50 print:hidden overflow-x-auto">
         <button
           onClick={() => setActiveTab('all')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer whitespace-nowrap ${
             activeTab === 'all'
               ? 'bg-white text-[#002B49] shadow-md'
               : 'text-slate-600 hover:text-slate-900'
@@ -421,7 +665,7 @@ const MyCreditDebit = () => {
         </button>
         <button
           onClick={() => setActiveTab('debit')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'debit'
               ? 'bg-[#c69255] text-white shadow-md'
               : 'text-slate-600 hover:text-[#c69255]'
@@ -432,7 +676,7 @@ const MyCreditDebit = () => {
         </button>
         <button
           onClick={() => setActiveTab('credit')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'credit'
               ? 'bg-emerald-600 text-white shadow-md'
               : 'text-slate-600 hover:text-emerald-700'
@@ -440,6 +684,17 @@ const MyCreditDebit = () => {
         >
           <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
           <span>Credit Table ({rawCreditTxns.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('received')}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'received'
+              ? 'bg-amber-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-amber-700'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span>Money Received ({myAllocations.length})</span>
         </button>
       </div>
 
@@ -548,14 +803,14 @@ const MyCreditDebit = () => {
             {/* Debit Summary Card (Interactive Single Combined Compact Card) */}
             <div className="pt-1 print:pt-0.5">
               <div
-                onClick={() => setDebitStatus('All')}
+                onClick={() => setDebitStatus('Done')}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/90 border transition-all cursor-pointer shadow-2xs hover:shadow-md w-full sm:w-fit min-w-[210px] sm:min-w-[240px] max-w-[270px] print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  debitStatus === 'All' && !hasActiveDebitFilters ? 'border-[#002B49] ring-2 ring-[#002B49]/15' : 'border-slate-200/90'
+                  debitStatus === 'Done' ? 'border-[#002B49] ring-2 ring-[#002B49]/15' : 'border-slate-200/90'
                 }`}
-                title="Click to show all debit transactions"
+                title="Click middle to filter Done Debit entries"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-[#002B49] print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">{displayDebitTitle}</span>
+                  <span className="text-[11px] font-black uppercase text-[#002B49] print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">TOTAL DONE DEBIT</span>
                   <div className="flex items-center space-x-1.5">
                     {hasActiveDebitFilters && (
                       <span
@@ -572,23 +827,23 @@ const MyCreditDebit = () => {
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-[#002B49] print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{displayDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{displayDebitDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
 
                   {/* Web View Interactive Pill Badges */}
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setDebitStatus(debitStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setDebitStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        debitStatus === 'Done'
-                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                          : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
+                        debitStatus === 'All'
+                          ? 'bg-[#002B49] text-white border-[#002B49] shadow-xs'
+                          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                       }`}
-                      title="Click to filter Done expenses"
+                      title="Click to show all debit transactions"
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{displayDebitDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{displayDebitTotal.toLocaleString('en-IN')}</span>
                     </button>
                     {displayDebitDue > 0 && (
                       <button
@@ -609,7 +864,7 @@ const MyCreditDebit = () => {
 
                   {/* Print View Clean Text Line */}
                   <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                    Done: {settings.currency}{displayDebitDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayDebitDue.toLocaleString('en-IN')}
+                    Total: {settings.currency}{displayDebitTotal.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayDebitDue.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
@@ -855,14 +1110,14 @@ const MyCreditDebit = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 print:gap-1.5 print:pt-1">
               {/* Total Credit Card */}
               <div
-                onClick={() => { setCreditDepositTo('All'); setCreditStatus('All'); }}
+                onClick={() => { setCreditDepositTo('All'); setCreditStatus('Done'); }}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  creditDepositTo === 'All' && creditStatus === 'All' ? 'border-emerald-600 ring-2 ring-emerald-500/15' : 'border-emerald-200/90'
+                  creditDepositTo === 'All' && creditStatus === 'Done' ? 'border-emerald-600 ring-2 ring-emerald-500/15' : 'border-emerald-200/90'
                 }`}
-                title="Click to show all credit transactions"
+                title="Click middle to view Done Credit entries"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-emerald-800 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">{displayCreditTotalTitle}</span>
+                  <span className="text-[11px] font-black uppercase text-emerald-800 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">TOTAL DONE CREDIT</span>
                   <div className="flex items-center space-x-1.5">
                     {hasActiveCreditFilters && (
                       <span
@@ -879,20 +1134,20 @@ const MyCreditDebit = () => {
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-emerald-700 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{displayCreditDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        creditDepositTo === 'All' && creditStatus === 'Done'
+                        creditDepositTo === 'All' && creditStatus === 'All'
                           ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
                           : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
                       }`}
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{displayCreditDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN')}</span>
                     </button>
                     {displayCreditDue > 0 && (
                       <button
@@ -911,41 +1166,41 @@ const MyCreditDebit = () => {
                   </div>
                   {/* Print View Clean Text Line */}
                   <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                    Done: {settings.currency}{displayCreditDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayCreditDue.toLocaleString('en-IN')}
+                    Total: {settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayCreditDue.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
 
               {/* My Hand Card */}
               <div
-                onClick={() => { setCreditDepositTo(creditDepositTo === 'My Hand' && creditStatus === 'All' ? 'All' : 'My Hand'); setCreditStatus('All'); }}
+                onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  creditDepositTo === 'My Hand' ? 'border-blue-600 ring-2 ring-blue-500/15' : 'border-blue-200/90'
+                  creditDepositTo === 'My Hand' && creditStatus === 'Done' ? 'border-blue-600 ring-2 ring-blue-500/15' : 'border-blue-200/90'
                 }`}
-                title="Click to filter My Hand transactions"
+                title="Click middle to filter Done My Hand transactions"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-blue-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">My Hand</span>
+                  <span className="text-[11px] font-black uppercase text-blue-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">MY HAND (DONE)</span>
                   <div className="w-6 h-6 rounded-lg bg-blue-200/80 text-blue-800 flex items-center justify-center text-xs font-black print:hidden">
                     ✋
                   </div>
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-blue-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'My Hand' ? filteredCreditTotal : creditSummary.myHandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        creditDepositTo === 'My Hand' && creditStatus === 'Done'
+                        creditDepositTo === 'My Hand' && creditStatus === 'All'
                           ? 'bg-blue-700 text-white border-blue-800 shadow-xs'
                           : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
                       }`}
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'My Hand' ? filteredCreditTotal : creditSummary.myHandTotal).toLocaleString('en-IN')}</span>
                     </button>
                     {creditSummary.myHandDue > 0 && (
                       <button
@@ -964,41 +1219,41 @@ const MyCreditDebit = () => {
                   </div>
                   {/* Print View Clean Text Line */}
                   <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                    Done: {settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}
+                    Total: {settings.currency}{creditSummary.myHandTotal.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
 
               {/* Company Wallet Card */}
               <div
-                onClick={() => { setCreditDepositTo(creditDepositTo === 'Company Wallet' && creditStatus === 'All' ? 'All' : 'Company Wallet'); setCreditStatus('All'); }}
+                onClick={() => { setCreditDepositTo('Company Wallet'); setCreditStatus('Done'); }}
                 className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/60 border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                  creditDepositTo === 'Company Wallet' ? 'border-purple-600 ring-2 ring-purple-500/15' : 'border-purple-200/90'
+                  creditDepositTo === 'Company Wallet' && creditStatus === 'Done' ? 'border-purple-600 ring-2 ring-purple-500/15' : 'border-purple-200/90'
                 }`}
-                title="Click to filter Company Wallet transactions"
+                title="Click middle to filter Done Company Wallet transactions"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-purple-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">Co. Wallet</span>
+                  <span className="text-[11px] font-black uppercase text-purple-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide">CO. WALLET (DONE)</span>
                   <div className="w-6 h-6 rounded-lg bg-purple-200/80 text-purple-800 flex items-center justify-center text-xs font-black print:hidden">
                     🏢
                   </div>
                 </div>
                 <div>
                   <div className="text-lg sm:text-xl font-black text-purple-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight mt-0.5">
-                    {settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'Company Wallet' ? filteredCreditTotal : creditSummary.walletTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {settings.currency}{creditSummary.walletDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="flex items-center space-x-1.5 mt-1.5 text-[10px] font-extrabold flex-wrap gap-y-1 print:hidden">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus(creditStatus === 'Done' ? 'All' : 'Done'); }}
+                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus('All'); }}
                       className={`px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-1 ${
-                        creditDepositTo === 'Company Wallet' && creditStatus === 'Done'
+                        creditDepositTo === 'Company Wallet' && creditStatus === 'All'
                           ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
                           : 'bg-purple-100/90 text-purple-900 border-purple-200/80 hover:bg-purple-200'
                       }`}
                     >
-                      <span>Done:</span>
-                      <span>{settings.currency}{creditSummary.walletDone.toLocaleString('en-IN')}</span>
+                      <span>Total:</span>
+                      <span>{settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'Company Wallet' ? filteredCreditTotal : creditSummary.walletTotal).toLocaleString('en-IN')}</span>
                     </button>
                     {creditSummary.walletDue > 0 && (
                       <button
@@ -1175,6 +1430,258 @@ const MyCreditDebit = () => {
                   </tfoot>
                 )}
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 💰 SECTION 3: MONEY RECEIVED (COMPANY ALLOCATIONS) TABLE  */}
+      {/* ======================================================== */}
+      {(activeTab === 'all' || activeTab === 'received') && (
+        <div className={`space-y-4 ${printTarget !== 'all' && printTarget !== 'received' ? 'print:hidden' : ''}`}>
+          {/* Section Header Card */}
+          <div className="glass-card p-4 rounded-2xl border-l-4 border-l-amber-500 space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 print:border-b-2 print:border-black pb-3 print:pb-1">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm print:hidden">
+                  💰
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-[#002B49] print:text-lg print:text-black print:font-black flex items-center gap-2">
+                    Money Received (Company Allocations)
+                    <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-semibold">
+                      {filteredAllocations.length} Records
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-slate-500 font-medium print:text-black print:font-semibold">Cash allocations transferred to you by Shukan Company</p>
+                </div>
+              </div>
+
+              {/* Dedicated Received Filter Trigger & Print Button */}
+              <div className="flex items-center space-x-2 print:hidden">
+                <button
+                  onClick={() => setIsReceivedFilterOpen(true)}
+                  className={`flex items-center justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                    hasActiveReceivedFilters
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5 mr-1.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  Filter Received {hasActiveReceivedFilters && <span className="ml-1 text-emerald-300 font-extrabold">●</span>}
+                </button>
+
+                <button
+                  onClick={() => triggerPrint('received')}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center"
+                >
+                  <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 00-2 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Money Log
+                </button>
+              </div>
+            </div>
+
+            {/* Quick 1-Line Search Bar for Received */}
+            <div className="flex items-center gap-2 print:hidden">
+              <div className="relative flex-1">
+                <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={receivedSearch}
+                  onChange={(e) => setReceivedSearch(e.target.value)}
+                  placeholder="Search received notes, date, amount..."
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input text-slate-800 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+              {receivedSearch && (
+                <button
+                  onClick={() => setReceivedSearch('')}
+                  className="text-xs text-rose-600 font-bold hover:underline px-2"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Active Received Filter Badge Banner */}
+            {hasActiveReceivedFilters && (
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+                <div className="flex flex-wrap items-center gap-2 text-slate-800">
+                  <span className="font-extrabold text-[#002B49]">Active Received Filters:</span>
+                  {(receivedStartDate || receivedEndDate) && (
+                    <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[11px]">
+                      Date: {formatDate(receivedStartDate) || 'Start'} to {formatDate(receivedEndDate) || 'Today'}
+                    </span>
+                  )}
+                </div>
+                <button onClick={resetReceivedFilters} className="text-[11px] font-bold text-rose-600 hover:underline">
+                  Reset Filters
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Money Received Table */}
+          <div className="glass-card p-3.5 sm:p-5 rounded-2xl print:p-0 print:border-none print:shadow-none print:bg-transparent">
+            {/* Mobile View */}
+            <div className="block md:hidden space-y-3 print:hidden">
+              {filteredAllocations.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
+                  No money received records found for the selected criteria.
+                </div>
+              ) : (
+                filteredAllocations.map((a, index) => (
+                  <div key={a.id || index} className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
+                        <span className="text-[11px] font-semibold text-slate-500">{formatDate(a.date)}</span>
+                      </div>
+                      <span className="text-sm font-extrabold text-emerald-600">
+                        +{settings.currency}{(parseFloat(a.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="pt-1.5 border-t border-slate-100 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl font-medium">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Notes / Purpose</span>
+                      {a.notes || 'Company Money Allocation'}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block print:block overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-700 print:text-black print:text-xs border-collapse">
+                <thead className="text-xs uppercase bg-amber-50/80 text-amber-900 border-b border-amber-200 print:bg-slate-100 print:text-black print:border-b-2 print:border-black">
+                  <tr>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Sr. No.</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Date</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Transferred By</th>
+                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Notes / Purpose</th>
+                    <th className="py-3 px-4 font-bold text-right print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Received Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 print:divide-y-0">
+                  {filteredAllocations.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-slate-300">
+                        No money received records found for the selected criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAllocations.map((a, index) => (
+                      <tr key={a.id || index} className="hover:bg-amber-50/30 transition print:bg-white">
+                        <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{index + 1}</td>
+                        <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{formatDate(a.date)}</td>
+                        <td className="py-3.5 px-4 font-bold text-[#002B49] print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">Shukan Company</td>
+                        <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:max-w-none print:whitespace-normal print:break-words">
+                          {a.notes || 'Company Money Allocation'}
+                        </td>
+                        <td className="py-3.5 px-4 font-black text-right text-emerald-600 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:font-black">
+                          +{settings.currency}{(parseFloat(a.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {filteredAllocations.length > 0 && (
+                  <tfoot className="bg-amber-50/50 font-bold text-xs text-amber-900 border-t-2 border-amber-200 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
+                    <tr>
+                      <td colSpan="4" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black">
+                        {hasActiveReceivedFilters ? 'Total Filtered Received Amount:' : 'Total Received Amount:'}
+                      </td>
+                      <td className="py-3 px-4 text-right font-black text-emerald-700 text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black">
+                        +{settings.currency}{totalFilteredReceived.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 💰 MONEY RECEIVED FILTER MODAL                            */}
+      {/* ======================================================== */}
+      {isReceivedFilterOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-[#c69255]/30">
+                  <svg className="w-5 h-5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Filter Received Cash</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Filter allocation records by date range</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsReceivedFilterOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
+                <DateInput
+                  value={receivedStartDate}
+                  max={receivedEndDate || undefined}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setReceivedStartDate(val);
+                    if (receivedEndDate && val > receivedEndDate) setReceivedEndDate('');
+                  }}
+                  className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
+                <DateInput
+                  value={receivedEndDate}
+                  min={receivedStartDate || undefined}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setReceivedEndDate(val);
+                    if (receivedStartDate && val < receivedStartDate) setReceivedStartDate('');
+                  }}
+                  className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
+              <button
+                onClick={() => { resetReceivedFilters(); setIsReceivedFilterOpen(false); }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                Reset All
+              </button>
+              <button
+                onClick={() => setIsReceivedFilterOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                Apply Filters
+              </button>
             </div>
           </div>
         </div>
