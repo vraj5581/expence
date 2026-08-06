@@ -29,20 +29,11 @@ const Navbar = ({ onToggleSidebar }) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 h-20 bg-white/90 border-b border-slate-200/80 backdrop-blur-md px-4 lg:px-8 flex items-center justify-between shadow-xs">
-      {/* Left section: Toggle & Title */}
+    <header className="sticky top-0 z-30 h-20 bg-white/90 border-b border-slate-200/80 backdrop-blur-md px-4 lg:px-8 flex items-center justify-between shadow-xs print:hidden">
+      {/* Left section: Title */}
       <div className="flex items-center space-x-4">
-        <button
-          onClick={onToggleSidebar}
-          className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 lg:hidden focus:outline-none"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-
-        <div className="hidden md:block">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Portal Mode: </span>
+        <div>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Portal Mode: </span>
           <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{effectiveRole} View</span>
         </div>
       </div>

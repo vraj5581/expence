@@ -546,136 +546,136 @@ const Dashboard = () => {
       {/* Simplified Financial Summary Grid */}
       {/* Main KPI Credit & Debit Summary Cards Grid */}
       {isAdmin ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5">
           {/* 1. TOTAL DEBIT (OUTFLOW) */}
           <div
             onClick={() => navigate('/admin/credit-debit', { state: { selectedType: 'Debit' } })}
-            className="glass-card p-3 sm:p-3.5 rounded-xl border-l-4 border-l-[#002B49] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-[#002B49] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
             title="Click to view All Debit Entries"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-6 h-6 rounded-lg bg-[#002B49]/10 flex items-center justify-center text-[#002B49] shrink-0">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center space-x-1">
+                  <div className="w-5 h-5 rounded-md bg-[#002B49]/10 flex items-center justify-center text-[#002B49] shrink-0">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                     </svg>
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">TOTAL DEBIT</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">TOTAL DEBIT</span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-[#002B49]/10 text-[#002B49] uppercase">
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-[#002B49]/10 text-[#002B49] uppercase shrink-0">
                   Outflow
                 </span>
               </div>
-              <div className="mt-2">
-                <div className="text-lg sm:text-xl font-black text-[#002B49]">
+              <div className="mt-1.5">
+                <div className="text-base sm:text-xl font-black text-[#002B49] tracking-tight">
                   {settings.currency}{adminTotalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5 font-medium">Total expenditure & cash out</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Total expenditure</p>
               </div>
             </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] font-semibold text-slate-500">
-              <span>System Outflow</span>
-              <span className="text-[#002B49] font-extrabold">View Outflow →</span>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+              <span className="truncate">Outflow</span>
+              <span className="text-[#002B49] font-extrabold shrink-0">View →</span>
             </div>
           </div>
 
           {/* 2. TOTAL CREDIT (INFLOW) */}
           <div
             onClick={() => navigate('/admin/credit-debit', { state: { selectedType: 'Credit', selectedDepositTo: 'My Hand' } })}
-            className="glass-card p-3 sm:p-3.5 rounded-xl border-l-4 border-l-emerald-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-emerald-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
             title="Click to view My Hand Credit Entries"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center space-x-1">
+                  <div className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                     </svg>
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">TOTAL CREDIT</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">TOTAL CREDIT</span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 uppercase">
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-emerald-100 text-emerald-800 uppercase shrink-0">
                   Inflow
                 </span>
               </div>
-              <div className="mt-2">
-                <div className="text-lg sm:text-xl font-black text-emerald-700">
+              <div className="mt-1.5">
+                <div className="text-base sm:text-xl font-black text-emerald-700 tracking-tight">
                   {settings.currency}{(adminTotalCredit + totalVaultDeposited).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5 font-medium">Total capital & credit entries</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Total capital & credit</p>
               </div>
             </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] font-semibold text-slate-500">
-              <span>System Inflow</span>
-              <span className="text-emerald-700 font-extrabold">View Inflow →</span>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+              <span className="truncate">Inflow</span>
+              <span className="text-emerald-700 font-extrabold shrink-0">View →</span>
             </div>
           </div>
 
           {/* 3. CASH RESERVE (NET BALANCE) */}
           <div
             onClick={() => navigate('/admin/deposit-allocate')}
-            className="glass-card p-3 sm:p-3.5 rounded-xl border-l-4 border-l-[#c69255] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-[#c69255] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
             title="Click to view Master Vault Balance"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-6 h-6 rounded-lg bg-[#c69255]/15 flex items-center justify-center text-[#9e6e34] shrink-0">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center space-x-1">
+                  <div className="w-5 h-5 rounded-md bg-[#c69255]/15 flex items-center justify-center text-[#9e6e34] shrink-0">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">CASH RESERVE</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">CASH RESERVE</span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-[#c69255]/15 text-[#9e6e34] uppercase">
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-[#c69255]/15 text-[#9e6e34] uppercase shrink-0">
                   Vault
                 </span>
               </div>
-              <div className="mt-2">
-                <div className="text-lg sm:text-xl font-black text-[#9e6e34]">
+              <div className="mt-1.5">
+                <div className="text-base sm:text-xl font-black text-[#9e6e34] tracking-tight">
                   {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5 font-medium">Available Master Vault balance</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Vault balance</p>
               </div>
             </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] font-semibold text-slate-500">
-              <span>Master Vault</span>
-              <span className="text-[#9e6e34] font-extrabold">Manage Vault →</span>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+              <span className="truncate">Vault</span>
+              <span className="text-[#9e6e34] font-extrabold shrink-0">Manage →</span>
             </div>
           </div>
 
           {/* 4. PENDING DEBIT (DUE BILLS) */}
           <div
             onClick={() => navigate('/admin/credit-debit', { state: { selectedStatus: 'Due' } })}
-            className="glass-card p-3 sm:p-3.5 rounded-xl border-l-4 border-l-amber-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-amber-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
             title="Click to view Unpaid Due Entries"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-700 shrink-0">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center space-x-1">
+                  <div className="w-5 h-5 rounded-md bg-amber-500/15 flex items-center justify-center text-amber-700 shrink-0">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">PENDING DEBIT</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">PENDING DEBIT</span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 uppercase">
-                  Due Bills
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-amber-100 text-amber-800 uppercase shrink-0">
+                  Due
                 </span>
               </div>
-              <div className="mt-2">
-                <div className="text-lg sm:text-xl font-black text-amber-800">
+              <div className="mt-1.5">
+                <div className="text-base sm:text-xl font-black text-amber-800 tracking-tight">
                   {settings.currency}{allDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5 font-medium">Unpaid due bills & claims</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Unpaid due bills</p>
               </div>
             </div>
-            <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] font-semibold text-slate-500">
-              <span>Pending Claims</span>
-              <span className="text-amber-800 font-extrabold">View Dues →</span>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+              <span className="truncate">Claims</span>
+              <span className="text-amber-800 font-extrabold shrink-0">View →</span>
             </div>
           </div>
         </div>
@@ -836,7 +836,7 @@ const Dashboard = () => {
                     title="Click to view Due Debit entries"
                   >
                     <span className="text-slate-400">Due Bills: </span>
-                    <span className="text-amber-700">{settings.currency}{netDueOwed.toLocaleString('en-IN')}</span>
+                    <span className="text-amber-700">{settings.currency}{myDueDebit.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>

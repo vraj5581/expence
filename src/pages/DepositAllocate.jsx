@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
@@ -36,6 +36,7 @@ const DepositAllocate = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedTxnForAction, setSelectedTxnForAction] = useState(null);
 
   useEffect(() => {
     if (location.state?.selectedUser) {
@@ -43,6 +44,9 @@ const DepositAllocate = () => {
     }
     if (location.state?.activeTab) {
       setActiveTab(location.state.activeTab);
+    }
+    if (location.state) {
+      window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
@@ -198,6 +202,10 @@ const DepositAllocate = () => {
       formatDate(t.date).includes(query)
     );
   });
+
+  const filteredTotal = useMemo(() => {
+    return filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredTransactions]);
 
   return (
     <div className="space-y-6">
@@ -540,97 +548,78 @@ const DepositAllocate = () => {
       )}
 
       <div className="glass-card p-3.5 sm:p-6 rounded-xl sm:rounded-2xl">
-        <div className="block md:hidden space-y-2.5">
+        {/* Mobile Compact Line-by-Line Table View */}
+        <div className="block md:hidden print:hidden">
           {filteredTransactions.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
-              No transaction entries found. Click "Deposit" or "Allocate" to record entries.
+            <div className="py-6 text-center text-slate-500 text-xs font-medium bg-white/80 rounded-xl border border-slate-200">
+              No transaction entries match your criteria.
             </div>
           ) : (
-            filteredTransactions.map((t, index) => (
-              <div key={t.id || index} className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                        t.txnCategory === 'Add Money'
-                          ? 'bg-amber-500/15 text-[#9e6e34] border border-[#c69255]/30'
-                          : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
-                      }`}
-                    >
-                      {t.txnCategory === 'Add Money' ? 'Deposit' : 'Allocate'}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 font-semibold">{formatDate(t.date)}</span>
-                </div>
-
-                <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Name / User</span>
-                    <span className="text-sm font-extrabold text-[#002B49]">{t.userName}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Amount</span>
-                    <span className={`text-sm font-extrabold ${t.txnCategory === 'Add Money' ? 'text-[#9e6e34]' : 'text-[#002B49]'}`}>
-                      {settings.currency}{parseFloat(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-
-                {t.notes && (
-                  <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl font-medium">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Description / Purpose</span>
-                    {t.notes}
-                  </div>
-                )}
-
-                <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-                  {t.txnCategory === 'Add Money' ? (
-                    <>
-                      <button
-                        onClick={() => handleOpenEditModal(t.rawItem)}
-                        className="px-3 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-[#002B49] hover:text-white text-xs font-bold transition flex items-center"
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+              <div className="max-h-[65vh] overflow-y-auto overflow-x-hidden">
+                <table className="w-full table-fixed text-left text-xs border-collapse">
+                  <thead className="text-[10px] uppercase bg-slate-100 text-[#002B49] sticky top-0 z-10 border-b border-slate-200 shadow-2xs font-extrabold">
+                    <tr>
+                      <th className="py-2 px-1 font-black w-6 text-center">#</th>
+                      <th className="py-2 px-1 font-black">Type, User, Date & Notes</th>
+                      <th className="py-2 px-1 font-black text-right w-24">Amount</th>
+                      <th className="py-2 px-1 font-black text-center w-16">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-[11px]">
+                    {filteredTransactions.map((t, index) => (
+                      <tr
+                        key={t.id || index}
+                        onClick={() => setSelectedTxnForAction(t)}
+                        className="hover:bg-slate-100/80 active:bg-slate-200 transition odd:bg-white even:bg-slate-50/30 cursor-pointer"
+                        title="Click entry to view details & options"
                       >
-                        <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(t.rawItem)}
-                        className="px-3 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white text-xs font-bold transition flex items-center"
-                      >
-                        <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Delete
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleOpenEditAllocationModal(t.rawItem)}
-                        className="px-3 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-[#002B49] hover:text-white text-xs font-bold transition flex items-center"
-                      >
-                        <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAllocation(t.rawItem)}
-                        className="px-3 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white text-xs font-bold transition flex items-center"
-                      >
-                        <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Delete
-                      </button>
-                    </>
+                        <td className="py-2.5 px-1 font-bold text-slate-400 text-center align-middle text-[10px] truncate">{index + 1}</td>
+                        <td className="py-2.5 px-1 align-middle min-w-0">
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center space-x-1 min-w-0">
+                              <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-extrabold uppercase shrink-0 ${
+                                t.txnCategory === 'Add Money'
+                                  ? 'bg-amber-100 text-[#9e6e34] border border-amber-300'
+                                  : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
+                              }`}>
+                                {t.txnCategory === 'Add Money' ? 'Deposit' : 'Allocate'}
+                              </span>
+                              <span className="text-[11px] font-extrabold text-[#002B49] truncate">{t.userName}</span>
+                              <span className="text-[9.5px] font-bold text-slate-400 shrink-0">• {formatDate(t.date)}</span>
+                            </div>
+                            <span className="text-[10.5px] font-semibold text-slate-600 truncate leading-tight mt-0.5">{t.notes || '-'}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-1 font-black text-right whitespace-nowrap align-middle text-[11px]">
+                          <span className={t.txnCategory === 'Add Money' ? 'text-[#9e6e34]' : 'text-[#002B49]'}>
+                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-1 text-center align-middle">
+                          <span className="px-1.5 py-0.5 rounded-md bg-slate-100 hover:bg-[#002B49] text-slate-600 hover:text-white font-extrabold text-[10px] border border-slate-200 transition inline-block">
+                            Options
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {filteredTransactions.length > 0 && (
+                    <tfoot className="bg-slate-100 font-bold text-xs text-[#002B49] border-t-2 border-slate-300 sticky bottom-0 z-10 shadow-xs">
+                      <tr>
+                        <td colSpan="2" className="py-2.5 px-3 text-right uppercase tracking-wider font-extrabold text-[11px] text-[#002B49]">
+                          {hasActiveFilters ? 'Total Filtered:' : 'Total Amount:'}
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-black text-[#002B49] text-xs whitespace-nowrap">
+                          {settings.currency}{filteredTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-2.5 px-1"></td>
+                      </tr>
+                    </tfoot>
                   )}
-                </div>
+                </table>
               </div>
-            ))
+            </div>
           )}
         </div>
 
@@ -727,6 +716,19 @@ const DepositAllocate = () => {
                 ))
               )}
             </tbody>
+            {filteredTransactions.length > 0 && (
+              <tfoot className="bg-slate-100/90 font-bold text-xs text-[#002B49] border-t-2 border-slate-300 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
+                <tr>
+                  <td colSpan="4" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black font-extrabold text-[#002B49]">
+                    {hasActiveFilters ? 'Total Filtered Amount:' : 'Total Amount:'}
+                  </td>
+                  <td className="py-3 px-4 font-black text-[#002B49] text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black whitespace-nowrap">
+                    {settings.currency}{filteredTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td colSpan="2" className="py-3 px-4 print:py-2 print:px-2 print:border print:border-black"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -893,6 +895,103 @@ const DepositAllocate = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Entry Action Modal Pop-up (Click Any Row) */}
+      {selectedTxnForAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs print:hidden animate-fadeIn">
+          <div className="bg-white w-full max-w-md p-5 sm:p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
+                selectedTxnForAction.txnCategory === 'Add Money'
+                  ? 'bg-amber-100 text-[#9e6e34] border border-amber-300'
+                  : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
+              }`}>
+                {selectedTxnForAction.txnCategory === 'Add Money' ? 'Deposit Entry' : 'Allocation Entry'}
+              </span>
+              <button
+                onClick={() => setSelectedTxnForAction(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Entry Details */}
+            <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">User / Partner</span>
+                  <span className="text-base font-extrabold text-[#002B49]">{selectedTxnForAction.userName}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Date</span>
+                  <span className="text-xs font-bold text-slate-700">{formatDate(selectedTxnForAction.date)}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Amount</span>
+                <span className={`text-lg font-black ${selectedTxnForAction.txnCategory === 'Add Money' ? 'text-[#9e6e34]' : 'text-[#002B49]'}`}>
+                  {settings.currency}{(parseFloat(selectedTxnForAction.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              {selectedTxnForAction.notes && (
+                <div className="pt-2 border-t border-slate-200/70">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Description / Purpose</span>
+                  <p className="text-xs font-semibold text-slate-700 leading-relaxed bg-white p-2.5 rounded-xl border border-slate-200/60">
+                    {selectedTxnForAction.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons: Edit & Delete */}
+            <div className="flex items-center space-x-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  const rawItem = selectedTxnForAction.rawItem;
+                  const category = selectedTxnForAction.txnCategory;
+                  setSelectedTxnForAction(null);
+                  if (category === 'Add Money') {
+                    handleOpenEditModal(rawItem);
+                  } else {
+                    handleOpenEditAllocationModal(rawItem);
+                  }
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer flex items-center justify-center space-x-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                <span>Edit Record</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const rawItem = selectedTxnForAction.rawItem;
+                  const category = selectedTxnForAction.txnCategory;
+                  setSelectedTxnForAction(null);
+                  if (category === 'Add Money') {
+                    handleDelete(rawItem);
+                  } else {
+                    handleDeleteAllocation(rawItem);
+                  }
+                }}
+                className="py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 text-xs font-bold transition cursor-pointer flex items-center justify-center space-x-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                <span>Delete</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedTxnForAction(null)}
+                className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

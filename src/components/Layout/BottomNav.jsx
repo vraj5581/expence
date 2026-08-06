@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useExpense } from '../../context/ExpenseContext';
 
-const adminNavItems = [
+const adminBottomItems = [
   {
     name: 'Dashboard',
     path: '/admin/dashboard',
@@ -14,7 +14,7 @@ const adminNavItems = [
     )
   },
   {
-    name: 'Debit & Credit',
+    name: 'Ledger',
     path: '/admin/credit-debit',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -23,7 +23,7 @@ const adminNavItems = [
     )
   },
   {
-    name: 'Deposit & Allocate',
+    name: 'Vault',
     path: '/admin/deposit-allocate',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,7 +50,7 @@ const adminNavItems = [
     )
   },
   {
-    name: 'Team Accounts',
+    name: 'Team',
     path: '/admin/team',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,7 +70,7 @@ const adminNavItems = [
   }
 ];
 
-const staffNavItems = [
+const staffBottomItems = [
   {
     name: 'Dashboard',
     path: '/admin/dashboard',
@@ -81,7 +81,7 @@ const staffNavItems = [
     )
   },
   {
-    name: 'My Debit & Credit',
+    name: 'My Ledger',
     path: '/admin/my-credit-debit',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,83 +100,37 @@ const staffNavItems = [
   }
 ];
 
-const Sidebar = ({ isOpen, onClose }) => {
+const BottomNav = () => {
   const { user } = useAuth();
   const { users } = useExpense();
 
   const currentUserInDb = users?.find(u => u.id === user?.id || u.name?.toLowerCase() === user?.name?.toLowerCase());
-  const effectiveRole = currentUserInDb?.role || user?.role || 'Staff';
-
   const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || currentUserInDb?.role === 'Administrator';
 
-  const menuItems = isAdmin ? adminNavItems : staffNavItems;
+  const menuItems = isAdmin ? adminBottomItems : staffBottomItems;
 
   return (
-    <>
-      {/* Sidebar Container (Desktop only) */}
-      <aside
-        className="fixed top-0 left-0 z-50 h-screen w-64 bg-[#002B49] text-white hidden lg:flex flex-col justify-between border-r border-[#001D33] print:hidden"
-      >
-        <div>
-          {/* Brand Header */}
-          <div className="h-16 px-6 flex items-center justify-between border-b border-white/10 bg-[#002B49]">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-[#c69255] flex items-center justify-center font-extrabold text-white text-base shadow-md">
-                SP
-              </div>
-              <div>
-                <span className="font-extrabold text-sm tracking-tight text-white block leading-none">SHUKAN</span>
-                <span className="text-[10px] font-bold text-[#c69255] tracking-widest uppercase block mt-0.5">PACKAGING</span>
-              </div>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="md:hidden text-slate-300 hover:text-white p-1 rounded-lg"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-140px)]">
-            {menuItems.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.path}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex items-center space-x-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    isActive
-                      ? 'bg-[#c69255] text-white shadow-md'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                  }`
-                }
-              >
-                {item.icon}
-                <span>{item.name}</span>
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-
-        {/* Footer User Info */}
-        <div className="p-4 border-t border-white/10 bg-[#00223b]">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-full bg-[#c69255]/20 text-[#c69255] border border-[#c69255]/40 flex items-center justify-center font-bold text-xs">
-              {user?.name?.[0] || 'U'}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-bold text-white truncate">{user?.name}</p>
-              <p className="text-[10px] text-slate-400 font-medium truncate uppercase">{effectiveRole}</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </>
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] print:hidden lg:hidden">
+      <div className="flex items-center justify-around px-1 py-1.5 overflow-x-auto no-scrollbar">
+        {menuItems.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center min-w-[56px] py-1 px-2 rounded-xl transition-all duration-200 shrink-0 ${
+                isActive
+                  ? 'bg-[#002B49] text-white shadow-sm font-extrabold scale-102'
+                  : 'text-slate-500 hover:text-slate-900 font-semibold hover:bg-slate-100/70'
+              }`
+            }
+          >
+            <div className="shrink-0 mb-0.5">{item.icon}</div>
+            <span className="text-[10px] leading-tight tracking-tight whitespace-nowrap">{item.name}</span>
+          </NavLink>
+        ))}
+      </div>
+    </nav>
   );
 };
 
-export default Sidebar;
+export default BottomNav;
