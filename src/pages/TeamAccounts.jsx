@@ -17,7 +17,7 @@ const TeamAccounts = () => {
     reset({
       name: '',
       id: '',
-      role: 'Staff',
+      role: 'Partner',
       password: '',
       status: 'Active'
     });
@@ -29,7 +29,7 @@ const TeamAccounts = () => {
     reset({
       name: user.name,
       id: user.id,
-      role: user.role || 'Staff',
+      role: user.role || 'Partner',
       password: user.password,
       status: user.status
     });
@@ -98,12 +98,14 @@ const TeamAccounts = () => {
                 <div className="flex items-center space-x-2">
                   <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
                   <span className="text-sm font-extrabold text-[#002B49]">{u.name}</span>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                    (u.role || 'Staff') === 'Administrator'
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shadow-2xs ${
+                    (u.role || 'Partner') === 'Partner'
+                      ? 'bg-slate-100 text-slate-900 border border-slate-300'
+                      : (u.role || 'Partner') === 'Administrator'
                       ? 'bg-amber-500/15 text-[#9e6e34] border border-[#c69255]/30'
                       : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
                   }`}>
-                    {u.role || 'Staff'}
+                    {u.role || 'Partner'}
                   </span>
                 </div>
                 <button
@@ -199,12 +201,14 @@ const TeamAccounts = () => {
                     </div>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
-                      (u.role || 'Staff') === 'Administrator'
+                    <span className={`inline-flex items-center px-3 py-0.5 rounded-full text-xs font-black shadow-2xs ${
+                      (u.role || 'Partner') === 'Partner'
+                        ? 'bg-slate-100 text-slate-900 border border-slate-300'
+                        : (u.role || 'Partner') === 'Administrator'
                         ? 'bg-amber-500/15 text-[#9e6e34] border border-[#c69255]/30'
                         : 'bg-[#002B49]/10 text-[#002B49] border border-[#002B49]/20'
                     }`}>
-                      {u.role || 'Staff'}
+                      {u.role || 'Partner'}
                     </span>
                   </td>
                   <td className="py-3.5 px-4">
@@ -314,20 +318,16 @@ const TeamAccounts = () => {
 
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Role / Designation</label>
-                <input
-                  type="text"
-                  list="user-role-list"
-                  placeholder="e.g. Staff, Partner, Administrator, Manager..."
+                <select
                   {...register('role')}
-                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none font-medium"
-                />
-                <datalist id="user-role-list">
-                  <option value="Staff" />
-                  <option value="Administrator" />
-                  <option value="Partner" />
-                  <option value="Manager" />
-                  <option value="Accountant" />
-                </datalist>
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
+                >
+                  <option value="Partner">Partner</option>
+                  <option value="Administrator">Administrator</option>
+                  <option value="Staff">Staff</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Accountant">Accountant</option>
+                </select>
               </div>
 
               <div>

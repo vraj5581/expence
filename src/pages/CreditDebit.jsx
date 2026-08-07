@@ -315,11 +315,15 @@ const CreditDebit = () => {
   const handleOpenAddModal = (defaultType = 'Cash Out') => {
     setEditingTxn(null);
     setModalTxnType(defaultType);
+    let initialUser = selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company');
+    if (defaultType === 'Cash In' && (initialUser === 'Shukan Company' || initialUser === 'Shukan Packaging (Company)' || initialUser === 'Company Vault')) {
+      initialUser = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
+    }
     reset({
       type: defaultType,
       amount: '',
       depositTo: defaultType === 'Cash In' ? 'My Hand' : 'My Hand',
-      userName: selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company'),
+      userName: initialUser,
       date: new Date().toISOString().split('T')[0],
       status: 'Done',
       description: ''
@@ -368,12 +372,17 @@ const CreditDebit = () => {
       const finalType = data.type || modalTxnType || 'Cash Out';
       const finalDepositTo = finalType === 'Cash In' ? (data.depositTo || 'My Hand') : 'My Hand';
 
+      let finalUserName = data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company'));
+      if (finalType === 'Cash In' && (finalUserName === 'Shukan Company' || finalUserName === 'Shukan Packaging (Company)' || finalUserName === 'Company Vault')) {
+        finalUserName = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
+      }
+
       const newTxn = {
         ...data,
         type: finalType,
         depositTo: finalDepositTo,
         status: data.status || 'Done',
-        userName: data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company')),
+        userName: finalUserName,
         createdBy: user?.name || 'Admin'
       };
 
@@ -1646,7 +1655,9 @@ const CreditDebit = () => {
                   {...register('userName')}
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                 >
-                  <option value="Shukan Company">🏢 Shukan Company</option>
+                  {watch('type') !== 'Cash In' && (
+                    <option value="Shukan Company">🏢 Shukan Company</option>
+                  )}
                   {users.map((u) => (
                     <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
                   ))}

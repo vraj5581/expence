@@ -9,7 +9,7 @@ const initialUsers = [
     id: 'vraj',
     name: 'Vraj',
     password: 'vraj123',
-    role: 'Administrator',
+    role: 'Partner',
     status: 'Active',
     createdAt: '2025-01-10'
   },
@@ -17,7 +17,7 @@ const initialUsers = [
     id: 'raj',
     name: 'Raj',
     password: 'raj123',
-    role: 'Staff',
+    role: 'Partner',
     status: 'Active',
     createdAt: '2025-03-14'
   },
@@ -25,7 +25,7 @@ const initialUsers = [
     id: 'teerth',
     name: 'Teerth',
     password: 'teerth123',
-    role: 'Staff',
+    role: 'Partner',
     status: 'Active',
     createdAt: '2025-06-20'
   },
@@ -33,7 +33,7 @@ const initialUsers = [
     id: 'mayank',
     name: 'Mayank',
     password: 'mayank123',
-    role: 'Staff',
+    role: 'Partner',
     status: 'Active',
     createdAt: '2025-09-01'
   }
@@ -120,9 +120,14 @@ export const ExpenseProvider = ({ children }) => {
   });
 
   const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem('shukan_expense_users_v5');
+    const saved = localStorage.getItem('shukan_expense_users_v6');
     if (saved) {
       return JSON.parse(saved);
+    }
+    const olderSaved = localStorage.getItem('shukan_expense_users_v5');
+    if (olderSaved) {
+      const parsed = JSON.parse(olderSaved);
+      return parsed.map(u => ({ ...u, role: 'Partner' }));
     }
     return initialUsers;
   });
@@ -154,7 +159,7 @@ export const ExpenseProvider = ({ children }) => {
   }, [transactions]);
 
   useEffect(() => {
-    localStorage.setItem('shukan_expense_users_v5', JSON.stringify(users));
+    localStorage.setItem('shukan_expense_users_v6', JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
