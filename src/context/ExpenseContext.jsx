@@ -170,9 +170,42 @@ export const ExpenseProvider = ({ children }) => {
     localStorage.setItem('shukan_tasks_v1', JSON.stringify(tasks));
   }, [tasks]);
 
-  // Calculate Admin Vault Balance dynamically
-  // Vault Balance = (Sum of all Vault Deposits) - (Sum of all Money Given to Users) - (Direct Company Expenses)
-  const totalVaultDeposited = vaultDeposits.reduce((sum, d) => sum + (d.amount || 0), 0);
+  // Helper function to check if a deposit is Due (or linked to a Due credit transaction)
+  const isDepositDue = (d) => {
+    if (!d) return false;
+    if (d.status === 'Due') return true;
+
+    if (d.txnId) {
+      const linkedTxn = transactions.find(t => t.id === d.txnId);
+      if (linkedTxn) return linkedTxn.status === 'Due';
+    }
+
+    if (d.notes && d.notes.includes('Company Wallet Credit')) {
+      const cleanNote = d.notes.replace('Company Wallet Credit:', '').trim().toLowerCase();
+
+      // Find matching Credit transactions for this user & Company Wallet
+      const matchingCreditTxns = transactions.filter(t =>
+        t.userName === d.userName &&
+        (t.type === 'Cash In' || t.type === 'Credit') &&
+        (t.depositTo === 'Company Wallet' || !t.depositTo)
+      );
+
+      const exactMatch = matchingCreditTxns.find(t =>
+        (t.description && cleanNote && t.description.trim().toLowerCase() === cleanNote) ||
+        (cleanNote && (t.description || '').trim().toLowerCase().includes(cleanNote)) ||
+        parseFloat(t.amount) === parseFloat(d.amount)
+      );
+
+      if (exactMatch) {
+        return exactMatch.status === 'Due';
+      }
+    }
+    return false;
+  };
+
+  // Calculate Admin Vault Balance dynamically (excluding Due deposits)
+  const activeVaultDeposits = vaultDeposits.filter(d => !isDepositDue(d));
+  const totalVaultDeposited = activeVaultDeposits.reduce((sum, d) => sum + (d.amount || 0), 0);
   const totalAllocatedToTeam = Object.values(userAllocations).reduce((sum, val) => sum + val, 0);
   
   const totalCompanyDirectExpenses = transactions
@@ -414,11 +447,48 @@ export const ExpenseProvider = ({ children }) => {
       }
     }
 
-    setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData, amount: newAmount } : t)));
+    setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t)));
+
+    // Synchronize linked vault deposit status if this is a Company Wallet credit entry
+    const finalType = updatedData.type || oldTxn.type;
+    const finalDepositTo = updatedData.depositTo || oldTxn.depositTo;
+    if ((finalType === 'Cash In' || finalType === 'Credit') && finalDepositTo === 'Company Wallet') {
+      setVaultDeposits(prev => {
+        const linkedDepIndex = prev.findIndex(d =>
+          d.txnId === id ||
+          (d.userName === oldTxn.userName && parseFloat(d.amount) === parseFloat(oldTxn.amount))
+        );
+        if (linkedDepIndex >= 0) {
+          return prev.map((d, index) => index === linkedDepIndex ? {
+            ...d,
+            amount: newAmount,
+            userName: newUserName,
+            status: newStatus
+          } : d);
+        } else if (newStatus === 'Done') {
+          const newDep = {
+            id: `DEP-${Math.floor(1000 + Math.random() * 9000)}`,
+            date: updatedData.date || oldTxn.date || new Date().toISOString().split('T')[0],
+            userName: newUserName,
+            amount: newAmount,
+            notes: `Company Wallet Credit: ${updatedData.description || oldTxn.description || 'Deposit to Vault'}`,
+            txnId: id,
+            status: 'Done'
+          };
+          return [newDep, ...prev];
+        }
+        return prev;
+      });
+    }
+
     return { success: true };
   };
 
   const deleteTransaction = (id) => {
+    const oldTxn = transactions.find(t => t.id === id);
+    if (oldTxn && (oldTxn.type === 'Cash In' || oldTxn.type === 'Credit') && oldTxn.depositTo === 'Company Wallet') {
+      setVaultDeposits(prev => prev.filter(d => d.txnId !== id && !(d.userName === oldTxn.userName && parseFloat(d.amount) === parseFloat(oldTxn.amount))));
+    }
     setTransactions(prev => prev.filter(t => t.id !== id));
     return { success: true };
   };
@@ -532,6 +602,7 @@ export const ExpenseProvider = ({ children }) => {
         adminVaultBalance,
         totalVaultDeposited,
         vaultDeposits,
+        isDepositDue,
         userAllocations,
         allocationsHistory,
         transactions,

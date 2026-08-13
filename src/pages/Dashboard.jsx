@@ -73,6 +73,7 @@ const Dashboard = () => {
 
   // Company Direct Stats
   const companyStats = getUserStats('Shukan Company');
+  const totalCompanyDirectExpenses = companyStats.spent;
   const teamSpentTotal = totalCashOut - companyStats.spent;
 
   // Get active and past/inactive users
@@ -259,8 +260,24 @@ const Dashboard = () => {
     return allDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [allDebitTxns]);
 
+  const adminDoneDebit = useMemo(() => {
+    return allDebitTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [allDebitTxns]);
+
+  const adminDueDebit = useMemo(() => {
+    return allDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [allDebitTxns]);
+
   const adminTotalCredit = useMemo(() => {
     return allCreditTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [allCreditTxns]);
+
+  const adminDoneCredit = useMemo(() => {
+    return allCreditTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [allCreditTxns]);
+
+  const adminDueCredit = useMemo(() => {
+    return allCreditTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [allCreditTxns]);
 
   // Total Remaining Across All Team Members
@@ -546,136 +563,228 @@ const Dashboard = () => {
       {/* Simplified Financial Summary Grid */}
       {/* Main KPI Credit & Debit Summary Cards Grid */}
       {isAdmin ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
           {/* 1. TOTAL DEBIT (OUTFLOW) */}
           <div
-            onClick={() => navigate('/admin/credit-debit', { state: { selectedType: 'Debit' } })}
-            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-[#002B49] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-            title="Click to view All Debit Entries"
+            onClick={() => navigate('/admin/credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } })}
+            className="glass-card p-3 sm:p-4 rounded-2xl border-l-4 border-l-[#002B49] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            title="Click card to view All Debit Entries"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1">
-                  <div className="w-5 h-5 rounded-md bg-[#002B49]/10 flex items-center justify-center text-[#002B49] shrink-0">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-[#002B49]/10 flex items-center justify-center text-[#002B49] shrink-0 font-bold text-xs">
+                    ⬆️
                   </div>
-                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">TOTAL DEBIT</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 truncate">TOTAL DEBIT</span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-[#002B49]/10 text-[#002B49] uppercase shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-[#002B49]/10 text-[#002B49] uppercase shrink-0">
                   Outflow
                 </span>
               </div>
-              <div className="mt-1.5">
-                <div className="text-base sm:text-xl font-black text-[#002B49] tracking-tight">
+              <div className="mt-2">
+                <div className="text-xl sm:text-2xl font-black text-[#002B49] tracking-tight">
                   {settings.currency}{adminTotalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Total expenditure</p>
+                <p className="text-[11px] text-slate-500 font-medium truncate">Total expenditure (Done + Due)</p>
               </div>
             </div>
-            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
-              <span className="truncate">Outflow</span>
-              <span className="text-[#002B49] font-extrabold shrink-0">View →</span>
+
+            {/* Interactive Breakdown Sub-Bar */}
+            <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-extrabold gap-1 flex-wrap">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
+                className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Paid Done Expenses"
+              >
+                <span className="text-slate-500 font-medium">Done:</span>
+                <span>{settings.currency}{adminDoneDebit.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                className="px-2 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Unpaid Due Expenses"
+              >
+                <span className="text-slate-500 font-medium">Due:</span>
+                <span>{settings.currency}{adminDueDebit.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                className="hover:text-[#002B49] hover:underline transition cursor-pointer text-[#002B49] shrink-0 font-extrabold pl-1"
+                title="Click to view All Debit entries"
+              >
+                View →
+              </div>
             </div>
           </div>
 
-          {/* 2. TOTAL CREDIT (INFLOW) */}
+          {/* 2. TOTAL CREDIT (DONE INFLOW) */}
           <div
-            onClick={() => navigate('/admin/credit-debit', { state: { selectedType: 'Credit', selectedDepositTo: 'My Hand' } })}
-            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-emerald-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-            title="Click to view My Hand Credit Entries"
+            onClick={() => navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } })}
+            className="glass-card p-3 sm:p-4 rounded-2xl border-l-4 border-l-emerald-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            title="Click card to view Done Credit Entries"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1">
-                  <div className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 font-bold text-xs">
+                    ⬇️
                   </div>
-                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">TOTAL CREDIT</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 truncate">TOTAL DONE CREDIT</span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-emerald-100 text-emerald-800 uppercase shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 uppercase shrink-0">
                   Inflow
                 </span>
               </div>
-              <div className="mt-1.5">
-                <div className="text-base sm:text-xl font-black text-emerald-700 tracking-tight">
-                  {settings.currency}{(adminTotalCredit + totalVaultDeposited).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              <div className="mt-2">
+                <div className="text-xl sm:text-2xl font-black text-emerald-700 tracking-tight">
+                  {settings.currency}{adminDoneCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Total capital & credit</p>
+                <p className="text-[11px] text-slate-500 font-medium truncate">Total completed credit entries</p>
               </div>
             </div>
-            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
-              <span className="truncate">Inflow</span>
-              <span className="text-emerald-700 font-extrabold shrink-0">View →</span>
+
+            {/* Interactive Breakdown Sub-Bar */}
+            <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-extrabold gap-1 flex-wrap">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/deposit-allocate'); }}
+                className="px-2 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 transition cursor-pointer flex items-center space-x-1"
+                title="Click to manage Vault Deposits"
+              >
+                <span className="text-slate-500 font-medium">Vault:</span>
+                <span>{settings.currency}{totalVaultDeposited.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'All' } }); }}
+                className="px-2 py-1 rounded-md bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Total Inflow (Vault + Credits)"
+              >
+                <span className="text-slate-500 font-medium">Total:</span>
+                <span>{settings.currency}{(adminDoneCredit + totalVaultDeposited).toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } }); }}
+                className="hover:text-emerald-700 hover:underline transition cursor-pointer text-emerald-700 shrink-0 font-extrabold pl-1"
+                title="Click to view Done Credit entries"
+              >
+                View →
+              </div>
             </div>
           </div>
 
-          {/* 3. CASH RESERVE (NET BALANCE) */}
+          {/* 3. PENDING CREDIT (DUE CREDIT) */}
           <div
-            onClick={() => navigate('/admin/deposit-allocate')}
-            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-[#c69255] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-            title="Click to view Master Vault Balance"
+            onClick={() => navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Due' } })}
+            className="glass-card p-3 sm:p-4 rounded-2xl border-l-4 border-l-amber-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            title="Click card to view Uncollected Due Credit Entries"
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1">
-                  <div className="w-5 h-5 rounded-md bg-[#c69255]/15 flex items-center justify-center text-[#9e6e34] shrink-0">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-700 shrink-0 font-bold text-xs">
+                    ⌛
                   </div>
-                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">CASH RESERVE</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 truncate">PENDING CREDIT</span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-[#c69255]/15 text-[#9e6e34] uppercase shrink-0">
-                  Vault
-                </span>
-              </div>
-              <div className="mt-1.5">
-                <div className="text-base sm:text-xl font-black text-[#9e6e34] tracking-tight">
-                  {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </div>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Vault balance</p>
-              </div>
-            </div>
-            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
-              <span className="truncate">Vault</span>
-              <span className="text-[#9e6e34] font-extrabold shrink-0">Manage →</span>
-            </div>
-          </div>
-
-          {/* 4. PENDING DEBIT (DUE BILLS) */}
-          <div
-            onClick={() => navigate('/admin/credit-debit', { state: { selectedStatus: 'Due' } })}
-            className="glass-card p-2.5 sm:p-3.5 rounded-xl border-l-4 border-l-amber-500 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-            title="Click to view Unpaid Due Entries"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1">
-                  <div className="w-5 h-5 rounded-md bg-amber-500/15 flex items-center justify-center text-amber-700 shrink-0">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-600 truncate">PENDING DEBIT</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-extrabold bg-amber-100 text-amber-800 uppercase shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 uppercase shrink-0">
                   Due
                 </span>
               </div>
-              <div className="mt-1.5">
-                <div className="text-base sm:text-xl font-black text-amber-800 tracking-tight">
-                  {settings.currency}{allDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              <div className="mt-2">
+                <div className="text-xl sm:text-2xl font-black text-amber-800 tracking-tight">
+                  {settings.currency}{adminDueCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Unpaid due bills</p>
+                <p className="text-[11px] text-slate-500 font-medium truncate">Uncollected pending due credits</p>
               </div>
             </div>
-            <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-semibold text-slate-500">
-              <span className="truncate">Claims</span>
-              <span className="text-amber-800 font-extrabold shrink-0">View →</span>
+
+            {/* Interactive Breakdown Sub-Bar */}
+            <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-extrabold gap-1 flex-wrap">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Due' } }); }}
+                className="px-2 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Due Credits"
+              >
+                <span className="text-amber-800 font-bold">Due:</span>
+                <span>{settings.currency}{adminDueCredit.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } }); }}
+                className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Completed Credit Inflows"
+              >
+                <span className="text-slate-500 font-medium">Done:</span>
+                <span>{settings.currency}{(adminDoneCredit + totalVaultDeposited).toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Due' } }); }}
+                className="hover:text-amber-800 hover:underline transition cursor-pointer text-amber-800 shrink-0 font-extrabold pl-1"
+                title="Click to view Due Credit entries"
+              >
+                View →
+              </div>
+            </div>
+          </div>
+
+          {/* 4. CASH RESERVE (NET BALANCE) */}
+          <div
+            onClick={() => navigate('/admin/deposit-allocate')}
+            className="glass-card p-3 sm:p-4 rounded-2xl border-l-4 border-l-[#c69255] flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+            title="Click card to manage Vault & Allocations"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-[#c69255]/15 flex items-center justify-center text-[#9e6e34] shrink-0 font-bold text-xs">
+                    🏦
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 truncate">CASH RESERVE</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-[#c69255]/15 text-[#9e6e34] uppercase shrink-0">
+                  Vault
+                </span>
+              </div>
+              <div className="mt-2">
+                <div className="text-xl sm:text-2xl font-black text-[#9e6e34] tracking-tight">
+                  {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium truncate">Available net vault balance</p>
+              </div>
+            </div>
+
+            {/* Interactive Breakdown Sub-Bar */}
+            <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-extrabold gap-1 flex-wrap">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/deposit-allocate'); }}
+                className="px-2 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Vault Allocations"
+              >
+                <span className="text-slate-500 font-medium">Given:</span>
+                <span>{settings.currency}{totalAllocatedToTeam.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/credit-debit', { state: { selectedUser: 'Shukan Company' } }); }}
+                className="px-2 py-1 rounded-md bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 transition cursor-pointer flex items-center space-x-1"
+                title="Click to view Company Direct Expenses"
+              >
+                <span className="text-slate-500 font-medium">Direct:</span>
+                <span>{settings.currency}{totalCompanyDirectExpenses.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/admin/deposit-allocate'); }}
+                className="hover:text-[#9e6e34] hover:underline transition cursor-pointer text-[#9e6e34] shrink-0 font-extrabold pl-1"
+                title="Click to manage Vault"
+              >
+                Manage →
+              </div>
             </div>
           </div>
         </div>

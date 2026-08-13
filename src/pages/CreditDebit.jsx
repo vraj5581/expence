@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import { formatDate } from '../utils/dateUtils';
 import DateInput from '../components/DateInput';
 
-const CreditDebit = () => {
+const CreditDebit = ({ isMyView = false }) => {
   const location = useLocation();
   const { user } = useAuth();
   const {
@@ -28,7 +28,10 @@ const CreditDebit = () => {
   const [printTarget, setPrintTarget] = useState('all'); // 'all' | 'debit' | 'credit'
 
   // Admin User Filter
-  const [selectedUser, setSelectedUser] = useState('All');
+  const [selectedUser, setSelectedUser] = useState(() => {
+    if (isMyView && user?.name) return user.name;
+    return 'All';
+  });
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,10 +72,16 @@ const CreditDebit = () => {
   const [creditMaxAmt, setCreditMaxAmt] = useState('');
   const [isCreditFilterOpen, setIsCreditFilterOpen] = useState(false);
 
+  useEffect(() => {
+    if (isMyView && user?.name) {
+      setSelectedUser(user.name);
+    }
+  }, [isMyView, user?.name]);
+
   // Handle location state ONCE on initial navigation and clear history state so F5 refresh NEVER auto-filters
   useEffect(() => {
     if (location.state) {
-      if (location.state.selectedUser !== undefined) {
+      if (!isMyView && location.state.selectedUser !== undefined) {
         setSelectedUser(location.state.selectedUser);
       }
       const typeFromState = location.state.typeFilter || location.state.selectedType;
@@ -315,8 +324,8 @@ const CreditDebit = () => {
   const handleOpenAddModal = (defaultType = 'Cash Out') => {
     setEditingTxn(null);
     setModalTxnType(defaultType);
-    let initialUser = selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company');
-    if (defaultType === 'Cash In' && (initialUser === 'Shukan Company' || initialUser === 'Shukan Packaging (Company)' || initialUser === 'Company Vault')) {
+    let initialUser = isMyView ? (user?.name || '') : (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company'));
+    if (!isMyView && defaultType === 'Cash In' && (initialUser === 'Shukan Company' || initialUser === 'Shukan Packaging (Company)' || initialUser === 'Company Vault')) {
       initialUser = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
     }
     reset({
@@ -338,7 +347,7 @@ const CreditDebit = () => {
       type: txn.type || 'Cash Out',
       amount: txn.amount,
       depositTo: txn.depositTo || 'My Hand',
-      userName: txn.userName,
+      userName: isMyView ? (user?.name || txn.userName) : txn.userName,
       date: txn.date,
       status: txn.status || 'Done',
       description: txn.description || ''
@@ -372,8 +381,8 @@ const CreditDebit = () => {
       const finalType = data.type || modalTxnType || 'Cash Out';
       const finalDepositTo = finalType === 'Cash In' ? (data.depositTo || 'My Hand') : 'My Hand';
 
-      let finalUserName = data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company'));
-      if (finalType === 'Cash In' && (finalUserName === 'Shukan Company' || finalUserName === 'Shukan Packaging (Company)' || finalUserName === 'Company Vault')) {
+      let finalUserName = isMyView ? (user?.name || '') : (data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company')));
+      if (!isMyView && finalType === 'Cash In' && (finalUserName === 'Shukan Company' || finalUserName === 'Shukan Packaging (Company)' || finalUserName === 'Company Vault')) {
         finalUserName = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
       }
 
@@ -397,7 +406,9 @@ const CreditDebit = () => {
           amount: data.amount,
           date: data.date,
           userName: newTxn.userName,
-          notes: `Company Wallet Credit: ${data.description || 'Deposit to Vault'}`
+          notes: `Company Wallet Credit: ${data.description || 'Deposit to Vault'}`,
+          txnId: res?.transaction?.id,
+          status: newTxn.status || 'Done'
         });
       }
 
@@ -416,6 +427,15 @@ const CreditDebit = () => {
       return;
     }
     updateTransaction(txn.id, { ...txn, status: newStatus });
+
+    // Sync vault deposit status if linked to Company Wallet credit entry
+    if (txn.type === 'Cash In' && txn.depositTo === 'Company Wallet') {
+      const linkedDep = vaultDeposits.find(d => d.txnId === txn.id || (d.notes && d.notes.includes(txn.description)));
+      if (linkedDep) {
+        updateVaultDeposit(linkedDep.id, { ...linkedDep, status: newStatus });
+      }
+    }
+
     if (newStatus === 'Done') {
       toast.success(`Transaction marked as Done`, { theme: 'light' });
     } else {
@@ -462,25 +482,36 @@ const CreditDebit = () => {
       {/* Page Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">Debit & Credit</h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">Company debit and credit transaction audit log</p>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
+            {isMyView ? 'My Debit & Credit' : 'Debit & Credit'}
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            {isMyView ? `Personal debit and credit transaction audit log for ${user?.name}` : 'Company debit and credit transaction audit log'}
+          </p>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap md:flex-nowrap shrink-0">
           {/* User Selector Dropdown */}
-          <div className="flex-1 sm:flex-none">
-            <select
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="w-full sm:w-auto px-2.5 sm:px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-bold border border-slate-300 focus:outline-none truncate"
-            >
-              <option value="All">All Users & Co.</option>
-              <option value="Shukan Company">🏢 Shukan Co.</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.name}>{u.name}</option>
-              ))}
-            </select>
-          </div>
+          {!isMyView ? (
+            <div className="flex-1 sm:flex-none">
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="w-full sm:w-auto px-2.5 sm:px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-bold border border-slate-300 focus:outline-none truncate"
+              >
+                <option value="All">All Users & Co.</option>
+                <option value="Shukan Company">🏢 Shukan Co.</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.name}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex-1 sm:flex-none px-3 py-2 text-xs rounded-xl bg-white font-bold border border-slate-300 text-[#002B49] flex items-center space-x-1.5 shadow-2xs">
+              <span className="text-slate-400 font-semibold">User:</span>
+              <span className="text-[#002B49] font-extrabold">{user?.name}</span>
+            </div>
+          )}
 
           {/* Add Debit Button */}
           <button
@@ -1651,17 +1682,25 @@ const CreditDebit = () => {
 
               <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">User / Account Holder</label>
-                <select
-                  {...register('userName')}
-                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
-                >
-                  {watch('type') !== 'Cash In' && (
-                    <option value="Shukan Company">🏢 Shukan Company</option>
-                  )}
-                  {users.map((u) => (
-                    <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
-                  ))}
-                </select>
+                {isMyView ? (
+                  <div className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-slate-100/90 border border-slate-200 font-bold text-sm flex items-center justify-between">
+                    <span>{user?.name}</span>
+                    <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-600 font-extrabold">Fixed (You)</span>
+                    <input type="hidden" {...register('userName')} value={user?.name || ''} />
+                  </div>
+                ) : (
+                  <select
+                    {...register('userName')}
+                    className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
+                  >
+                    {watch('type') !== 'Cash In' && (
+                      <option value="Shukan Company">🏢 Shukan Company</option>
+                    )}
+                    {users.map((u) => (
+                      <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>

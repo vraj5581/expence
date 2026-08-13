@@ -14,6 +14,7 @@ const DepositAllocate = () => {
     adminVaultBalance,
     totalVaultDeposited,
     vaultDeposits,
+    isDepositDue,
     allocationsHistory,
     users,
     settings,
@@ -159,7 +160,8 @@ const DepositAllocate = () => {
   };
 
   // Combine Vault Deposits (+ Add Money) and Allocations (Give Money to User)
-  const formattedVaultDeposits = (vaultDeposits || []).map((d) => ({
+  const activeVaultDepositsList = (vaultDeposits || []).filter(d => isDepositDue ? !isDepositDue(d) : d.status !== 'Due');
+  const formattedVaultDeposits = activeVaultDepositsList.map((d) => ({
     id: d.id,
     date: d.date,
     userName: (d.userName && d.userName !== 'Shukan Admin') ? d.userName : 'Vraj',
@@ -309,7 +311,7 @@ const DepositAllocate = () => {
           <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
             {settings.currency}{totalVaultDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">{vaultDeposits.length} Entries</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">{activeVaultDepositsList.length} Entries</p>
         </div>
 
         <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
