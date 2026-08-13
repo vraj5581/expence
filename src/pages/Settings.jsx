@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
 const Settings = () => {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const {
     settings,
     updateSettings,
@@ -14,8 +17,32 @@ const Settings = () => {
     allocationsHistory,
     users
   } = useExpense();
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('general');
+  const { user, changePassword } = useAuth();
+
+  const currentUserInDb = users?.find(u => u.id === user?.id || u.name?.toLowerCase() === user?.name?.toLowerCase());
+  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || currentUserInDb?.role === 'Administrator';
+
+  const [activeTab, setActiveTab] = useState(() => {
+    if (!isAdmin) return 'password';
+    return searchParams.get('tab') || location.state?.tab || 'general';
+  });
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setActiveTab('password');
+      return;
+    }
+    const targetTab = searchParams.get('tab') || location.state?.tab;
+    if (targetTab) {
+      setActiveTab(targetTab);
+    }
+  }, [location.state, searchParams, isAdmin]);
+
+  // Change Password State
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [pwdNew, setPwdNew] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [pwdLoading, setPwdLoading] = useState(false);
 
   // Filter-wise Backup State
   const [backupCategory, setBackupCategory] = useState('All');
@@ -23,6 +50,29 @@ const Settings = () => {
   const [backupStartDate, setBackupStartDate] = useState('');
   const [backupEndDate, setBackupEndDate] = useState('');
   const [backupFormat, setBackupFormat] = useState('JSON');
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!pwdCurrent || !pwdNew || !pwdConfirm) {
+      toast.error('All password fields are required', { theme: 'light' });
+      return;
+    }
+    if (pwdNew !== pwdConfirm) {
+      toast.error('New passwords do not match', { theme: 'light' });
+      return;
+    }
+    setPwdLoading(true);
+    const res = await changePassword(pwdCurrent, pwdNew, users);
+    setPwdLoading(false);
+    if (res.success) {
+      toast.success('Your password was updated successfully!', { theme: 'light' });
+      setPwdCurrent('');
+      setPwdNew('');
+      setPwdConfirm('');
+    } else {
+      toast.error(res.message || 'Failed to update password', { theme: 'light' });
+    }
+  };
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
@@ -191,29 +241,41 @@ const Settings = () => {
         <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">Settings</h1>
       </div>
 
-      {/* Settings Tab Selector */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab('general')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-            activeTab === 'general'
-              ? 'bg-[#c69255] text-white shadow-md'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          General Preferences
-        </button>
-        <button
-          onClick={() => setActiveTab('data')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-            activeTab === 'data'
-              ? 'bg-[#c69255] text-white shadow-md'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          Backup & Data Management
-        </button>
-      </div>
+      {/* Settings Tab Selector (Admin Only shows full tabs) */}
+      {isAdmin && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              activeTab === 'general'
+                ? 'bg-[#c69255] text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            General Preferences
+          </button>
+          <button
+            onClick={() => setActiveTab('password')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              activeTab === 'password'
+                ? 'bg-[#c69255] text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            Change Password
+          </button>
+          <button
+            onClick={() => setActiveTab('data')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              activeTab === 'data'
+                ? 'bg-[#c69255] text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            Backup & Data Management
+          </button>
+        </div>
+      )}
 
       {/* General Settings Tab */}
       {activeTab === 'general' && (
@@ -269,6 +331,64 @@ const Settings = () => {
                 className="px-6 py-2.5 rounded-xl bg-[#c69255] hover:bg-[#d4a359] text-white text-xs font-bold shadow-md transition"
               >
                 Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Change Password Tab */}
+      {activeTab === 'password' && (
+        <div className="glass-card p-6 sm:p-8 rounded-2xl max-w-lg space-y-6">
+          <div>
+            <h2 className="text-lg font-extrabold text-[#002B49] mb-1">Account Security</h2>
+            <p className="text-xs text-slate-500 font-medium">Update your login password for user account: <strong className="text-[#002B49]">{user?.name}</strong></p>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-[#002B49] mb-1">Current Password</label>
+              <input
+                type="password"
+                value={pwdCurrent}
+                onChange={(e) => setPwdCurrent(e.target.value)}
+                placeholder="Enter current password"
+                required
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#002B49] mb-1">New Password</label>
+              <input
+                type="password"
+                value={pwdNew}
+                onChange={(e) => setPwdNew(e.target.value)}
+                placeholder="Enter new password"
+                required
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#002B49] mb-1">Confirm New Password</label>
+              <input
+                type="password"
+                value={pwdConfirm}
+                onChange={(e) => setPwdConfirm(e.target.value)}
+                placeholder="Re-enter new password"
+                required
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={pwdLoading}
+                className="px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#003c66] text-white text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                {pwdLoading ? 'Updating Password...' : 'Update Password'}
               </button>
             </div>
           </form>

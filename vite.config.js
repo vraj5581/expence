@@ -10,6 +10,13 @@ export default defineConfig({
   ],
   server: {
     host: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost/expence/api',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
   },
 })
 

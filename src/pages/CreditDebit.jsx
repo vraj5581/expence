@@ -132,7 +132,7 @@ const CreditDebit = ({ isMyView = false }) => {
   // Filtered Debit Transactions
   const filteredDebitTxns = useMemo(() => {
     return rawDebitTxns.filter((t) => {
-      if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
+      if (selectedUser !== 'All' && (t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
       if (debitSearch.trim()) {
         const query = debitSearch.toLowerCase();
         const matchId = (t.id || '').toLowerCase().includes(query);
@@ -156,7 +156,7 @@ const CreditDebit = ({ isMyView = false }) => {
   // Filtered Credit Transactions
   const filteredCreditTxns = useMemo(() => {
     return rawCreditTxns.filter((t) => {
-      if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
+      if (selectedUser !== 'All' && (t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
       if (creditSearch.trim()) {
         const query = creditSearch.toLowerCase();
         const matchId = (t.id || '').toLowerCase().includes(query);
@@ -355,70 +355,112 @@ const CreditDebit = ({ isMyView = false }) => {
     setIsModalOpen(true);
   };
 
+  const normalizeToYYYYMMDD = (dateStr) => {
+    if (!dateStr) return new Date().toISOString().split('T')[0];
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr;
+    }
+    if (typeof dateStr === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      const parts = dateStr.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    try {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+    } catch (e) {}
+    return new Date().toISOString().split('T')[0];
+  };
+
   const onSubmitForm = (data) => {
-    if (editingTxn) {
-      if (editingTxn.isAllocation) {
-        const res = updateAllocation(editingTxn.id, {
-          amount: data.amount,
-          notes: data.description,
-          date: data.date,
-          userName: data.userName || editingTxn.userName
-        });
-        if (res && res.success === false) {
-          toast.error(res.message, { theme: 'light' });
-          return;
-        }
-        toast.success(`Company Allocation updated successfully!`, { theme: 'light' });
-      } else {
-        const res = updateTransaction(editingTxn.id, data);
-        if (res && res.success === false) {
-          toast.error(res.message, { theme: 'light' });
-          return;
-        }
-        toast.success(`Transaction ${editingTxn.id} updated successfully!`, { theme: 'light' });
+    try {
+      const numAmount = parseFloat(data.amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        toast.error('Please enter a valid amount greater than 0', { theme: 'light' });
+        return;
       }
-    } else {
-      const finalType = data.type || modalTxnType || 'Cash Out';
-      const finalDepositTo = finalType === 'Cash In' ? (data.depositTo || 'My Hand') : 'My Hand';
-
-      let finalUserName = isMyView ? (user?.name || '') : (data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company')));
-      if (!isMyView && finalType === 'Cash In' && (finalUserName === 'Shukan Company' || finalUserName === 'Shukan Packaging (Company)' || finalUserName === 'Company Vault')) {
-        finalUserName = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
-      }
-
-      const newTxn = {
-        ...data,
-        type: finalType,
-        depositTo: finalDepositTo,
-        status: data.status || 'Done',
-        userName: finalUserName,
-        createdBy: user?.name || 'Admin'
-      };
-
-      const res = addTransaction(newTxn);
-      if (res && res.success === false) {
-        toast.error(res.message, { theme: 'light' });
+      if (!data.description || !data.description.trim()) {
+        toast.error('Description / Notes is required', { theme: 'light' });
         return;
       }
 
-      if (finalType === 'Cash In' && finalDepositTo === 'Company Wallet') {
-        addVaultDeposit({
-          amount: data.amount,
-          date: data.date,
-          userName: newTxn.userName,
-          notes: `Company Wallet Credit: ${data.description || 'Deposit to Vault'}`,
-          txnId: res?.transaction?.id,
-          status: newTxn.status || 'Done'
-        });
+      const formattedDate = normalizeToYYYYMMDD(data.date);
+
+      if (editingTxn) {
+        if (editingTxn.isAllocation) {
+          const res = updateAllocation(editingTxn.id, {
+            amount: numAmount,
+            notes: data.description,
+            date: formattedDate,
+            userName: data.userName || editingTxn.userName
+          });
+          if (res && res.success === false) {
+            toast.error(res.message, { theme: 'light' });
+            return;
+          }
+          toast.success(`Company Allocation updated successfully!`, { theme: 'light' });
+        } else {
+          const res = updateTransaction(editingTxn.id, {
+            ...data,
+            amount: numAmount,
+            date: formattedDate
+          });
+          if (res && res.success === false) {
+            toast.error(res.message, { theme: 'light' });
+            return;
+          }
+          toast.success(`Transaction ${editingTxn.id} updated successfully!`, { theme: 'light' });
+        }
+      } else {
+        const finalType = data.type || modalTxnType || 'Cash Out';
+        const finalDepositTo = finalType === 'Cash In' ? (data.depositTo || 'My Hand') : 'My Hand';
+
+        let finalUserName = isMyView ? (user?.name || '') : (data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company')));
+        if (!isMyView && finalType === 'Cash In' && (finalUserName === 'Shukan Company' || finalUserName === 'Shukan Packaging (Company)' || finalUserName === 'Company Vault')) {
+          finalUserName = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
+        }
+
+        const newTxn = {
+          ...data,
+          amount: numAmount,
+          date: formattedDate,
+          type: finalType,
+          depositTo: finalDepositTo,
+          status: data.status || 'Done',
+          userName: finalUserName,
+          createdBy: user?.name || 'Admin'
+        };
+
+        const res = addTransaction(newTxn);
+        if (res && res.success === false) {
+          toast.error(res.message, { theme: 'light' });
+          return;
+        }
+
+        if (finalType === 'Cash In' && finalDepositTo === 'Company Wallet') {
+          addVaultDeposit({
+            amount: numAmount,
+            date: formattedDate,
+            userName: newTxn.userName,
+            notes: `Company Wallet Credit: ${data.description || 'Deposit to Vault'}`,
+            txnId: res?.transaction?.id || res?.txn?.id,
+            status: newTxn.status || 'Done'
+          });
+        }
+
+        toast.success(`New ${finalType === 'Cash In' ? 'Credit' : 'Debit'} entry of ${settings.currency}${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} recorded!`, { theme: 'light' });
+
+        if (finalType === 'Cash In') resetCreditFilters();
+        else resetDebitFilters();
       }
-
-      toast.success(`New ${finalType === 'Cash In' ? 'Credit' : 'Debit'} entry of ${settings.currency}${parseFloat(data.amount).toLocaleString()} recorded!`, { theme: 'light' });
-
-      if (finalType === 'Cash In') resetCreditFilters();
-      else resetDebitFilters();
+      setIsModalOpen(false);
+      reset();
+    } catch (err) {
+      console.error("Form submission error caught:", err);
+      setIsModalOpen(false);
+      reset();
     }
-    setIsModalOpen(false);
-    reset();
   };
 
   const handleStatusChange = (txn, newStatus) => {

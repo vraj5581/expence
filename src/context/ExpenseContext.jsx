@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { apiService } from '../services/api';
 
 const ExpenseContext = createContext();
 
@@ -50,167 +51,105 @@ const initialVaultDeposits = [
 ];
 
 const initialSettings = {
-  companyName: 'Shukan Packaging',
   currency: '₹',
   currencyCode: 'INR',
-  fiscalYearStart: 'April',
-  lowBalanceThreshold: 10000,
-  requireApprovalOver: 5000,
-  autoEmailReports: true
+  companyName: 'Shukan Packaging',
+  lowBalanceAlert: 5000,
+  approvalThreshold: 20000
 };
 
-const initialTasks = [
-  {
-    id: 'TSK-1001',
-    title: 'Raw Material Corrugated Sheet Inspection',
-    description: 'Inspect quality of newly delivered corrugated sheet batch at Factory Gate 2.',
-    assignedTo: 'Raj',
-    priority: 'High',
-    category: 'Purchase',
-    status: 'In Progress',
-    dueDate: '2026-07-30',
-    createdAt: '2026-07-28'
-  },
-  {
-    id: 'TSK-1002',
-    title: 'Client Dispatch & Transport Vehicle Audit',
-    description: 'Verify shipping manifest and load security for major client order delivery.',
-    assignedTo: 'Teerth',
-    priority: 'Urgent',
-    category: 'Delivery',
-    status: 'Pending',
-    dueDate: '2026-07-29',
-    createdAt: '2026-07-29'
-  },
-  {
-    id: 'TSK-1003',
-    title: 'Weekly Factory Machine Maintenance',
-    description: 'Perform scheduled lubrication and roller checks for packaging assembly line.',
-    assignedTo: 'Mayank',
-    priority: 'Medium',
-    category: 'Maintenance',
-    status: 'Completed',
-    dueDate: '2026-07-27',
-    createdAt: '2026-07-25'
-  }
-];
+const initialTasks = [];
 
 export const ExpenseProvider = ({ children }) => {
-  // Vault Deposits List (CRUD)
-  const [vaultDeposits, setVaultDeposits] = useState(() => {
-    const saved = localStorage.getItem('shukan_vault_deposits_v1');
-    return saved ? JSON.parse(saved) : initialVaultDeposits;
-  });
+  const [vaultDeposits, setVaultDeposits] = useState([]);
+  const [userAllocations, setUserAllocations] = useState({});
+  const [allocationsHistory, setAllocationsHistory] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [users, setUsers] = useState(initialUsers);
+  const [settings, setSettings] = useState(initialSettings);
+  const [tasks, setTasks] = useState([]);
 
-  // Per-User Money Allocations (e.g. { 'Raj': 500, 'Alex Mercer': 1000 })
-  const [userAllocations, setUserAllocations] = useState(() => {
-    const saved = localStorage.getItem('shukan_user_allocations_v1');
-    return saved ? JSON.parse(saved) : {};
-  });
+  // Fetch state from PHP backend on mount
+  useEffect(() => {
+    async function loadBackendData() {
+      try {
+        const [txRes, depRes, alcRes, userRes, setRes, taskRes] = await Promise.all([
+          apiService.getTransactions(),
+          apiService.getVaultDeposits(),
+          apiService.getAllocations(),
+          apiService.getUsers(),
+          apiService.getSettings(),
+          apiService.getTasks()
+        ]);
 
-  // Allocations History (When Admin gives money to users)
-  const [allocationsHistory, setAllocationsHistory] = useState(() => {
-    const saved = localStorage.getItem('shukan_allocations_history_v1');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem('shukan_expense_transactions_v3');
-    return saved ? JSON.parse(saved) : initialTransactions;
-  });
-
-  const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem('shukan_expense_users_v6');
-    if (saved) {
-      return JSON.parse(saved);
+        if (txRes?.success && Array.isArray(txRes.transactions)) {
+          setTransactions(txRes.transactions);
+        }
+        if (depRes?.success && Array.isArray(depRes.vaultDeposits)) {
+          setVaultDeposits(depRes.vaultDeposits);
+        }
+        if (alcRes?.success) {
+          if (Array.isArray(alcRes.allocationsHistory)) setAllocationsHistory(alcRes.allocationsHistory);
+          if (alcRes.userAllocations && typeof alcRes.userAllocations === 'object') setUserAllocations(alcRes.userAllocations);
+        }
+        if (userRes?.success && Array.isArray(userRes.users) && userRes.users.length > 0) {
+          setUsers(userRes.users);
+        }
+        if (setRes?.success && setRes.settings) {
+          setSettings(setRes.settings);
+        }
+        if (taskRes?.success && Array.isArray(taskRes.tasks)) {
+          setTasks(taskRes.tasks);
+        }
+      } catch (err) {
+        console.warn("Failed to load initial data from PHP backend, using local state:", err);
+      }
     }
-    const olderSaved = localStorage.getItem('shukan_expense_users_v5');
-    if (olderSaved) {
-      const parsed = JSON.parse(olderSaved);
-      return parsed.map(u => ({ ...u, role: 'Partner' }));
-    }
-    return initialUsers;
-  });
+    loadBackendData();
+  }, []);
 
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('shukan_expense_settings');
-    return saved ? JSON.parse(saved) : initialSettings;
-  });
+  // Effective Vault Deposits = Direct Manual Deposits + Completed Company Wallet Credit Transactions (No Duplicates!)
+  const effectiveVaultDeposits = useMemo(() => {
+    // 1. Direct manual deposits (excluding those auto-generated from Company Wallet credits)
+    const directManualDeposits = (vaultDeposits || []).filter(d =>
+      !d.txnId &&
+      (!d.notes || !d.notes.includes('Company Wallet Credit'))
+    );
 
-  const [tasks, setTasks] = useState(() => {
-    const saved = localStorage.getItem('shukan_tasks_v1');
-    return saved ? JSON.parse(saved) : initialTasks;
-  });
+    // 2. Completed Company Wallet Credit transactions
+    const creditWalletDeposits = (transactions || [])
+      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && t.depositTo === 'Company Wallet' && (t.status || 'Done') === 'Done')
+      .map(t => ({
+        id: `DEP-TXN-${t.id}`,
+        txnId: t.id,
+        date: t.date,
+        userName: t.userName,
+        amount: parseFloat(t.amount) || 0,
+        notes: `Company Wallet Credit: ${t.description || 'Deposit to Vault'}`,
+        status: 'Done',
+        isCreditTxn: true
+      }));
 
-  useEffect(() => {
-    localStorage.setItem('shukan_vault_deposits_v1', JSON.stringify(vaultDeposits));
-  }, [vaultDeposits]);
+    return [...creditWalletDeposits, ...directManualDeposits].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [vaultDeposits, transactions]);
 
-  useEffect(() => {
-    localStorage.setItem('shukan_user_allocations_v1', JSON.stringify(userAllocations));
-  }, [userAllocations]);
-
-  useEffect(() => {
-    localStorage.setItem('shukan_allocations_history_v1', JSON.stringify(allocationsHistory));
-  }, [allocationsHistory]);
-
-  useEffect(() => {
-    localStorage.setItem('shukan_expense_transactions_v3', JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('shukan_expense_users_v6', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem('shukan_expense_settings', JSON.stringify(settings));
-  }, [settings]);
-
-  useEffect(() => {
-    localStorage.setItem('shukan_tasks_v1', JSON.stringify(tasks));
-  }, [tasks]);
-
-  // Helper function to check if a deposit is Due (or linked to a Due credit transaction)
   const isDepositDue = (d) => {
     if (!d) return false;
     if (d.status === 'Due') return true;
-
     if (d.txnId) {
-      const linkedTxn = transactions.find(t => t.id === d.txnId);
+      const linkedTxn = (transactions || []).find(t => t && t.id === d.txnId);
       if (linkedTxn) return linkedTxn.status === 'Due';
-    }
-
-    if (d.notes && d.notes.includes('Company Wallet Credit')) {
-      const cleanNote = d.notes.replace('Company Wallet Credit:', '').trim().toLowerCase();
-
-      // Find matching Credit transactions for this user & Company Wallet
-      const matchingCreditTxns = transactions.filter(t =>
-        t.userName === d.userName &&
-        (t.type === 'Cash In' || t.type === 'Credit') &&
-        (t.depositTo === 'Company Wallet' || !t.depositTo)
-      );
-
-      const exactMatch = matchingCreditTxns.find(t =>
-        (t.description && cleanNote && t.description.trim().toLowerCase() === cleanNote) ||
-        (cleanNote && (t.description || '').trim().toLowerCase().includes(cleanNote)) ||
-        parseFloat(t.amount) === parseFloat(d.amount)
-      );
-
-      if (exactMatch) {
-        return exactMatch.status === 'Due';
-      }
     }
     return false;
   };
 
   // Calculate Admin Vault Balance dynamically (excluding Due deposits)
-  const activeVaultDeposits = vaultDeposits.filter(d => !isDepositDue(d));
-  const totalVaultDeposited = activeVaultDeposits.reduce((sum, d) => sum + (d.amount || 0), 0);
-  const totalAllocatedToTeam = Object.values(userAllocations).reduce((sum, val) => sum + val, 0);
+  const totalVaultDeposited = (effectiveVaultDeposits || []).reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
+  const totalAllocatedToTeam = Object.values(userAllocations || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
   
-  const totalCompanyDirectExpenses = transactions
-    .filter(t => (t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalCompanyDirectExpenses = (transactions || [])
+    .filter(t => t && (t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
+    .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
 
   const adminVaultBalance = totalVaultDeposited - totalAllocatedToTeam - totalCompanyDirectExpenses;
 
@@ -230,6 +169,7 @@ export const ExpenseProvider = ({ children }) => {
     };
 
     setVaultDeposits(prev => [newDeposit, ...prev]);
+    apiService.addVaultDeposit(newDeposit).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true, deposit: newDeposit };
   };
 
@@ -241,12 +181,14 @@ export const ExpenseProvider = ({ children }) => {
       ...updatedData,
       amount: !isNaN(numAmount) ? numAmount : d.amount
     } : d)));
+    apiService.updateVaultDeposit(id, updatedData).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
   // 3. DELETE VAULT DEPOSIT
   const deleteVaultDeposit = (id) => {
     setVaultDeposits(prev => prev.filter(d => d.id !== id));
+    apiService.deleteVaultDeposit(id).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
@@ -279,6 +221,7 @@ export const ExpenseProvider = ({ children }) => {
     };
 
     setAllocationsHistory(prev => [allocationLog, ...prev]);
+    apiService.allocateMoney(allocationLog).catch(err => console.warn("PHP Sync warning:", err));
 
     return { success: true, allocationLog };
   };
@@ -323,6 +266,7 @@ export const ExpenseProvider = ({ children }) => {
       userName: updatedData.userName || a.userName
     } : a));
 
+    apiService.updateAllocation(id, updatedData).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
@@ -336,6 +280,7 @@ export const ExpenseProvider = ({ children }) => {
     }));
 
     setAllocationsHistory(prev => prev.filter(a => a.id !== id));
+    apiService.deleteAllocation(id).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
@@ -353,21 +298,24 @@ export const ExpenseProvider = ({ children }) => {
       };
     }
 
-    const allocated = userAllocations[userName] || 0;
+    const targetUser = (userName || '').toLowerCase();
+    const allocated = Object.entries(userAllocations).reduce((sum, [u, amt]) => {
+      return u.toLowerCase() === targetUser ? sum + amt : sum;
+    }, 0);
     
     // User Completed Expenses (Cash Out / Debit submitted by user - Done status)
     const spent = transactions
-      .filter(t => t.userName === userName && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Done')
+      .filter(t => (t.userName || '').toLowerCase() === targetUser && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Done')
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
     // User Due Expenses (Unpaid bills)
     const dueSpent = transactions
-      .filter(t => t.userName === userName && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Due')
+      .filter(t => (t.userName || '').toLowerCase() === targetUser && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Due')
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
     // Additional Credit / Cash In received directly by user in My Hand (Done status)
     const cashInReceived = transactions
-      .filter(t => t.userName === userName && (t.type === 'Cash In' || t.type === 'Credit') && t.depositTo !== 'Company Wallet' && (t.status || 'Done') === 'Done')
+      .filter(t => (t.userName || '').toLowerCase() === targetUser && (t.type === 'Cash In' || t.type === 'Credit') && t.depositTo !== 'Company Wallet' && (t.status || 'Done') === 'Done')
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
     const totalCashAvailable = allocated + cashInReceived;
@@ -420,7 +368,10 @@ export const ExpenseProvider = ({ children }) => {
       ...txnData,
       amount: numAmount
     };
+
     setTransactions(prev => [newTxn, ...prev]);
+    apiService.addTransaction(newTxn).catch(err => console.warn("PHP Sync warning:", err));
+
     return { success: true, txn: newTxn };
   };
 
@@ -448,6 +399,7 @@ export const ExpenseProvider = ({ children }) => {
     }
 
     setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t)));
+    apiService.updateTransaction(id, { ...updatedData, amount: newAmount, status: newStatus }).catch(err => console.warn("PHP Sync warning:", err));
 
     // Synchronize linked vault deposit status if this is a Company Wallet credit entry
     const finalType = updatedData.type || oldTxn.type;
@@ -490,6 +442,7 @@ export const ExpenseProvider = ({ children }) => {
       setVaultDeposits(prev => prev.filter(d => d.txnId !== id && !(d.userName === oldTxn.userName && parseFloat(d.amount) === parseFloat(oldTxn.amount))));
     }
     setTransactions(prev => prev.filter(t => t.id !== id));
+    apiService.deleteTransaction(id).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
@@ -498,16 +451,20 @@ export const ExpenseProvider = ({ children }) => {
     const newUser = {
       id: userData.id || `USR-${Math.floor(100 + Math.random() * 900)}`,
       name: userData.name,
-      password: userData.password,
+      username: userData.username || userData.id || userData.name.toLowerCase(),
+      password: userData.password || 'partner123',
+      role: userData.role || 'Partner',
       status: userData.status || 'Active',
       createdAt: new Date().toISOString().split('T')[0]
     };
     setUsers(prev => [newUser, ...prev]);
+    apiService.addUser(newUser).catch(err => console.warn("PHP Sync warning:", err));
     return newUser;
   };
 
   const updateUser = (originalId, updatedData) => {
     setUsers(prev => prev.map(u => (u.id === originalId ? { ...u, ...updatedData } : u)));
+    apiService.updateUser(originalId, updatedData).catch(err => console.warn("PHP Sync warning:", err));
   };
 
   const deleteUser = (id) => {
@@ -521,9 +478,11 @@ export const ExpenseProvider = ({ children }) => {
     if (hasAllocations || hasTransactions) {
       // Soft-delete / archive to preserve historical accounting & audit trail
       setUsers(prev => prev.map(u => (u.id === id ? { ...u, status: 'Inactive', isDeleted: true } : u)));
+      apiService.updateUser(id, { status: 'Inactive' }).catch(err => console.warn("PHP Sync warning:", err));
     } else {
       // Permanently remove if user has no financial activity
       setUsers(prev => prev.filter(u => u.id !== id));
+      apiService.deleteUser(id).catch(err => console.warn("PHP Sync warning:", err));
     }
     return { success: true };
   };
@@ -531,7 +490,9 @@ export const ExpenseProvider = ({ children }) => {
   const toggleUserStatus = (id) => {
     setUsers(prev => prev.map(u => {
       if (u.id === id) {
-        return { ...u, status: u.status === 'Active' ? 'Suspended' : 'Active' };
+        const nextStatus = u.status === 'Active' ? 'Suspended' : 'Active';
+        apiService.updateUser(id, { status: nextStatus }).catch(err => console.warn("PHP Sync warning:", err));
+        return { ...u, status: nextStatus };
       }
       return u;
     }));
@@ -540,6 +501,7 @@ export const ExpenseProvider = ({ children }) => {
   // Settings
   const updateSettings = (newSettings) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
+    apiService.updateSettings(newSettings).catch(err => console.warn("PHP Sync warning:", err));
   };
 
   // Task Management CRUD
@@ -554,19 +516,23 @@ export const ExpenseProvider = ({ children }) => {
       ...taskData
     };
     setTasks(prev => [newTask, ...prev]);
+    apiService.addTask(newTask).catch(err => console.warn("PHP Sync warning:", err));
     return newTask;
   };
 
   const updateTask = (id, updatedData) => {
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData } : t)));
+    apiService.updateTask(id, updatedData).catch(err => console.warn("PHP Sync warning:", err));
   };
 
   const updateTaskStatus = (id, newStatus) => {
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, status: newStatus } : t)));
+    apiService.updateTask(id, { status: newStatus }).catch(err => console.warn("PHP Sync warning:", err));
   };
 
   const deleteTask = (id) => {
     setTasks(prev => prev.filter(t => t.id !== id));
+    apiService.deleteTask(id).catch(err => console.warn("PHP Sync warning:", err));
   };
 
   const resetToDefaultData = () => {
@@ -601,7 +567,7 @@ export const ExpenseProvider = ({ children }) => {
       value={{
         adminVaultBalance,
         totalVaultDeposited,
-        vaultDeposits,
+        vaultDeposits: effectiveVaultDeposits,
         isDepositDue,
         userAllocations,
         allocationsHistory,

@@ -14,17 +14,16 @@ const Login = () => {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting }
   } = useForm({
     defaultValues: {
-      adminId: 'Vraj',
-      password: 'vraj123'
+      adminId: '',
+      password: ''
     }
   });
 
-  const onSubmit = (data) => {
-    const res = login(data.adminId, data.password, users);
+  const onSubmit = async (data) => {
+    const res = await login(data.adminId, data.password, users);
     if (res.success) {
       toast.success(`Welcome to Shukan Packaging Portal (${res.user.name})!`, {
         position: 'top-right',
@@ -37,12 +36,6 @@ const Login = () => {
         theme: 'light'
       });
     }
-  };
-
-  const handleQuickFill = () => {
-    setValue('adminId', 'Vraj');
-    setValue('password', 'vraj123');
-    toast.info('Vraj (Admin) Credentials Filled', { position: 'bottom-center', theme: 'light' });
   };
 
   return (
@@ -126,20 +119,7 @@ const Login = () => {
               )}
             </div>
 
-            {/* Hint Box */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-700">
-              <div>
-                <span className="text-[#002B49] font-bold">Admin:</span> Vraj (vraj123)<br />
-                <span className="text-[#002B49] font-bold">Staff:</span> Raj, Teerth, Mayank
-              </div>
-              <button
-                type="button"
-                onClick={handleQuickFill}
-                className="px-3 py-1.5 rounded-lg bg-[#c69255]/15 text-[#9e6e34] hover:bg-[#c69255]/25 text-xs font-bold transition cursor-pointer"
-              >
-                Auto Fill Admin
-              </button>
-            </div>
+
 
             {/* Submit Button */}
             <button

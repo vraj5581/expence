@@ -19,6 +19,8 @@ import Settings from './pages/Settings';
 import MyCreditDebit from './pages/MyCreditDebit';
 import Tasks from './pages/Tasks';
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 // Component to handle intelligent default redirection based on user role
 const DefaultRedirect = () => {
   const { user } = useAuth();
@@ -35,9 +37,10 @@ const AdminOnlyRoute = ({ children }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <ExpenseProvider>
-        <BrowserRouter>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ExpenseProvider>
+          <BrowserRouter>
           <Routes>
             {/* Public Login Route */}
             <Route path="/login" element={<Login />} />
@@ -52,7 +55,7 @@ function App() {
                 <Route path="team" element={<AdminOnlyRoute><TeamAccounts /></AdminOnlyRoute>} />
                 <Route path="tasks" element={<AdminOnlyRoute><Tasks /></AdminOnlyRoute>} />
                 <Route path="reports" element={<AdminOnlyRoute><Reports /></AdminOnlyRoute>} />
-                <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
+                <Route path="settings" element={<Settings />} />
                 <Route path="my-credit-debit" element={<MyCreditDebit />} />
 
                 {/* Backward Compatible Redirects for Legacy URLs */}
@@ -74,6 +77,7 @@ function App() {
         <ToastContainer position="top-right" autoClose={1200} theme="dark" />
       </ExpenseProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

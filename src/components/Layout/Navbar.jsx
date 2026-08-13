@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useExpense } from '../../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
 const Navbar = ({ onToggleSidebar }) => {
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout, changePassword } = useAuth();
   const { adminVaultBalance, settings, addMoneyToAdminVault, getUserStats, users } = useExpense();
 
   const currentUserInDb = users?.find(u => u.id === user?.id || u.name?.toLowerCase() === user?.name?.toLowerCase());
@@ -14,7 +16,27 @@ const Navbar = ({ onToggleSidebar }) => {
   const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || currentUserInDb?.role === 'Administrator';
   const userStats = getUserStats(user?.name || '');
 
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
   const [isAddMoneyOpen, setIsAddMoneyOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [pwdNew, setPwdNew] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [pwdLoading, setPwdLoading] = useState(false);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   const onAddMoneySubmit = (data) => {
@@ -28,6 +50,30 @@ const Navbar = ({ onToggleSidebar }) => {
     }
   };
 
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!pwdCurrent || !pwdNew || !pwdConfirm) {
+      toast.error('All password fields are required', { theme: 'light' });
+      return;
+    }
+    if (pwdNew !== pwdConfirm) {
+      toast.error('New passwords do not match', { theme: 'light' });
+      return;
+    }
+    setPwdLoading(true);
+    const res = await changePassword(pwdCurrent, pwdNew);
+    setPwdLoading(false);
+    if (res.success) {
+      toast.success('Your password was updated successfully!', { theme: 'light' });
+      setIsChangePasswordOpen(false);
+      setPwdCurrent('');
+      setPwdNew('');
+      setPwdConfirm('');
+    } else {
+      toast.error(res.message || 'Failed to update password', { theme: 'light' });
+    }
+  };
+
   return (
     <header className="sticky top-0 z-30 h-20 bg-white/90 border-b border-slate-200/80 backdrop-blur-md px-4 lg:px-8 flex items-center justify-between shadow-xs print:hidden">
       {/* Left section: Title */}
@@ -38,34 +84,87 @@ const Navbar = ({ onToggleSidebar }) => {
         </div>
       </div>
 
-      {/* Right section: User Profile */}
-      <div className="flex items-center space-x-3 lg:space-x-4">
-
-        {/* User Profile Info */}
-        <div className="flex items-center space-x-3 pl-3 border-l border-slate-200">
-          <div className="w-9 h-9 rounded-xl bg-white p-0.5 ring-2 ring-[#c69255]/40 overflow-hidden shadow-xs">
+      {/* Right section: User Profile Dropdown Pop-Up */}
+      <div className="relative" ref={dropdownRef}>
+        <button
+          onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+          className="flex items-center space-x-3 p-1.5 pl-3 rounded-2xl hover:bg-slate-100/80 transition-all border border-slate-200/60 cursor-pointer shadow-xs"
+        >
+          <div className="w-8 h-8 rounded-xl bg-white p-0.5 ring-2 ring-[#c69255]/40 overflow-hidden shadow-xs shrink-0">
             <img
               src="/logo.jpg"
               alt="User Avatar"
               className="w-full h-full object-contain"
             />
           </div>
-          <div className="hidden md:block text-left">
-            <div className="text-xs font-bold text-[#002B49]">{user?.name || 'User'}</div>
-            <div className="text-[11px] text-[#c69255] font-semibold">{effectiveRole}</div>
+          <div className="hidden sm:block text-left">
+            <div className="text-xs font-extrabold text-[#002B49] leading-tight">{user?.name || 'User'}</div>
+            <div className="text-[10px] text-[#c69255] font-bold uppercase tracking-wider">{effectiveRole}</div>
           </div>
-
-          {/* Logout Button */}
-          <button
-            onClick={logout}
-            title="Sign Out"
-            className="p-2 ml-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+          <svg
+            className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-[#002B49]' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
-        </div>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {/* Profile Pop-Up Menu */}
+        {isProfileDropdownOpen && (
+          <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-slate-200/90 shadow-2xl z-50 py-2.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+            {/* Header User Card */}
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-white p-1 ring-2 ring-[#c69255]/30 shadow-xs shrink-0">
+                <img src="/logo.jpg" alt="Avatar" className="w-full h-full object-contain" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black text-[#002B49] truncate">{user?.name || 'User'}</p>
+                <p className="text-[10px] font-semibold text-[#c69255] truncate">{user?.email || 'user@shukanpackaging.com'}</p>
+                <span className="inline-block mt-1 px-2 py-0.5 text-[9.5px] font-extrabold bg-[#002B49]/10 text-[#002B49] rounded-md">
+                  {effectiveRole}
+                </span>
+              </div>
+            </div>
+
+            {/* Pop-Up Options List */}
+            <div className="py-1">
+              <button
+                onClick={() => {
+                  setIsProfileDropdownOpen(false);
+                  navigate('/admin/settings', { state: { tab: 'password' } });
+                }}
+                className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-[#002B49] flex items-center space-x-2.5 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-200">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <span>Account Settings</span>
+              </button>
+            </div>
+
+            <div className="border-t border-slate-100 my-1 pt-1">
+              <button
+                onClick={() => {
+                  setIsProfileDropdownOpen(false);
+                  logout();
+                }}
+                className="w-full px-4 py-2.5 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center space-x-2.5 transition cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top Navbar Add Money Modal (Admin Only) */}

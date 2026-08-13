@@ -21,6 +21,7 @@ const DepositAllocate = () => {
     addVaultDeposit,
     updateVaultDeposit,
     deleteVaultDeposit,
+    deleteTransaction,
     allocateMoneyToUser,
     updateAllocation,
     deleteAllocation,
@@ -150,7 +151,11 @@ const DepositAllocate = () => {
 
   const handleDelete = (deposit) => {
     if (window.confirm(`Are you sure you want to remove deposit record for ${deposit.userName || 'Partner'} (${settings.currency}${deposit.amount})?`)) {
-      deleteVaultDeposit(deposit.id);
+      if (deposit.isCreditTxn && deposit.txnId) {
+        deleteTransaction(deposit.txnId);
+      } else {
+        deleteVaultDeposit(deposit.id);
+      }
       toast.info(`Deposit entry deleted`, { theme: 'light' });
     }
   };
@@ -162,32 +167,33 @@ const DepositAllocate = () => {
   // Combine Vault Deposits (+ Add Money) and Allocations (Give Money to User)
   const activeVaultDepositsList = (vaultDeposits || []).filter(d => isDepositDue ? !isDepositDue(d) : d.status !== 'Due');
   const formattedVaultDeposits = activeVaultDepositsList.map((d) => ({
-    id: d.id,
-    date: d.date,
+    id: d.id || `DEP-${Math.random()}`,
+    date: d.date || new Date().toISOString().split('T')[0],
     userName: (d.userName && d.userName !== 'Shukan Admin') ? d.userName : 'Vraj',
-    amount: d.amount,
+    amount: parseFloat(d.amount) || 0,
     notes: d.notes ? d.notes.replace(/Admin Capital/g, 'Company Capital') : 'Company Capital Deposit',
     txnCategory: 'Add Money',
     rawItem: d
   }));
 
   const formattedAllocations = (allocationsHistory || []).map((a) => ({
-    id: a.id,
-    date: a.date,
-    userName: a.userName,
-    amount: a.amount,
+    id: a.id || `ALC-${Math.random()}`,
+    date: a.date || new Date().toISOString().split('T')[0],
+    userName: a.userName || 'Staff',
+    amount: parseFloat(a.amount) || 0,
     notes: a.notes ? a.notes.replace(/Admin allocated/g, 'Company allocated') : (a.purpose || 'Petty Cash Allowance'),
     txnCategory: 'Give Money',
     rawItem: a
   }));
 
   const combinedList = [...formattedVaultDeposits, ...formattedAllocations].sort(
-    (a, b) => new Date(b.date) - new Date(a.date)
+    (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
   );
 
   const hasActiveFilters = Boolean(selectedUser !== 'All' || startDate || endDate);
 
   const filteredTransactions = combinedList.filter((t) => {
+    if (!t) return false;
     if (activeTab === 'Add Money' && t.txnCategory !== 'Add Money') return false;
     if (activeTab === 'Give Money' && t.txnCategory !== 'Give Money') return false;
     if (selectedUser !== 'All' && t.userName !== selectedUser) return false;
@@ -200,13 +206,21 @@ const DepositAllocate = () => {
       (t.userName || '').toLowerCase().includes(query) ||
       (t.notes || '').toLowerCase().includes(query) ||
       (t.txnCategory || '').toLowerCase().includes(query) ||
-      t.date.includes(query) ||
+      (t.date || '').includes(query) ||
       formatDate(t.date).includes(query)
     );
   });
 
-  const filteredTotal = useMemo(() => {
-    return filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  const totalFilteredDeposits = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.txnCategory === 'Add Money')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [filteredTransactions]);
+
+  const totalFilteredAllocations = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.txnCategory === 'Give Money')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [filteredTransactions]);
 
   return (
@@ -309,7 +323,7 @@ const DepositAllocate = () => {
         <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
           <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Total Deposited</p>
           <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
-            {settings.currency}{totalVaultDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">{activeVaultDepositsList.length} Entries</p>
         </div>
@@ -317,7 +331,7 @@ const DepositAllocate = () => {
         <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
           <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Company Vault</p>
           <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
-            {settings.currency}{adminVaultBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">Available Reserve</p>
         </div>
@@ -325,11 +339,11 @@ const DepositAllocate = () => {
 
       {/* Team Balances & Status Bar (Shows All Users!) */}
       {(() => {
-        const teamUsers = users.filter(u => u.id !== 'admin');
+        const teamUsers = (users || []).filter(u => u && u.id !== 'admin');
         if (teamUsers.length === 0) return null;
         
-        const totalNeeded = teamUsers.reduce((sum, u) => sum + getUserStats(u.name).needFromCompany, 0);
-        const totalInHand = teamUsers.reduce((sum, u) => sum + Math.max(0, getUserStats(u.name).remaining), 0);
+        const totalNeeded = teamUsers.reduce((sum, u) => sum + (getUserStats(u.name)?.needFromCompany || 0), 0);
+        const totalInHand = teamUsers.reduce((sum, u) => sum + Math.max(0, getUserStats(u.name)?.remaining || 0), 0);
 
         return (
           <div className="glass-card p-3 sm:p-4 rounded-2xl print:hidden shadow-xs space-y-2.5">
@@ -347,11 +361,11 @@ const DepositAllocate = () => {
 
               <div className="flex items-center gap-1.5 text-[11px] font-extrabold flex-wrap">
                 <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-800 border border-emerald-300 shadow-2xs">
-                  Team In Hand: {settings.currency}{totalInHand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Team In Hand: {(settings?.currency || '₹')}{(totalInHand || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </span>
                 {totalNeeded > 0 && (
                   <span className="px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-800 border border-rose-300 shadow-2xs">
-                    Due: {settings.currency}{totalNeeded.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    Due: {(settings?.currency || '₹')}{(totalNeeded || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 )}
               </div>
@@ -359,9 +373,9 @@ const DepositAllocate = () => {
 
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-2 border-t border-slate-100">
               {teamUsers.map(u => {
-                const s = getUserStats(u.name);
-                const isNeed = s.needFromCompany > 0;
-                const hasBal = s.remaining > 0;
+                const s = getUserStats(u.name) || {};
+                const isNeed = (s.needFromCompany || 0) > 0;
+                const hasBal = (s.remaining || 0) > 0;
 
                 return (
                   <button
@@ -383,13 +397,13 @@ const DepositAllocate = () => {
                           ? 'bg-emerald-200 text-emerald-800'
                           : 'bg-slate-200 text-slate-700'
                     }`}>
-                      {u.name.charAt(0)}
+                      {(u.name || 'U').charAt(0)}
                     </span>
                     <span>{u.name}</span>
                     <span className="font-extrabold">
                       {isNeed
-                        ? `Need: +${settings.currency}${s.needFromCompany.toLocaleString('en-IN')}`
-                        : `Bal: ${settings.currency}${s.remaining.toLocaleString('en-IN')}`}
+                        ? `Need: +${settings?.currency || '₹'}${s.needFromCompany?.toLocaleString('en-IN') || 0}`
+                        : `Bal: ${settings?.currency || '₹'}${s.remaining?.toLocaleString('en-IN') || 0}`}
                     </span>
                   </button>
                 );
@@ -608,15 +622,28 @@ const DepositAllocate = () => {
                   </tbody>
                   {filteredTransactions.length > 0 && (
                     <tfoot className="bg-slate-100 font-bold text-xs text-[#002B49] border-t-2 border-slate-300 sticky bottom-0 z-10 shadow-xs">
-                      <tr>
-                        <td colSpan="2" className="py-2.5 px-3 text-right uppercase tracking-wider font-extrabold text-[11px] text-[#002B49]">
-                          {hasActiveFilters ? 'Total Filtered:' : 'Total Amount:'}
-                        </td>
-                        <td className="py-2.5 px-2 text-right font-black text-[#002B49] text-xs whitespace-nowrap">
-                          {settings.currency}{filteredTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-2.5 px-1"></td>
-                      </tr>
+                      {(activeTab === 'All' || activeTab === 'Add Money') && totalFilteredDeposits > 0 && (
+                        <tr>
+                          <td colSpan="2" className="py-2 px-3 text-right uppercase tracking-wider font-extrabold text-[11px] text-[#9e6e34]">
+                            Total Deposited:
+                          </td>
+                          <td className="py-2 px-2 text-right font-black text-[#9e6e34] text-xs whitespace-nowrap">
+                            {settings?.currency || '₹'}{totalFilteredDeposits.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2 px-1"></td>
+                        </tr>
+                      )}
+                      {(activeTab === 'All' || activeTab === 'Give Money') && totalFilteredAllocations > 0 && (
+                        <tr>
+                          <td colSpan="2" className="py-2 px-3 text-right uppercase tracking-wider font-extrabold text-[11px] text-[#002B49]">
+                            Total Allocated:
+                          </td>
+                          <td className="py-2 px-2 text-right font-black text-[#002B49] text-xs whitespace-nowrap">
+                            {settings?.currency || '₹'}{totalFilteredAllocations.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2 px-1"></td>
+                        </tr>
+                      )}
                     </tfoot>
                   )}
                 </table>
@@ -664,7 +691,7 @@ const DepositAllocate = () => {
                     </td>
                     <td className="py-3.5 px-4 font-bold text-[#002B49]">{t.userName}</td>
                     <td className={`py-3.5 px-4 font-bold ${t.txnCategory === 'Add Money' ? 'text-[#9e6e34]' : 'text-[#002B49]'}`}>
-                      {settings.currency}{parseFloat(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      {settings?.currency || '₹'}{(parseFloat(t.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate">
                       {t.notes || '-'}
@@ -720,15 +747,28 @@ const DepositAllocate = () => {
             </tbody>
             {filteredTransactions.length > 0 && (
               <tfoot className="bg-slate-100/90 font-bold text-xs text-[#002B49] border-t-2 border-slate-300 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
-                <tr>
-                  <td colSpan="4" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black font-extrabold text-[#002B49]">
-                    {hasActiveFilters ? 'Total Filtered Amount:' : 'Total Amount:'}
-                  </td>
-                  <td className="py-3 px-4 font-black text-[#002B49] text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black whitespace-nowrap">
-                    {settings.currency}{filteredTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td colSpan="2" className="py-3 px-4 print:py-2 print:px-2 print:border print:border-black"></td>
-                </tr>
+                {(activeTab === 'All' || activeTab === 'Add Money') && totalFilteredDeposits > 0 && (
+                  <tr>
+                    <td colSpan="4" className="py-2.5 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black font-extrabold text-[#9e6e34]">
+                      Total Deposited:
+                    </td>
+                    <td className="py-2.5 px-4 font-black text-[#9e6e34] text-sm print:py-2 print:px-2 print:border print:border-black whitespace-nowrap">
+                      {settings?.currency || '₹'}{totalFilteredDeposits.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td colSpan="2" className="py-2.5 px-4 print:py-2 print:px-2 print:border print:border-black"></td>
+                  </tr>
+                )}
+                {(activeTab === 'All' || activeTab === 'Give Money') && totalFilteredAllocations > 0 && (
+                  <tr>
+                    <td colSpan="4" className="py-2.5 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black font-extrabold text-[#002B49]">
+                      Total Allocated:
+                    </td>
+                    <td className="py-2.5 px-4 font-black text-[#002B49] text-sm print:py-2 print:px-2 print:border print:border-black whitespace-nowrap">
+                      {settings?.currency || '₹'}{totalFilteredAllocations.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td colSpan="2" className="py-2.5 px-4 print:py-2 print:px-2 print:border print:border-black"></td>
+                  </tr>
+                )}
               </tfoot>
             )}
           </table>
