@@ -447,9 +447,19 @@ const Dashboard = () => {
     plugins: {
       legend: {
         position: 'bottom',
-        labels: { color: '#334155', font: { size: 11, family: 'Inter', weight: '600' } }
       }
     }
+  };
+
+  const handleAccountClick = (userName, typeFilter = 'All', statusFilter = 'All') => {
+    const targetRoute = isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit';
+    navigate(targetRoute, {
+      state: {
+        selectedUser: userName,
+        typeFilter: typeFilter,
+        statusFilter: statusFilter
+      }
+    });
   };
 
   return (
@@ -984,7 +994,7 @@ const Dashboard = () => {
             {allAccounts.map((u) => {
               const isComp = u.isCompany;
               const stats = isComp ? companyStats : getUserStats(u.name);
-              const allocatedVal = isComp ? totalVaultDeposited : stats.allocated;
+              const allocatedVal = isComp ? totalVaultDeposited : (stats.totalCashAvailable || (stats.allocated + stats.cashInReceived));
               const rawPercent = allocatedVal > 0 ? Math.round((stats.spent / allocatedVal) * 100) : (stats.spent > 0 ? 100 : 0);
               const isOverSpent = allocatedVal > 0 ? stats.spent > allocatedVal : stats.spent > 0;
               const displayPercent = Math.min(100, rawPercent);
@@ -993,9 +1003,9 @@ const Dashboard = () => {
               return (
                 <div
                   key={u.id}
-                  onClick={() => handleRowClick(u.name)}
+                  onClick={() => handleAccountClick(u.name, 'All', 'All')}
                   className={`p-3.5 rounded-2xl bg-white border shadow-xs space-y-2.5 cursor-pointer hover:border-slate-400 hover:shadow-md transition-all ${isComp ? 'border-[#002B49]/40 bg-slate-50/50' : 'border-slate-200/80'}`}
-                  title={`Click to view ${u.name}'s expenses`}
+                  title={`Click to view ${u.name}'s records`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5 min-w-0">
@@ -1016,15 +1026,29 @@ const Dashboard = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">{isComp ? 'Total Capital Deposited' : 'Money Given'}</span>
-                      <span className="font-extrabold text-[#9e6e34]">
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAccountClick(u.name, 'Credit', 'Done');
+                      }}
+                      className="cursor-pointer p-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
+                      title={`Click to view Total Done Credit for ${u.name}`}
+                    >
+                      <span className="text-[10px] font-bold uppercase text-emerald-800 block mb-0.5">{isComp ? 'Total Capital Deposited' : 'Total Done Credit'}</span>
+                      <span className="font-extrabold text-emerald-700">
                         {settings.currency}{allocatedVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">{isComp ? 'Company Direct Expenses' : 'Spent Expenses'}</span>
-                      <span className="font-extrabold text-[#002B49]">
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAccountClick(u.name, 'Debit', 'Done');
+                      }}
+                      className="cursor-pointer p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                      title={`Click to view TOTAL DONE DEBIT for ${u.name}`}
+                    >
+                      <span className="text-[10px] font-bold uppercase text-rose-800 block mb-0.5">{isComp ? 'Company Direct Expenses' : 'TOTAL DONE DEBIT'}</span>
+                      <span className="font-extrabold text-rose-700">
                         {settings.currency}{stats.spent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -1102,8 +1126,8 @@ const Dashboard = () => {
                 <tr>
                   <th className="py-3 px-4 font-bold">Account Name</th>
                   <th className="py-3 px-4 font-bold">ID / Type</th>
-                  <th className="py-3 px-4 font-bold">Capital / Money Given</th>
-                  <th className="py-3 px-4 font-bold">Spent Expenses</th>
+                  <th className="py-3 px-4 font-bold">Total Done Credit</th>
+                  <th className="py-3 px-4 font-bold">TOTAL DONE DEBIT</th>
                   <th className="py-3 px-4 font-bold">Available Reserve / Balance</th>
                   <th className="py-3 px-4 font-bold">Utilization</th>
                   <th className="py-3 px-4 text-right font-bold no-print">Action</th>
@@ -1113,7 +1137,7 @@ const Dashboard = () => {
                 {allAccounts.map((u) => {
                   const isComp = u.isCompany;
                   const stats = isComp ? companyStats : getUserStats(u.name);
-                  const allocatedVal = isComp ? totalVaultDeposited : stats.allocated;
+                  const allocatedVal = isComp ? totalVaultDeposited : (stats.totalCashAvailable || (stats.allocated + stats.cashInReceived));
                   const rawPercent = allocatedVal > 0 ? Math.round((stats.spent / allocatedVal) * 100) : (stats.spent > 0 ? 100 : 0);
                   const isOverSpent = allocatedVal > 0 ? stats.spent > allocatedVal : stats.spent > 0;
                   const displayPercent = Math.min(100, rawPercent);
@@ -1122,9 +1146,9 @@ const Dashboard = () => {
                   return (
                     <tr
                       key={u.id}
-                      onClick={() => handleRowClick(u.name)}
+                      onClick={() => handleAccountClick(u.name, 'All', 'All')}
                       className={`cursor-pointer hover:bg-slate-100/90 transition-all ${isComp ? 'bg-slate-50/60 font-bold' : ''}`}
-                      title={`Click to view ${u.name}'s expenses`}
+                      title={`Click to view all records for ${u.name}`}
                     >
                       <td className="py-3.5 px-4 font-bold text-[#002B49]">
                         <div className="flex items-center space-x-2">
@@ -1141,10 +1165,24 @@ const Dashboard = () => {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 font-mono text-xs text-slate-600">{u.id}</td>
-                      <td className="py-3.5 px-4 font-bold text-[#9e6e34]">
+                      <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAccountClick(u.name, 'Credit', 'Done');
+                        }}
+                        className="py-3.5 px-4 font-bold text-emerald-800 hover:bg-emerald-100/60 rounded-lg transition-colors cursor-pointer"
+                        title={`Click to view Total Done Credit for ${u.name}`}
+                      >
                         {settings.currency}{allocatedVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-[#002B49]">
+                      <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAccountClick(u.name, 'Debit', 'Done');
+                        }}
+                        className="py-3.5 px-4 font-bold text-rose-800 hover:bg-rose-100/60 rounded-lg transition-colors cursor-pointer"
+                        title={`Click to view TOTAL DONE DEBIT for ${u.name}`}
+                      >
                         {settings.currency}{stats.spent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3.5 px-4">
