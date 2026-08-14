@@ -15,13 +15,15 @@ if ($method === 'POST') {
             exit();
         }
 
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username OR id = :username LIMIT 1");
-        $stmt->execute(['username' => $username]);
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :u1 OR id = :u2 LIMIT 1");
+        $stmt->execute(['u1' => $username, 'u2' => $username]);
         $user = $stmt->fetch();
 
         if ($user) {
-            // Check password (plain text or password_verify fallback)
-            $passwordMatch = ($password === $user['password']) || password_verify($password, $user['password']);
+            $cleanPassword = trim($password);
+            $dbPass = trim($user['password']);
+            $passwordMatch = ($cleanPassword === $dbPass) || password_verify($cleanPassword, $user['password']);
+
             if ($passwordMatch) {
                 unset($user['password']);
                 echo json_encode([
@@ -45,8 +47,8 @@ if ($method === 'POST') {
             exit();
         }
 
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(:u) OR LOWER(id) = LOWER(:u) OR LOWER(name) = LOWER(:u) LIMIT 1");
-        $stmt->execute(['u' => $username]);
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(:u1) OR LOWER(id) = LOWER(:u2) OR LOWER(name) = LOWER(:u3) LIMIT 1");
+        $stmt->execute(['u1' => $username, 'u2' => $username, 'u3' => $username]);
         $user = $stmt->fetch();
 
         if ($user) {

@@ -79,27 +79,44 @@ const Tasks = () => {
     setIsModalOpen(true);
   };
 
-  const onSubmitTask = (data) => {
+  const onSubmitTask = async (data) => {
     if (editingTask) {
-      updateTask(editingTask.id, data);
-      toast.success(`Task "${data.title}" updated successfully!`, { theme: 'light' });
+      const res = await updateTask(editingTask.id, data);
+      if (res && res.success) {
+        toast.success(`Task "${data.title}" updated successfully!`, { theme: 'light' });
+        setIsModalOpen(false);
+      } else {
+        toast.error(res?.message || 'Failed to update task in PHP database', { theme: 'light' });
+      }
     } else {
-      addTask(data);
-      toast.success(`New task assigned to ${data.assignedTo}!`, { theme: 'light' });
+      const res = await addTask(data);
+      if (res && res.success) {
+        toast.success(`New task assigned to ${data.assignedTo}!`, { theme: 'light' });
+        setIsModalOpen(false);
+      } else {
+        toast.error(res?.message || 'Failed to save task in PHP database', { theme: 'light' });
+      }
     }
-    setIsModalOpen(false);
   };
 
-  const handleDeleteTask = (id, title) => {
+  const handleDeleteTask = async (id, title) => {
     if (window.confirm(`Delete task "${title}"?`)) {
-      deleteTask(id);
-      toast.info('Task removed from system', { theme: 'light' });
+      const res = await deleteTask(id);
+      if (res && res.success) {
+        toast.info('Task removed from system', { theme: 'light' });
+      } else {
+        toast.error(res?.message || 'Failed to delete task from PHP database', { theme: 'light' });
+      }
     }
   };
 
-  const handleStatusChange = (task, newStatus) => {
-    updateTaskStatus(task.id, newStatus);
-    toast.success(`Task updated to ${newStatus}`, { theme: 'light' });
+  const handleStatusChange = async (task, newStatus) => {
+    const res = await updateTaskStatus(task.id, newStatus);
+    if (res && res.success) {
+      toast.success(`Task updated to ${newStatus}`, { theme: 'light' });
+    } else {
+      toast.error(res?.message || 'Failed to update task status in PHP database', { theme: 'light' });
+    }
   };
 
   const handlePrint = () => {
@@ -166,7 +183,7 @@ const Tasks = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 print:grid-cols-4 print:gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 print:grid-cols-4 print:gap-2">
         <div className="glass-card p-4 sm:p-5 rounded-2xl border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
           <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Total Tasks</p>
           <p className="text-xl sm:text-3xl font-extrabold text-[#002B49] mt-1 print:text-base print:font-black print:text-black print:mt-0">{totalCount}</p>

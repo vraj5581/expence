@@ -11,7 +11,9 @@ const Settings = () => {
   const {
     settings,
     updateSettings,
-    resetToDefaultData,
+    deleteTransaction,
+    deleteVaultDeposit,
+    deleteAllocation,
     transactions,
     vaultDeposits,
     allocationsHistory,
@@ -51,6 +53,11 @@ const Settings = () => {
   const [backupEndDate, setBackupEndDate] = useState('');
   const [backupFormat, setBackupFormat] = useState('JSON');
 
+  // Security Delete Password Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!pwdCurrent || !pwdNew || !pwdConfirm) {
@@ -84,14 +91,18 @@ const Settings = () => {
     }
   });
 
-  const onSaveGeneral = (data) => {
-    updateSettings({
+  const onSaveGeneral = async (data) => {
+    const res = await updateSettings({
       ...data,
       currency: '₹',
       currencyCode: 'INR'
     });
 
-    toast.success('System settings updated successfully!', { theme: 'light' });
+    if (res && res.success) {
+      toast.success('System settings updated successfully!', { theme: 'light' });
+    } else {
+      toast.error(res?.message || 'Failed to update settings in PHP database', { theme: 'light' });
+    }
   };
 
   // Dynamic filter matching calculation
@@ -226,11 +237,48 @@ const Settings = () => {
     }
   };
 
-  const handleResetDemoData = () => {
-    if (window.confirm('Reset all transactions and user data to Shukan Packaging default demo values?')) {
-      resetToDefaultData();
-      toast.info('System data reset to Shukan Packaging demo values.', { theme: 'light' });
+  const handleOpenDeleteModal = () => {
+    const { total } = getFilteredData();
+    if (total === 0) {
+      toast.warning('No matching records found to delete for the selected filter criteria.', { theme: 'light' });
+      return;
     }
+    setDeletePassword('');
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeleteWithPassword = async (e) => {
+    e.preventDefault();
+    if (deletePassword !== 'Shukan@2026') {
+      toast.error('Incorrect security password! Deletion request denied.', { theme: 'light' });
+      return;
+    }
+
+    const { total, txns, deposits, allocs } = getFilteredData();
+    if (total === 0) {
+      toast.warning('No matching records found to delete.', { theme: 'light' });
+      setIsDeleteModalOpen(false);
+      return;
+    }
+
+    setDeleteLoading(true);
+    let count = 0;
+    for (const t of txns) {
+      await deleteTransaction(t.id);
+      count++;
+    }
+    for (const d of deposits) {
+      await deleteVaultDeposit(d.id);
+      count++;
+    }
+    for (const a of allocs) {
+      await deleteAllocation(a.id);
+      count++;
+    }
+    setDeleteLoading(false);
+    setIsDeleteModalOpen(false);
+    setDeletePassword('');
+    toast.success(`Successfully deleted ${count} matching record(s) from PHP database!`, { theme: 'light' });
   };
 
   const filteredStats = getFilteredData();
@@ -504,12 +552,12 @@ const Settings = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center space-x-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
                   {(backupStartDate || backupEndDate || backupUser !== 'All' || backupCategory !== 'All') && (
                     <button
                       type="button"
                       onClick={() => { setBackupCategory('All'); setBackupUser('All'); setBackupStartDate(''); setBackupEndDate(''); }}
-                      className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+                      className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
                     >
                       Reset Filters
                     </button>
@@ -518,30 +566,96 @@ const Settings = () => {
                   <button
                     type="button"
                     onClick={handleExportData}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer flex items-center shrink-0"
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer flex items-center shrink-0"
                   >
                     <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Export Backup ({backupFormat})
+                    Export ({backupFormat})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenDeleteModal}
+                    className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition cursor-pointer flex items-center shrink-0"
+                  >
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Filtered Records ({filteredStats.total})
                   </button>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Reset Demo Data Card */}
-            <div className="p-5 rounded-2xl bg-rose-50 border border-rose-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-extrabold text-rose-800">Reset System Demo Data</h3>
+      {/* Security Password Verification Modal for Filtered Deletion */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center border border-rose-200 text-rose-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Confirm Filtered Deletion</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Permanently remove {filteredStats.total} matching record(s)</p>
+                </div>
               </div>
+
               <button
                 type="button"
-                onClick={handleResetDemoData}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0 transition shadow-xs"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
               >
-                Reset Demo Data
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
+
+            <form onSubmit={handleConfirmDeleteWithPassword} className="space-y-4 pt-1">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-semibold">
+                ⚠️ Warning: This will permanently delete <strong>{filteredStats.total}</strong> record(s) matching your filter criteria from the database.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">
+                  Enter Security Password to Confirm
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter security password"
+                  required
+                  autoFocus
+                  className="w-full px-4 py-2.5 text-xs rounded-xl glass-input text-slate-900 focus:outline-none border border-slate-300"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleteLoading}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition cursor-pointer"
+                >
+                  {deleteLoading ? 'Deleting...' : 'Confirm & Delete'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

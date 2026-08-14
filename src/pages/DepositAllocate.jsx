@@ -77,32 +77,36 @@ const DepositAllocate = () => {
     setIsGiveMoneyOpen(true);
   };
 
-  const onGiveMoneySubmit = (data) => {
+  const onGiveMoneySubmit = async (data) => {
     if (editingAllocation) {
-      const res = updateAllocation(editingAllocation.id, data);
-      if (res.success) {
+      const res = await updateAllocation(editingAllocation.id, data);
+      if (res && res.success) {
         toast.success(`Updated allocation for ${data.userName}!`, { theme: 'light' });
         setIsGiveMoneyOpen(false);
         resetGive();
       } else {
-        toast.error(res.message, { theme: 'light' });
+        toast.error(res?.message || 'Failed to update allocation in PHP database', { theme: 'light' });
       }
     } else {
-      const res = allocateMoneyToUser(data.userName, data.amount, data.notes);
-      if (res.success) {
+      const res = await allocateMoneyToUser(data.userName, data.amount, data.notes);
+      if (res && res.success) {
         toast.success(`Allocated ${settings.currency}${parseFloat(data.amount).toLocaleString()} to ${data.userName}!`, { theme: 'light' });
         setIsGiveMoneyOpen(false);
         resetGive();
       } else {
-        toast.error(res.message, { theme: 'light' });
+        toast.error(res?.message || 'Failed to save allocation in PHP database', { theme: 'light' });
       }
     }
   };
 
-  const handleDeleteAllocation = (alloc) => {
+  const handleDeleteAllocation = async (alloc) => {
     if (window.confirm(`Are you sure you want to remove allocation of ${settings.currency}${alloc.amount} to ${alloc.userName}?`)) {
-      deleteAllocation(alloc.id);
-      toast.info(`Allocation record removed.`, { theme: 'light' });
+      const res = await deleteAllocation(alloc.id);
+      if (res && res.success) {
+        toast.info(`Allocation record removed.`, { theme: 'light' });
+      } else {
+        toast.error(res?.message || 'Failed to delete allocation from PHP database', { theme: 'light' });
+      }
     }
   };
 
@@ -128,35 +132,45 @@ const DepositAllocate = () => {
     setIsModalOpen(true);
   };
 
-  const onSubmitForm = (data) => {
+  const onSubmitForm = async (data) => {
     const depositData = {
       ...data,
       userName: data.userName || editingDeposit?.userName || shukanPartners[0]
     };
     if (editingDeposit) {
-      updateVaultDeposit(editingDeposit.id, depositData);
-      toast.success(`Deposit entry for ${depositData.userName} updated!`, { theme: 'light' });
-    } else {
-      const res = addVaultDeposit(depositData);
-      if (res.success) {
-        toast.success(`Added ${settings.currency}${parseFloat(data.amount).toLocaleString()} from ${depositData.userName} to Vault!`, { theme: 'light' });
+      const res = await updateVaultDeposit(editingDeposit.id, depositData);
+      if (res && res.success) {
+        toast.success(`Deposit entry for ${depositData.userName} updated!`, { theme: 'light' });
+        setIsModalOpen(false);
+        reset();
       } else {
-        toast.error(res.message, { theme: 'light' });
-        return;
+        toast.error(res?.message || 'Failed to update deposit in PHP database', { theme: 'light' });
+      }
+    } else {
+      const res = await addVaultDeposit(depositData);
+      if (res && res.success) {
+        toast.success(`Added ${settings.currency}${parseFloat(data.amount).toLocaleString()} from ${depositData.userName} to Vault!`, { theme: 'light' });
+        setIsModalOpen(false);
+        reset();
+      } else {
+        toast.error(res?.message || 'Failed to save deposit in PHP database', { theme: 'light' });
       }
     }
-    setIsModalOpen(false);
-    reset();
   };
 
-  const handleDelete = (deposit) => {
+  const handleDelete = async (deposit) => {
     if (window.confirm(`Are you sure you want to remove deposit record for ${deposit.userName || 'Partner'} (${settings.currency}${deposit.amount})?`)) {
+      let res;
       if (deposit.isCreditTxn && deposit.txnId) {
-        deleteTransaction(deposit.txnId);
+        res = await deleteTransaction(deposit.txnId);
       } else {
-        deleteVaultDeposit(deposit.id);
+        res = await deleteVaultDeposit(deposit.id);
       }
-      toast.info(`Deposit entry deleted`, { theme: 'light' });
+      if (res && res.success) {
+        toast.info(`Deposit entry deleted`, { theme: 'light' });
+      } else {
+        toast.error(res?.message || 'Failed to delete deposit from PHP database', { theme: 'light' });
+      }
     }
   };
 

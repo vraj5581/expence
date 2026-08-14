@@ -22,7 +22,7 @@ if ($method === 'POST') {
 
     $stmt = $pdo->prepare("INSERT INTO users (id, name, username, password, role, status, avatar)
         VALUES (:id, :name, :username, :password, :role, :status, :avatar)
-        ON DUPLICATE KEY UPDATE name = :name, role = :role, status = :status");
+        ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), status = VALUES(status), password = VALUES(password), avatar = VALUES(avatar)");
 
     $stmt->execute([
         'id' => $id, 'name' => $name, 'username' => $username,

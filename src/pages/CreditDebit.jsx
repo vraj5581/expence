@@ -373,7 +373,7 @@ const CreditDebit = ({ isMyView = false }) => {
     return new Date().toISOString().split('T')[0];
   };
 
-  const onSubmitForm = (data) => {
+  const onSubmitForm = async (data) => {
     try {
       const numAmount = parseFloat(data.amount);
       if (isNaN(numAmount) || numAmount <= 0) {
@@ -389,7 +389,7 @@ const CreditDebit = ({ isMyView = false }) => {
 
       if (editingTxn) {
         if (editingTxn.isAllocation) {
-          const res = updateAllocation(editingTxn.id, {
+          const res = await updateAllocation(editingTxn.id, {
             amount: numAmount,
             notes: data.description,
             date: formattedDate,
@@ -401,7 +401,7 @@ const CreditDebit = ({ isMyView = false }) => {
           }
           toast.success(`Company Allocation updated successfully!`, { theme: 'light' });
         } else {
-          const res = updateTransaction(editingTxn.id, {
+          const res = await updateTransaction(editingTxn.id, {
             ...data,
             amount: numAmount,
             date: formattedDate
@@ -432,14 +432,14 @@ const CreditDebit = ({ isMyView = false }) => {
           createdBy: user?.name || 'Admin'
         };
 
-        const res = addTransaction(newTxn);
+        const res = await addTransaction(newTxn);
         if (res && res.success === false) {
           toast.error(res.message, { theme: 'light' });
           return;
         }
 
         if (finalType === 'Cash In' && finalDepositTo === 'Company Wallet') {
-          addVaultDeposit({
+          await addVaultDeposit({
             amount: numAmount,
             date: formattedDate,
             userName: newTxn.userName,
@@ -463,18 +463,22 @@ const CreditDebit = ({ isMyView = false }) => {
     }
   };
 
-  const handleStatusChange = (txn, newStatus) => {
+  const handleStatusChange = async (txn, newStatus) => {
     if (txn.isAllocation) {
       toast.info('Company allocation status is fixed as Done', { theme: 'light' });
       return;
     }
-    updateTransaction(txn.id, { ...txn, status: newStatus });
+    const res = await updateTransaction(txn.id, { ...txn, status: newStatus });
+    if (res && res.success === false) {
+      toast.error(res.message || 'Failed to update transaction status in PHP database', { theme: 'light' });
+      return;
+    }
 
     // Sync vault deposit status if linked to Company Wallet credit entry
     if (txn.type === 'Cash In' && txn.depositTo === 'Company Wallet') {
       const linkedDep = vaultDeposits.find(d => d.txnId === txn.id || (d.notes && d.notes.includes(txn.description)));
       if (linkedDep) {
-        updateVaultDeposit(linkedDep.id, { ...linkedDep, status: newStatus });
+        await updateVaultDeposit(linkedDep.id, { ...linkedDep, status: newStatus });
       }
     }
 
@@ -485,19 +489,27 @@ const CreditDebit = ({ isMyView = false }) => {
     }
   };
 
-  const handleDelete = (tOrId) => {
+  const handleDelete = async (tOrId) => {
     const id = typeof tOrId === 'object' ? tOrId.id : tOrId;
     const isAlloc = typeof tOrId === 'object' ? tOrId.isAllocation : allocationsHistory.some(a => a.id === id);
 
     if (isAlloc) {
       if (window.confirm(`Delete Company Cash Allocation record ${id}?`)) {
-        deleteAllocation(id);
-        toast.info(`Company allocation record removed.`, { theme: 'light' });
+        const res = await deleteAllocation(id);
+        if (res && res.success) {
+          toast.info(`Company allocation record removed.`, { theme: 'light' });
+        } else {
+          toast.error(res?.message || 'Failed to delete allocation from PHP database', { theme: 'light' });
+        }
       }
     } else {
       if (window.confirm(`Delete transaction record ${id}?`)) {
-        deleteTransaction(id);
-        toast.info(`Transaction removed.`, { theme: 'light' });
+        const res = await deleteTransaction(id);
+        if (res && res.success) {
+          toast.info(`Transaction removed.`, { theme: 'light' });
+        } else {
+          toast.error(res?.message || 'Failed to delete transaction from PHP database', { theme: 'light' });
+        }
       }
     }
   };

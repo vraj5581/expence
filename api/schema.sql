@@ -16,32 +16,43 @@ CREATE TABLE IF NOT EXISTS `users` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Initial Users Seed Data
 INSERT INTO `users` (`id`, `name`, `username`, `password`, `role`, `status`) VALUES
-('vraj', 'Vraj', 'vraj', 'admin123', 'Partner', 'Active'),
-('raj', 'Raj', 'raj', 'partner123', 'Partner', 'Active'),
-('teerth', 'Teerth', 'teerth', 'partner123', 'Partner', 'Active'),
-('mayank', 'Mayank', 'mayank', 'partner123', 'Partner', 'Active')
+('vraj', 'Vraj', 'vraj', 'vraj12', 'Partner', 'Active'),
+('raj', 'Raj', 'raj', 'raj12', 'Partner', 'Active'),
+('teerth', 'Teerth', 'teerth', 'teerth12', 'Partner', 'Active'),
+('mayank', 'Mayank', 'mayank', 'mayank12', 'Partner', 'Active')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
--- 2. Transactions Table
-CREATE TABLE IF NOT EXISTS `transactions` (
+-- 2. Debit Transactions Table (Expenses / Cash Out)
+CREATE TABLE IF NOT EXISTS `debit_transactions` (
   `id` VARCHAR(50) PRIMARY KEY,
   `date` DATE NOT NULL,
-  `type` VARCHAR(20) NOT NULL, -- 'Cash In' / 'Cash Out' / 'Credit' / 'Debit'
+  `userName` VARCHAR(100) NOT NULL,
+  `amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  `category` VARCHAR(100) DEFAULT 'General',
+  `description` TEXT,
+  `status` VARCHAR(20) DEFAULT 'Done',
+  `notes` TEXT,
+  `createdBy` VARCHAR(100) DEFAULT 'Admin',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 3. Credit Transactions Table (Inflows / Cash In)
+CREATE TABLE IF NOT EXISTS `credit_transactions` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `date` DATE NOT NULL,
   `userName` VARCHAR(100) NOT NULL,
   `depositTo` VARCHAR(100) DEFAULT 'My Hand',
   `amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `category` VARCHAR(100) DEFAULT 'General',
   `description` TEXT,
-  `status` VARCHAR(20) DEFAULT 'Done', -- 'Done' / 'Due'
+  `status` VARCHAR(20) DEFAULT 'Done',
   `notes` TEXT,
   `createdBy` VARCHAR(100) DEFAULT 'Admin',
-  `isAllocation` TINYINT(1) DEFAULT 0,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 3. Vault Deposits Table
+-- 4. Vault Deposits Table
 CREATE TABLE IF NOT EXISTS `vault_deposits` (
   `id` VARCHAR(50) PRIMARY KEY,
   `date` DATE NOT NULL,
@@ -53,7 +64,7 @@ CREATE TABLE IF NOT EXISTS `vault_deposits` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 4. Allocations History Table
+-- 5. Allocations History Table
 CREATE TABLE IF NOT EXISTS `allocations_history` (
   `id` VARCHAR(50) PRIMARY KEY,
   `userName` VARCHAR(100) NOT NULL,
@@ -62,13 +73,6 @@ CREATE TABLE IF NOT EXISTS `allocations_history` (
   `date` DATE NOT NULL,
   `notes` TEXT,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 5. User Allocations Table
-CREATE TABLE IF NOT EXISTS `user_allocations` (
-  `userName` VARCHAR(100) PRIMARY KEY,
-  `allocated` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 6. Settings Table
@@ -86,7 +90,7 @@ INSERT INTO `settings` (`id`, `currency`, `currencyCode`, `companyName`, `lowBal
 (1, '₹', 'INR', 'Shukan Packaging', 5000.00, 20000.00)
 ON DUPLICATE KEY UPDATE `currency` = VALUES(`currency`);
 
--- 7. Tasks Table
+-- 8. Tasks Table
 CREATE TABLE IF NOT EXISTS `tasks` (
   `id` VARCHAR(50) PRIMARY KEY,
   `title` VARCHAR(255) NOT NULL,
@@ -98,3 +102,6 @@ CREATE TABLE IF NOT EXISTS `tasks` (
   `dueDate` DATE DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- NOTE: The old `transactions` table has been dropped.
+-- All data is stored in separate `debit_transactions` and `credit_transactions` tables.

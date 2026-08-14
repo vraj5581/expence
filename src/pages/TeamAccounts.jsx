@@ -36,27 +36,45 @@ const TeamAccounts = () => {
     setIsModalOpen(true);
   };
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     if (editingUser) {
-      updateUser(editingUser.id, data);
-      toast.success(`User ${data.name} updated!`, { theme: 'light' });
+      const res = await updateUser(editingUser.id, data);
+      if (res && res.success) {
+        toast.success(`User ${data.name} updated!`, { theme: 'light' });
+        setIsModalOpen(false);
+        reset();
+      } else {
+        toast.error(res?.message || 'Failed to update user in PHP database', { theme: 'light' });
+      }
     } else {
-      addUser(data);
-      toast.success(`New user ${data.name} created!`, { theme: 'light' });
+      const res = await addUser(data);
+      if (res && res.success) {
+        toast.success(`New user ${data.name} created!`, { theme: 'light' });
+        setIsModalOpen(false);
+        reset();
+      } else {
+        toast.error(res?.message || 'Failed to create user in PHP database', { theme: 'light' });
+      }
     }
-    setIsModalOpen(false);
-    reset();
   };
 
-  const handleToggleStatus = (user) => {
-    toggleUserStatus(user.id);
-    toast.info(`Status updated for ${user.name}`, { theme: 'light' });
+  const handleToggleStatus = async (user) => {
+    const res = await toggleUserStatus(user.id);
+    if (res && res.success) {
+      toast.info(`Status updated for ${user.name}`, { theme: 'light' });
+    } else {
+      toast.error(res?.message || 'Failed to update user status in PHP database', { theme: 'light' });
+    }
   };
 
-  const handleDelete = (user) => {
+  const handleDelete = async (user) => {
     if (window.confirm(`Remove user ${user.name}?`)) {
-      deleteUser(user.id);
-      toast.warning(`User ${user.name} removed.`, { theme: 'light' });
+      const res = await deleteUser(user.id);
+      if (res && res.success) {
+        toast.warning(`User ${user.name} removed.`, { theme: 'light' });
+      } else {
+        toast.error(res?.message || 'Failed to remove user from PHP database', { theme: 'light' });
+      }
     }
   };
 

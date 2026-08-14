@@ -23,12 +23,19 @@ async function request(endpoint, options = {}) {
     const res = await fetch(url, config);
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(`HTTP Error ${res.status}: ${errorText}`);
+      let parsedMessage = '';
+      try {
+        const parsed = JSON.parse(errorText);
+        parsedMessage = parsed.message || parsed.error;
+      } catch (e) {
+        parsedMessage = errorText;
+      }
+      return { success: false, error: parsedMessage || `HTTP Error ${res.status}` };
     }
     return await res.json();
   } catch (err) {
-    console.warn(`API Request failed for ${endpoint}, returning fallback:`, err.message);
-    return { success: false, error: err.message };
+    console.error(`API Request failed for ${endpoint}:`, err.message);
+    return { success: false, error: err.message || 'Failed to connect to PHP database server' };
   }
 }
 
@@ -41,7 +48,19 @@ export const apiService = {
       body: { username, currentPassword, newPassword }
     }),
 
-  // Transactions
+  // Debit Transactions (Cash Out / Expenses) - dedicated table
+  getDebits: () => request('debit.php', { method: 'GET' }),
+  addDebit: (data) => request('debit.php', { method: 'POST', body: data }),
+  updateDebit: (id, data) => request('debit.php', { method: 'PUT', body: { id, ...data } }),
+  deleteDebit: (id) => request(`debit.php?id=${id}`, { method: 'DELETE', body: { id } }),
+
+  // Credit Transactions (Cash In / Inflows) - dedicated table
+  getCredits: () => request('credit.php', { method: 'GET' }),
+  addCredit: (data) => request('credit.php', { method: 'POST', body: data }),
+  updateCredit: (id, data) => request('credit.php', { method: 'PUT', body: { id, ...data } }),
+  deleteCredit: (id) => request(`credit.php?id=${id}`, { method: 'DELETE', body: { id } }),
+
+  // Transactions (merged view for dashboard calculations - reads both tables)
   getTransactions: () => request('transactions.php', { method: 'GET' }),
   addTransaction: (txnData) => request('transactions.php', { method: 'POST', body: txnData }),
   updateTransaction: (id, txnData) => request('transactions.php', { method: 'PUT', body: { id, ...txnData } }),

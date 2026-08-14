@@ -21,11 +21,13 @@ import Tasks from './pages/Tasks';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Component to handle intelligent default redirection based on user role
+// Component to handle default redirection based on authentication state
 const DefaultRedirect = () => {
-  const { user } = useAuth();
-  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
-  return <Navigate to="/admin/dashboard" replace />;
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  return <Navigate to="/login" replace />;
 };
 
 // Route wrapper for Admin-only pages
@@ -42,7 +44,8 @@ function App() {
         <ExpenseProvider>
           <BrowserRouter>
           <Routes>
-            {/* Public Login Route */}
+            {/* Root & Public Login Routes */}
+            <Route path="/" element={<DefaultRedirect />} />
             <Route path="/login" element={<Login />} />
 
             {/* Protected Routes */}

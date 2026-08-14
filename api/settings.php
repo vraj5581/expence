@@ -34,8 +34,8 @@ if ($method === 'POST' || $method === 'PUT') {
 
     $stmt = $pdo->prepare("INSERT INTO settings (id, currency, currencyCode, companyName, lowBalanceAlert, approvalThreshold)
         VALUES (1, :currency, :currencyCode, :companyName, :lowBalanceAlert, :approvalThreshold)
-        ON DUPLICATE KEY UPDATE currency = :currency, currencyCode = :currencyCode, companyName = :companyName,
-        lowBalanceAlert = :lowBalanceAlert, approvalThreshold = :approvalThreshold");
+        ON DUPLICATE KEY UPDATE currency = VALUES(currency), currencyCode = VALUES(currencyCode), companyName = VALUES(companyName),
+        lowBalanceAlert = VALUES(lowBalanceAlert), approvalThreshold = VALUES(approvalThreshold)");
 
     $stmt->execute([
         'currency' => $currency, 'currencyCode' => $currencyCode,

@@ -3,8 +3,6 @@ import { apiService } from '../services/api';
 
 const ExpenseContext = createContext();
 
-const initialTransactions = [];
-
 const initialUsers = [
   {
     id: 'vraj',
@@ -40,16 +38,6 @@ const initialUsers = [
   }
 ];
 
-const initialVaultDeposits = [
-  {
-    id: 'DEP-1001',
-    date: '2026-07-28',
-    userName: 'Shukan Admin',
-    amount: 2000,
-    notes: ''
-  }
-];
-
 const initialSettings = {
   currency: '₹',
   currencyCode: 'INR',
@@ -58,53 +46,85 @@ const initialSettings = {
   approvalThreshold: 20000
 };
 
-const initialTasks = [];
-
 export const ExpenseProvider = ({ children }) => {
   const [vaultDeposits, setVaultDeposits] = useState([]);
   const [userAllocations, setUserAllocations] = useState({});
   const [allocationsHistory, setAllocationsHistory] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [debitTransactions, setDebitTransactions] = useState([]);
+  const [creditTransactions, setCreditTransactions] = useState([]);
   const [users, setUsers] = useState(initialUsers);
   const [settings, setSettings] = useState(initialSettings);
   const [tasks, setTasks] = useState([]);
+  const [isDbConnected, setIsDbConnected] = useState(true);
+  const [dbError, setDbError] = useState(null);
 
-  // Fetch state from PHP backend on mount
-  useEffect(() => {
-    async function loadBackendData() {
-      try {
-        const [txRes, depRes, alcRes, userRes, setRes, taskRes] = await Promise.all([
-          apiService.getTransactions(),
-          apiService.getVaultDeposits(),
-          apiService.getAllocations(),
-          apiService.getUsers(),
-          apiService.getSettings(),
-          apiService.getTasks()
-        ]);
+  // Fetch state from PHP backend database on mount
+  const loadBackendData = async () => {
+    try {
+      const [debitRes, creditRes, depRes, alcRes, userRes, setRes, taskRes] = await Promise.all([
+        apiService.getDebits(),
+        apiService.getCredits(),
+        apiService.getVaultDeposits(),
+        apiService.getAllocations(),
+        apiService.getUsers(),
+        apiService.getSettings(),
+        apiService.getTasks()
+      ]);
 
-        if (txRes?.success && Array.isArray(txRes.transactions)) {
-          setTransactions(txRes.transactions);
-        }
-        if (depRes?.success && Array.isArray(depRes.vaultDeposits)) {
-          setVaultDeposits(depRes.vaultDeposits);
-        }
-        if (alcRes?.success) {
-          if (Array.isArray(alcRes.allocationsHistory)) setAllocationsHistory(alcRes.allocationsHistory);
-          if (alcRes.userAllocations && typeof alcRes.userAllocations === 'object') setUserAllocations(alcRes.userAllocations);
-        }
-        if (userRes?.success && Array.isArray(userRes.users) && userRes.users.length > 0) {
-          setUsers(userRes.users);
-        }
-        if (setRes?.success && setRes.settings) {
-          setSettings(setRes.settings);
-        }
-        if (taskRes?.success && Array.isArray(taskRes.tasks)) {
-          setTasks(taskRes.tasks);
-        }
-      } catch (err) {
-        console.warn("Failed to load initial data from PHP backend, using local state:", err);
+      let backendErr = null;
+
+      if (debitRes?.success && Array.isArray(debitRes.debits)) {
+        setDebitTransactions(debitRes.debits);
+      } else if (debitRes?.error) {
+        backendErr = debitRes.error;
       }
+
+      if (creditRes?.success && Array.isArray(creditRes.credits)) {
+        setCreditTransactions(creditRes.credits);
+      }
+
+      if (depRes?.success && Array.isArray(depRes.vaultDeposits)) {
+        setVaultDeposits(depRes.vaultDeposits);
+      }
+      if (alcRes?.success) {
+        if (Array.isArray(alcRes.allocationsHistory)) setAllocationsHistory(alcRes.allocationsHistory);
+        if (alcRes.userAllocations && typeof alcRes.userAllocations === 'object') setUserAllocations(alcRes.userAllocations);
+      }
+      if (userRes?.success && Array.isArray(userRes.users) && userRes.users.length > 0) {
+        setUsers(userRes.users);
+      }
+      if (setRes?.success && setRes.settings) {
+        setSettings(setRes.settings);
+      }
+      if (taskRes?.success && Array.isArray(taskRes.tasks)) {
+        setTasks(taskRes.tasks);
+      }
+
+      if (backendErr) {
+        setIsDbConnected(false);
+        setDbError(backendErr);
+      } else {
+        setIsDbConnected(true);
+        setDbError(null);
+      }
+    } catch (err) {
+      console.warn("Failed to load initial data from PHP backend:", err);
+      setIsDbConnected(false);
+      setDbError(err.message || "Cannot connect to PHP Database");
     }
+  };
+
+  // Merged view of all transactions for backward-compatible calculations
+  const transactions = useMemo(() => {
+    const debits = (debitTransactions || []).map(t => ({ ...t, type: 'Cash Out' }));
+    const credits = (creditTransactions || []).map(t => ({ ...t, type: 'Cash In' }));
+    return [...debits, ...credits].sort((a, b) => {
+      const d = new Date(b.date) - new Date(a.date);
+      return d !== 0 ? d : new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+  }, [debitTransactions, creditTransactions]);
+
+  useEffect(() => {
     loadBackendData();
   }, []);
 
@@ -154,7 +174,7 @@ export const ExpenseProvider = ({ children }) => {
   const adminVaultBalance = totalVaultDeposited - totalAllocatedToTeam - totalCompanyDirectExpenses;
 
   // 1. ADD VAULT DEPOSIT
-  const addVaultDeposit = (depositData) => {
+  const addVaultDeposit = async (depositData) => {
     const numAmount = parseFloat(depositData.amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return { success: false, message: 'Please enter a valid amount' };
@@ -168,32 +188,45 @@ export const ExpenseProvider = ({ children }) => {
       notes: depositData.notes || ''
     };
 
-    setVaultDeposits(prev => [newDeposit, ...prev]);
-    apiService.addVaultDeposit(newDeposit).catch(err => console.warn("PHP Sync warning:", err));
-    return { success: true, deposit: newDeposit };
+    const res = await apiService.addVaultDeposit(newDeposit);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save deposit to PHP database' };
+    }
+
+    const savedDeposit = res.deposit || newDeposit;
+    setVaultDeposits(prev => [savedDeposit, ...prev]);
+    return { success: true, deposit: savedDeposit };
   };
 
   // 2. UPDATE VAULT DEPOSIT
-  const updateVaultDeposit = (id, updatedData) => {
+  const updateVaultDeposit = async (id, updatedData) => {
     const numAmount = parseFloat(updatedData.amount);
+    const res = await apiService.updateVaultDeposit(id, updatedData);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update deposit in PHP database' };
+    }
+
     setVaultDeposits(prev => prev.map(d => (d.id === id ? {
       ...d,
       ...updatedData,
       amount: !isNaN(numAmount) ? numAmount : d.amount
     } : d)));
-    apiService.updateVaultDeposit(id, updatedData).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
   // 3. DELETE VAULT DEPOSIT
-  const deleteVaultDeposit = (id) => {
+  const deleteVaultDeposit = async (id) => {
+    const res = await apiService.deleteVaultDeposit(id);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete deposit from PHP database' };
+    }
+
     setVaultDeposits(prev => prev.filter(d => d.id !== id));
-    apiService.deleteVaultDeposit(id).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
   // Give Money / Allocate Cash to User (Deducts from Admin Vault)
-  const allocateMoneyToUser = (userName, amount, notes = '') => {
+  const allocateMoneyToUser = async (userName, amount, notes = '') => {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return { success: false, message: 'Please enter a valid amount' };
@@ -205,12 +238,6 @@ export const ExpenseProvider = ({ children }) => {
       };
     }
 
-    // Increase User Allocated Pool
-    setUserAllocations(prev => ({
-      ...prev,
-      [userName]: (prev[userName] || 0) + numAmount
-    }));
-
     const allocationLog = {
       id: `ALC-${Math.floor(1000 + Math.random() * 9000)}`,
       userName,
@@ -220,13 +247,21 @@ export const ExpenseProvider = ({ children }) => {
       notes: notes || ''
     };
 
+    const res = await apiService.allocateMoney(allocationLog);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save allocation in PHP database' };
+    }
+
+    setUserAllocations(prev => ({
+      ...prev,
+      [userName]: (prev[userName] || 0) + numAmount
+    }));
     setAllocationsHistory(prev => [allocationLog, ...prev]);
-    apiService.allocateMoney(allocationLog).catch(err => console.warn("PHP Sync warning:", err));
 
     return { success: true, allocationLog };
   };
 
-  const updateAllocation = (id, updatedData) => {
+  const updateAllocation = async (id, updatedData) => {
     const oldAlloc = allocationsHistory.find(a => a.id === id);
     if (!oldAlloc) return { success: false, message: 'Allocation record not found' };
 
@@ -243,6 +278,11 @@ export const ExpenseProvider = ({ children }) => {
         success: false,
         message: `Cannot increase allocation by ${settings.currency}${diff}. Admin Vault has only ${settings.currency}${adminVaultBalance.toLocaleString()} available.`
       };
+    }
+
+    const res = await apiService.updateAllocation(id, updatedData);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update allocation in PHP database' };
     }
 
     setUserAllocations(prev => {
@@ -266,21 +306,24 @@ export const ExpenseProvider = ({ children }) => {
       userName: updatedData.userName || a.userName
     } : a));
 
-    apiService.updateAllocation(id, updatedData).catch(err => console.warn("PHP Sync warning:", err));
     return { success: true };
   };
 
-  const deleteAllocation = (id) => {
+  const deleteAllocation = async (id) => {
     const targetAlloc = allocationsHistory.find(a => a.id === id);
     if (!targetAlloc) return { success: false, message: 'Allocation record not found' };
+
+    const res = await apiService.deleteAllocation(id);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete allocation from PHP database' };
+    }
 
     setUserAllocations(prev => ({
       ...prev,
       [targetAlloc.userName]: Math.max(0, (prev[targetAlloc.userName] || 0) - targetAlloc.amount)
     }));
-
     setAllocationsHistory(prev => prev.filter(a => a.id !== id));
-    apiService.deleteAllocation(id).catch(err => console.warn("PHP Sync warning:", err));
+
     return { success: true };
   };
 
@@ -334,8 +377,8 @@ export const ExpenseProvider = ({ children }) => {
     };
   };
 
-  // Transaction CRUD
-  const addTransaction = (txnData) => {
+  // Transaction CRUD — routes to debit or credit table based on type
+  const addTransaction = async (txnData) => {
     const numAmount = parseFloat(txnData.amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return { success: false, message: 'Please enter a valid amount' };
@@ -369,13 +412,25 @@ export const ExpenseProvider = ({ children }) => {
       amount: numAmount
     };
 
-    setTransactions(prev => [newTxn, ...prev]);
-    apiService.addTransaction(newTxn).catch(err => console.warn("PHP Sync warning:", err));
+    const isCredit = newTxn.type === 'Cash In' || newTxn.type === 'Credit';
+    const res = isCredit
+      ? await apiService.addCredit(newTxn)
+      : await apiService.addDebit(newTxn);
 
-    return { success: true, txn: newTxn };
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save transaction in PHP database' };
+    }
+
+    const savedTxn = res.credit || res.debit || newTxn;
+    if (isCredit) {
+      setCreditTransactions(prev => [savedTxn, ...prev]);
+    } else {
+      setDebitTransactions(prev => [savedTxn, ...prev]);
+    }
+    return { success: true, txn: savedTxn };
   };
 
-  const updateTransaction = (id, updatedData) => {
+  const updateTransaction = async (id, updatedData) => {
     const oldTxn = transactions.find(t => t.id === id);
     if (!oldTxn) return { success: false, message: 'Transaction record not found' };
 
@@ -398,8 +453,20 @@ export const ExpenseProvider = ({ children }) => {
       }
     }
 
-    setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t)));
-    apiService.updateTransaction(id, { ...updatedData, amount: newAmount, status: newStatus }).catch(err => console.warn("PHP Sync warning:", err));
+    const isCredit = (updatedData.type || oldTxn.type) === 'Cash In' || (updatedData.type || oldTxn.type) === 'Credit';
+    const res = isCredit
+      ? await apiService.updateCredit(id, { ...updatedData, amount: newAmount, status: newStatus })
+      : await apiService.updateDebit(id, { ...updatedData, amount: newAmount, status: newStatus });
+
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update transaction in PHP database' };
+    }
+
+    if (isCredit) {
+      setCreditTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t));
+    } else {
+      setDebitTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t));
+    }
 
     // Synchronize linked vault deposit status if this is a Company Wallet credit entry
     const finalType = updatedData.type || oldTxn.type;
@@ -436,18 +503,30 @@ export const ExpenseProvider = ({ children }) => {
     return { success: true };
   };
 
-  const deleteTransaction = (id) => {
+  const deleteTransaction = async (id) => {
     const oldTxn = transactions.find(t => t.id === id);
-    if (oldTxn && (oldTxn.type === 'Cash In' || oldTxn.type === 'Credit') && oldTxn.depositTo === 'Company Wallet') {
+    const isCredit = oldTxn && (oldTxn.type === 'Cash In' || oldTxn.type === 'Credit');
+    const res = isCredit
+      ? await apiService.deleteCredit(id)
+      : await apiService.deleteDebit(id);
+
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete transaction from PHP database' };
+    }
+
+    if (isCredit && oldTxn.depositTo === 'Company Wallet') {
       setVaultDeposits(prev => prev.filter(d => d.txnId !== id && !(d.userName === oldTxn.userName && parseFloat(d.amount) === parseFloat(oldTxn.amount))));
     }
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    apiService.deleteTransaction(id).catch(err => console.warn("PHP Sync warning:", err));
+    if (isCredit) {
+      setCreditTransactions(prev => prev.filter(t => t.id !== id));
+    } else {
+      setDebitTransactions(prev => prev.filter(t => t.id !== id));
+    }
     return { success: true };
   };
 
   // User CRUD
-  const addUser = (userData) => {
+  const addUser = async (userData) => {
     const newUser = {
       id: userData.id || `USR-${Math.floor(100 + Math.random() * 900)}`,
       name: userData.name,
@@ -457,17 +536,28 @@ export const ExpenseProvider = ({ children }) => {
       status: userData.status || 'Active',
       createdAt: new Date().toISOString().split('T')[0]
     };
-    setUsers(prev => [newUser, ...prev]);
-    apiService.addUser(newUser).catch(err => console.warn("PHP Sync warning:", err));
-    return newUser;
+
+    const res = await apiService.addUser(newUser);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to add user to PHP database' };
+    }
+
+    const createdUser = res.user || newUser;
+    setUsers(prev => [createdUser, ...prev]);
+    return { success: true, user: createdUser };
   };
 
-  const updateUser = (originalId, updatedData) => {
+  const updateUser = async (originalId, updatedData) => {
+    const res = await apiService.updateUser(originalId, updatedData);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update user in PHP database' };
+    }
+
     setUsers(prev => prev.map(u => (u.id === originalId ? { ...u, ...updatedData } : u)));
-    apiService.updateUser(originalId, updatedData).catch(err => console.warn("PHP Sync warning:", err));
+    return { success: true };
   };
 
-  const deleteUser = (id) => {
+  const deleteUser = async (id) => {
     const targetUser = users.find(u => u.id === id);
     if (!targetUser) return { success: false, message: 'User not found' };
 
@@ -477,35 +567,49 @@ export const ExpenseProvider = ({ children }) => {
 
     if (hasAllocations || hasTransactions) {
       // Soft-delete / archive to preserve historical accounting & audit trail
+      const res = await apiService.updateUser(id, { status: 'Inactive' });
+      if (!res || res.success === false) {
+        return { success: false, message: res?.error || res?.message || 'Database error: Failed to deactivate user in PHP database' };
+      }
       setUsers(prev => prev.map(u => (u.id === id ? { ...u, status: 'Inactive', isDeleted: true } : u)));
-      apiService.updateUser(id, { status: 'Inactive' }).catch(err => console.warn("PHP Sync warning:", err));
     } else {
       // Permanently remove if user has no financial activity
+      const res = await apiService.deleteUser(id);
+      if (!res || res.success === false) {
+        return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete user from PHP database' };
+      }
       setUsers(prev => prev.filter(u => u.id !== id));
-      apiService.deleteUser(id).catch(err => console.warn("PHP Sync warning:", err));
     }
     return { success: true };
   };
 
-  const toggleUserStatus = (id) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === id) {
-        const nextStatus = u.status === 'Active' ? 'Suspended' : 'Active';
-        apiService.updateUser(id, { status: nextStatus }).catch(err => console.warn("PHP Sync warning:", err));
-        return { ...u, status: nextStatus };
-      }
-      return u;
-    }));
+  const toggleUserStatus = async (id) => {
+    const targetUser = users.find(u => u.id === id);
+    if (!targetUser) return { success: false, message: 'User not found' };
+    const nextStatus = targetUser.status === 'Active' ? 'Suspended' : 'Active';
+
+    const res = await apiService.updateUser(id, { status: nextStatus });
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update user status in PHP database' };
+    }
+
+    setUsers(prev => prev.map(u => (u.id === id ? { ...u, status: nextStatus } : u)));
+    return { success: true };
   };
 
   // Settings
-  const updateSettings = (newSettings) => {
+  const updateSettings = async (newSettings) => {
+    const res = await apiService.updateSettings(newSettings);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update settings in PHP database' };
+    }
+
     setSettings(prev => ({ ...prev, ...newSettings }));
-    apiService.updateSettings(newSettings).catch(err => console.warn("PHP Sync warning:", err));
+    return { success: true };
   };
 
   // Task Management CRUD
-  const addTask = (taskData) => {
+  const addTask = async (taskData) => {
     const newTask = {
       id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: new Date().toISOString().split('T')[0],
@@ -515,50 +619,54 @@ export const ExpenseProvider = ({ children }) => {
       assignedTo: taskData.assignedTo || 'Raj',
       ...taskData
     };
-    setTasks(prev => [newTask, ...prev]);
-    apiService.addTask(newTask).catch(err => console.warn("PHP Sync warning:", err));
-    return newTask;
+
+    const res = await apiService.addTask(newTask);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save task to PHP database' };
+    }
+
+    const createdTask = res.task || newTask;
+    setTasks(prev => [createdTask, ...prev]);
+    return { success: true, task: createdTask };
   };
 
-  const updateTask = (id, updatedData) => {
+  const updateTask = async (id, updatedData) => {
+    const res = await apiService.updateTask(id, updatedData);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update task in PHP database' };
+    }
+
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData } : t)));
-    apiService.updateTask(id, updatedData).catch(err => console.warn("PHP Sync warning:", err));
+    return { success: true };
   };
 
-  const updateTaskStatus = (id, newStatus) => {
+  const updateTaskStatus = async (id, newStatus) => {
+    const res = await apiService.updateTask(id, { status: newStatus });
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update task status in PHP database' };
+    }
+
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, status: newStatus } : t)));
-    apiService.updateTask(id, { status: newStatus }).catch(err => console.warn("PHP Sync warning:", err));
+    return { success: true };
   };
 
-  const deleteTask = (id) => {
+  const deleteTask = async (id) => {
+    const res = await apiService.deleteTask(id);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete task from PHP database' };
+    }
+
     setTasks(prev => prev.filter(t => t.id !== id));
-    apiService.deleteTask(id).catch(err => console.warn("PHP Sync warning:", err));
+    return { success: true };
   };
 
-  const resetToDefaultData = () => {
-    setVaultDeposits(initialVaultDeposits);
-    setUserAllocations({});
-    setAllocationsHistory([]);
-    setTransactions([]);
-    setUsers(initialUsers);
-    setSettings(initialSettings);
-    setTasks(initialTasks);
-    localStorage.removeItem('shukan_vault_deposits_v1');
-    localStorage.removeItem('shukan_user_allocations_v1');
-    localStorage.removeItem('shukan_allocations_history_v1');
-    localStorage.removeItem('shukan_expense_transactions_v3');
-    localStorage.removeItem('shukan_expense_users_v2');
-    localStorage.removeItem('shukan_expense_settings');
-    localStorage.removeItem('shukan_tasks_v1');
-  };
+  const totalCashIn = (creditTransactions || [])
+    .filter(t => (t.status || 'Done') === 'Done')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-  const totalCashIn = transactions
-    .filter(t => t.type === 'Cash In')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
-
-  const totalCashOut = transactions
-    .filter(t => t.type === 'Cash Out' && t.status !== 'Due')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalCashOut = (debitTransactions || [])
+    .filter(t => (t.status || 'Done') === 'Done')
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
   const netBalance = totalCashIn - totalCashOut;
 
@@ -572,6 +680,8 @@ export const ExpenseProvider = ({ children }) => {
         userAllocations,
         allocationsHistory,
         transactions,
+        debitTransactions,
+        creditTransactions,
         users,
         settings,
         tasks,
@@ -579,6 +689,9 @@ export const ExpenseProvider = ({ children }) => {
         totalCashIn,
         totalCashOut,
         netBalance,
+        isDbConnected,
+        dbError,
+        refetchData: loadBackendData,
         addVaultDeposit,
         updateVaultDeposit,
         deleteVaultDeposit,
@@ -594,7 +707,6 @@ export const ExpenseProvider = ({ children }) => {
         deleteUser,
         toggleUserStatus,
         updateSettings,
-        resetToDefaultData,
         addTask,
         updateTask,
         updateTaskStatus,
