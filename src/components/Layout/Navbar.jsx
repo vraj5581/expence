@@ -76,12 +76,9 @@ const Navbar = ({ onToggleSidebar }) => {
 
   return (
     <header className="sticky top-0 z-30 h-20 bg-white/90 border-b border-slate-200/80 backdrop-blur-md px-4 lg:px-8 flex items-center justify-between shadow-xs print:hidden">
-      {/* Left section: Title & Live Sync Status */}
+      {/* Left section: Live Sync Status */}
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-2.5">
-          <div>
-            <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{effectiveRole} View</span>
-          </div>
           {/* Live Sync Badge */}
           <div
             onClick={() => refetchData && refetchData()}

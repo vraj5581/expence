@@ -295,26 +295,27 @@ const CreditDebit = ({ isMyView = false }) => {
   }, [filteredCreditTxns]);
 
   // Active filter checks
-  const hasActiveDebitFilters = Boolean(debitSearch || debitStatus !== 'All' || selectedUser !== 'All' || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
-  const hasActiveCreditFilters = Boolean(creditSearch || creditDepositTo !== 'All' || creditStatus !== 'All' || selectedUser !== 'All' || creditStartDate || creditEndDate || creditMinAmt || creditMaxAmt);
+  const isUserFilterActive = !isMyView && selectedUser !== 'All';
+  const hasActiveDebitFilters = Boolean(debitSearch || debitStatus !== 'All' || isUserFilterActive || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
+  const hasActiveCreditFilters = Boolean(creditSearch || creditDepositTo !== 'All' || creditStatus !== 'All' || isUserFilterActive || creditStartDate || creditEndDate || creditMinAmt || creditMaxAmt);
   const hasAnyActiveFilters = Boolean(hasActiveDebitFilters || hasActiveCreditFilters);
 
   const debitTableFooterLabel = useMemo(() => {
     if (debitStatus === 'Due') return 'TOTAL DUE DEBIT:';
     if (debitStatus === 'Done') return 'TOTAL DONE DEBIT:';
-    if (selectedUser !== 'All') return `TOTAL ${selectedUser.toUpperCase()} DEBIT:`;
+    if (!isMyView && selectedUser !== 'All') return `TOTAL ${selectedUser.toUpperCase()} DEBIT:`;
     if (hasActiveDebitFilters) return 'TOTAL FILTERED DEBIT:';
     return 'TOTAL DEBIT:';
-  }, [debitStatus, selectedUser, hasActiveDebitFilters]);
+  }, [debitStatus, selectedUser, isMyView, hasActiveDebitFilters]);
 
   const creditTableFooterLabel = useMemo(() => {
     if (creditStatus === 'Due') return 'TOTAL DUE CREDIT:';
     if (creditStatus === 'Done') return 'TOTAL DONE CREDIT:';
     if (creditDepositTo !== 'All') return `TOTAL ${creditDepositTo.toUpperCase()} CREDIT:`;
-    if (selectedUser !== 'All') return `TOTAL ${selectedUser.toUpperCase()} CREDIT:`;
+    if (!isMyView && selectedUser !== 'All') return `TOTAL ${selectedUser.toUpperCase()} CREDIT:`;
     if (hasActiveCreditFilters) return 'TOTAL FILTERED CREDIT:';
     return 'TOTAL CREDIT:';
-  }, [creditStatus, creditDepositTo, selectedUser, hasActiveCreditFilters]);
+  }, [creditStatus, creditDepositTo, selectedUser, isMyView, hasActiveCreditFilters]);
 
   // Dynamic Debit Display Metrics (reflects filters if active)
   const displayDebitTitle = useMemo(() => {
@@ -830,7 +831,7 @@ const CreditDebit = ({ isMyView = false }) => {
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-600 animate-pulse"></span>
                   <span>Active Debit Filters:</span>
                 </div>
-                {selectedUser !== 'All' && (
+                {!isMyView && selectedUser !== 'All' && (
                   <span className="px-2.5 py-1 rounded-lg bg-[#002B49] text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     User: {selectedUser}
                   </span>
@@ -1159,7 +1160,7 @@ const CreditDebit = ({ isMyView = false }) => {
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-600 animate-pulse"></span>
                   <span>Active Credit Filters:</span>
                 </div>
-                {selectedUser !== 'All' && (
+                {!isMyView && selectedUser !== 'All' && (
                   <span className="px-2.5 py-1 rounded-lg bg-[#002B49] text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     User: {selectedUser}
                   </span>
