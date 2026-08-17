@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 const Navbar = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
   const { user, logout, changePassword } = useAuth();
-  const { adminVaultBalance, settings, addMoneyToAdminVault, getUserStats, users } = useExpense();
+  const { adminVaultBalance, settings, addMoneyToAdminVault, getUserStats, users, isSyncing, refetchData } = useExpense();
 
   const currentUserInDb = users?.find(u => u.id === user?.id || u.name?.toLowerCase() === user?.name?.toLowerCase());
   const effectiveRole = currentUserInDb?.role || user?.role || 'Staff';
@@ -76,11 +76,22 @@ const Navbar = ({ onToggleSidebar }) => {
 
   return (
     <header className="sticky top-0 z-30 h-20 bg-white/90 border-b border-slate-200/80 backdrop-blur-md px-4 lg:px-8 flex items-center justify-between shadow-xs print:hidden">
-      {/* Left section: Title */}
-      <div className="flex items-center space-x-4">
-        <div>
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Portal Mode: </span>
-          <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{effectiveRole} View</span>
+      {/* Left section: Title & Live Sync Status */}
+      <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2.5">
+          <div>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Portal Mode: </span>
+            <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{effectiveRole} View</span>
+          </div>
+          {/* Live Sync Badge */}
+          <div
+            onClick={() => refetchData && refetchData()}
+            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-extrabold shadow-2xs cursor-pointer hover:bg-emerald-100 transition shrink-0"
+            title="Click to manually refresh database state"
+          >
+            <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isSyncing ? 'animate-ping' : 'animate-pulse'}`}></span>
+            <span>{isSyncing ? 'Syncing...' : 'Live Sync'}</span>
+          </div>
         </div>
       </div>
 

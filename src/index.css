@@ -75,14 +75,15 @@
   box-shadow: 0 0 0 3px rgba(198, 146, 85, 0.2);
 }
 
-/* Print Styling Rules for High-Quality PDF & Paper Reports */
+/* Pure Black & White Professional A4 Print Report Styles */
 @media print {
   @page {
-    size: auto;
-    margin: 10mm 10mm 10mm 10mm;
+    size: A4 portrait;
+    margin: 10mm 9mm 12mm 9mm;
   }
 
-  html, body, #root {
+  /* Universal Root Layout Reset for Clean Paper Rendering */
+  html, body, #root, main, #root > div, .screen-dashboard {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
@@ -90,79 +91,363 @@
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: visible !important;
+    float: none !important;
+    position: static !important;
+    box-sizing: border-box !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide navigation, headers, filter bars, action buttons */
-  nav, header, aside, .no-print, button, input, select, .print\:hidden {
-    display: none !important;
-  }
-
-  /* Show desktop tables and clean print containers */
-  .hidden.md\:block {
-    display: block !important;
-  }
-  
-  .block.md\:hidden {
-    display: none !important;
-  }
-
-  .print\:block {
+  /* Reset layout display modes on root wrappers */
+  html, body, #root, main, #root > div {
     display: block !important;
   }
 
-  /* Reset container margins & shadows for print */
-  main {
-    padding: 0 !important;
+  /* Completely hide screen dashboard UI, sidebar, navbar, bottom nav, modals in print */
+  .screen-dashboard,
+  aside, nav, header, footer, .no-print, button, input, select, .print\:hidden {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    visibility: hidden !important;
+    overflow: hidden !important;
     margin: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
+    padding: 0 !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
   }
 
-  .glass-card, .glass-panel, div {
-    box-shadow: none !important;
+  /* Reset layout padding from sidebar */
+  .lg\:pl-64 {
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* Display print report container */
+  .print-ledger-report {
+    display: block !important;
+    width: 100% !important;
+    max-width: 192mm !important;
+    margin: 0 auto !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    position: relative !important;
     overflow: visible !important;
   }
 
-  /* Table formatting for crisp paper printing */
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    font-size: 10pt !important;
-    color: #000000 !important;
-    background-color: #ffffff !important;
-  }
-
-  table th, table td {
-    border: 1px solid #334155 !important;
-    padding: 6px 8px !important;
+  /* Strict B&W resets for print report contents */
+  .print-ledger-report * {
     color: #000000 !important;
     background: #ffffff !important;
+    background-color: #ffffff !important;
+    border-color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    font-family: Arial, Helvetica, sans-serif !important;
   }
 
-  thead {
-    display: table-header-group !important;
-  }
-
-  thead th {
-    background-color: #f1f5f9 !important;
-    font-weight: 800 !important;
-    color: #000000 !important;
-  }
-
-  tr, tr.bg-amber-50\/90, tr[class*="bg-amber"] {
+  /* Print Header & Section titles */
+  .print-header,
+  .print-section-header {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
     page-break-inside: avoid !important;
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    border-left: none !important;
   }
 
-  tfoot td {
+  /* Credit Summary Print Grid (3 Columns, Equal Height) */
+  .credit-summary-print-wrapper {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 4mm !important;
+    width: 100% !important;
+  }
+
+  .credit-summary-print-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 4mm !important;
+    width: 100% !important;
+    align-items: stretch !important;
+    margin: 3mm 0 4mm 0 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Page Break Control Rules for Printing */
+  .print-page-break-before {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  /* Debit Summary Card Container */
+  .print-debit-card-wrapper {
+    display: block !important;
+    width: 100% !important;
+    margin: 3mm 0 4mm 0 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Print Card Component Styling */
+  .print-card {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    border: 1px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 3mm !important;
+    height: 100% !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-card-debit {
+    width: 70mm !important;
+    max-width: 100% !important;
+  }
+
+  .card-title {
+    font-weight: 700 !important;
+    font-size: 8.5pt !important;
+    text-align: left !important;
+    text-transform: uppercase !important;
+    margin-bottom: 2mm !important;
+    padding-bottom: 1.5mm !important;
+    border-bottom: 1px solid #000000 !important;
+    color: #000000 !important;
+  }
+
+  .card-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.5mm !important;
+    flex: 1 1 auto !important;
+  }
+
+  .card-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 3mm !important;
+    font-size: 8pt !important;
+    color: #000000 !important;
+  }
+
+  .card-label {
+    text-align: left !important;
+    flex: 1 1 auto !important;
+    color: #000000 !important;
+  }
+
+  .card-value {
+    text-align: right !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    font-weight: 600 !important;
+    color: #000000 !important;
+  }
+
+  .card-total {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 3mm !important;
+    margin-top: 2mm !important;
+    padding-top: 1.5mm !important;
+    border-top: 1px solid #000000 !important;
+    font-weight: 700 !important;
+    font-size: 8.5pt !important;
+    color: #000000 !important;
+  }
+
+  /* Credit & Debit Print Tables */
+  .credit-print-table,
+  .debit-print-table,
+  .print-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 0 12px 0 !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    box-sizing: border-box !important;
+  }
+
+  .credit-print-table thead,
+  .debit-print-table thead,
+  .print-table thead {
+    display: table-header-group !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .credit-print-table tbody,
+  .debit-print-table tbody,
+  .print-table tbody {
+    display: table-row-group !important;
+  }
+
+  .credit-print-table tr,
+  .debit-print-table tr,
+  .print-table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Prevent orphan total row: keep last data rows and total row together */
+  .credit-print-table tbody tr:nth-last-child(2),
+  .credit-print-table tbody tr:nth-last-child(3),
+  .debit-print-table tbody tr:nth-last-child(2),
+  .debit-print-table tbody tr:nth-last-child(3),
+  .print-table tbody tr:nth-last-child(2),
+  .print-table tbody tr:nth-last-child(3) {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .credit-print-table th,
+  .credit-print-table td,
+  .debit-print-table th,
+  .debit-print-table td,
+  .print-table th,
+  .print-table td {
+    border: 1px solid #000000 !important;
+    padding: 1.5mm 1.5mm !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+    vertical-align: middle !important;
+    box-sizing: border-box !important;
+  }
+
+  .credit-print-table th,
+  .debit-print-table th,
+  .print-table th {
+    font-weight: 700 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    white-space: normal !important;
+    line-height: 1.15 !important;
+    padding: 2mm 1.5mm !important;
+    border: 1px solid #000000 !important;
+    border-bottom: 2px solid #000000 !important;
     background-color: #ffffff !important;
-    font-weight: 800 !important;
+    color: #000000 !important;
+  }
+
+  /* Specific column width selectors for Credit Table (8 columns) */
+  .credit-print-table th:nth-child(1), .credit-print-table td:nth-child(1) { width: 6% !important; }
+  .credit-print-table th:nth-child(2), .credit-print-table td:nth-child(2) { width: 10% !important; }
+  .credit-print-table th:nth-child(3), .credit-print-table td:nth-child(3) { width: 9% !important; }
+  .credit-print-table th:nth-child(4), .credit-print-table td:nth-child(4) { width: 12% !important; }
+  .credit-print-table th:nth-child(5), .credit-print-table td:nth-child(5) { width: 15% !important; }
+  .credit-print-table th:nth-child(6), .credit-print-table td:nth-child(6) { width: 28% !important; }
+  .credit-print-table th:nth-child(7), .credit-print-table td:nth-child(7) { width: 13% !important; }
+  .credit-print-table th:nth-child(8), .credit-print-table td:nth-child(8) { width: 7% !important; }
+
+  /* Specific column width selectors for Debit Table (7 columns) */
+  .debit-print-table th:nth-child(1), .debit-print-table td:nth-child(1) { width: 6% !important; }
+  .debit-print-table th:nth-child(2), .debit-print-table td:nth-child(2) { width: 11% !important; }
+  .debit-print-table th:nth-child(3), .debit-print-table td:nth-child(3) { width: 9% !important; }
+  .debit-print-table th:nth-child(4), .debit-print-table td:nth-child(4) { width: 13% !important; }
+  .debit-print-table th:nth-child(5), .debit-print-table td:nth-child(5) { width: 34% !important; }
+  .debit-print-table th:nth-child(6), .debit-print-table td:nth-child(6) { width: 18% !important; }
+  .debit-print-table th:nth-child(7), .debit-print-table td:nth-child(7) { width: 9% !important; }
+
+  /* Explicit Cell Classes & Alignments */
+  .sr-cell {
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .date-cell {
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .type-cell {
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .user-cell {
+    text-align: left !important;
+    white-space: nowrap !important;
+  }
+
+  .account-cell {
+    text-align: left !important;
+    white-space: nowrap !important;
+  }
+
+  .description-cell {
+    text-align: left !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+
+  .amount-cell {
+    text-align: right !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    font-weight: 600 !important;
+  }
+
+  .status-cell {
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  /* Total Rows in tables */
+  tr.print-total-row,
+  tr.credit-total-row,
+  tr.debit-total-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    width: 100% !important;
+  }
+
+  tr.print-total-row td,
+  tr.credit-total-row td,
+  tr.debit-total-row td {
+    background-color: #ffffff !important;
+    font-weight: bold !important;
     border-top: 2px solid #000000 !important;
+    border-bottom: 2px solid #000000 !important;
+    color: #000000 !important;
+    white-space: nowrap !important;
+  }
+
+  .total-label {
+    text-align: right !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    white-space: nowrap !important;
+  }
+
+  .total-amount {
+    text-align: right !important;
+    font-weight: bold !important;
+    white-space: nowrap !important;
+  }
+
+  .print-footer {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    font-size: 8pt !important;
+    color: #000000 !important;
   }
 
   /* Target specific report printing */
@@ -178,4 +463,3 @@
     display: none !important;
   }
 }
-

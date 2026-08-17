@@ -40,6 +40,9 @@ async function request(endpoint, options = {}) {
 }
 
 export const apiService = {
+  // Ultra-fast single-request bootstrap fetch
+  getBootstrapData: () => request('bootstrap.php', { method: 'GET' }),
+
   // Auth
   login: (credentials) => request('auth.php?action=login', { method: 'POST', body: credentials }),
   changePassword: (username, currentPassword, newPassword) =>

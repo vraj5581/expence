@@ -57,60 +57,69 @@ export const ExpenseProvider = ({ children }) => {
   const [tasks, setTasks] = useState([]);
   const [isDbConnected, setIsDbConnected] = useState(true);
   const [dbError, setDbError] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
-  // Fetch state from PHP backend database on mount
+  // Fetch state from PHP backend database (Ultra-fast single request)
   const loadBackendData = async () => {
+    setIsSyncing(true);
     try {
-      const [debitRes, creditRes, depRes, alcRes, userRes, setRes, taskRes] = await Promise.all([
-        apiService.getDebits(),
-        apiService.getCredits(),
-        apiService.getVaultDeposits(),
-        apiService.getAllocations(),
-        apiService.getUsers(),
-        apiService.getSettings(),
-        apiService.getTasks()
-      ]);
+      // 1. Try single-request bulk bootstrap API (1 HTTP request instead of 7)
+      const bootRes = await apiService.getBootstrapData();
+      if (bootRes && bootRes.success) {
+        if (Array.isArray(bootRes.debits)) setDebitTransactions(bootRes.debits);
+        if (Array.isArray(bootRes.credits)) setCreditTransactions(bootRes.credits);
+        if (Array.isArray(bootRes.vaultDeposits)) setVaultDeposits(bootRes.vaultDeposits);
+        if (Array.isArray(bootRes.allocationsHistory)) setAllocationsHistory(bootRes.allocationsHistory);
+        if (bootRes.userAllocations && typeof bootRes.userAllocations === 'object') setUserAllocations(bootRes.userAllocations);
+        if (Array.isArray(bootRes.users) && bootRes.users.length > 0) setUsers(bootRes.users);
+        if (bootRes.settings) setSettings(bootRes.settings);
+        if (Array.isArray(bootRes.tasks)) setTasks(bootRes.tasks);
 
-      let backendErr = null;
-
-      if (debitRes?.success && Array.isArray(debitRes.debits)) {
-        setDebitTransactions(debitRes.debits);
-      } else if (debitRes?.error) {
-        backendErr = debitRes.error;
-      }
-
-      if (creditRes?.success && Array.isArray(creditRes.credits)) {
-        setCreditTransactions(creditRes.credits);
-      }
-
-      if (depRes?.success && Array.isArray(depRes.vaultDeposits)) {
-        setVaultDeposits(depRes.vaultDeposits);
-      }
-      if (alcRes?.success) {
-        if (Array.isArray(alcRes.allocationsHistory)) setAllocationsHistory(alcRes.allocationsHistory);
-        if (alcRes.userAllocations && typeof alcRes.userAllocations === 'object') setUserAllocations(alcRes.userAllocations);
-      }
-      if (userRes?.success && Array.isArray(userRes.users) && userRes.users.length > 0) {
-        setUsers(userRes.users);
-      }
-      if (setRes?.success && setRes.settings) {
-        setSettings(setRes.settings);
-      }
-      if (taskRes?.success && Array.isArray(taskRes.tasks)) {
-        setTasks(taskRes.tasks);
-      }
-
-      if (backendErr) {
-        setIsDbConnected(false);
-        setDbError(backendErr);
-      } else {
         setIsDbConnected(true);
         setDbError(null);
+        setLastSyncedAt(new Date());
+      } else {
+        // Fallback to parallel requests if bootstrap endpoint is unavailable
+        const [debitRes, creditRes, depRes, alcRes, userRes, setRes, taskRes] = await Promise.all([
+          apiService.getDebits(),
+          apiService.getCredits(),
+          apiService.getVaultDeposits(),
+          apiService.getAllocations(),
+          apiService.getUsers(),
+          apiService.getSettings(),
+          apiService.getTasks()
+        ]);
+
+        let backendErr = null;
+        if (debitRes?.success && Array.isArray(debitRes.debits)) setDebitTransactions(debitRes.debits);
+        else if (debitRes?.error) backendErr = debitRes.error;
+
+        if (creditRes?.success && Array.isArray(creditRes.credits)) setCreditTransactions(creditRes.credits);
+        if (depRes?.success && Array.isArray(depRes.vaultDeposits)) setVaultDeposits(depRes.vaultDeposits);
+        if (alcRes?.success) {
+          if (Array.isArray(alcRes.allocationsHistory)) setAllocationsHistory(alcRes.allocationsHistory);
+          if (alcRes.userAllocations && typeof alcRes.userAllocations === 'object') setUserAllocations(alcRes.userAllocations);
+        }
+        if (userRes?.success && Array.isArray(userRes.users) && userRes.users.length > 0) setUsers(userRes.users);
+        if (setRes?.success && setRes.settings) setSettings(setRes.settings);
+        if (taskRes?.success && Array.isArray(taskRes.tasks)) setTasks(taskRes.tasks);
+
+        if (backendErr) {
+          setIsDbConnected(false);
+          setDbError(backendErr);
+        } else {
+          setIsDbConnected(true);
+          setDbError(null);
+        }
+        setLastSyncedAt(new Date());
       }
     } catch (err) {
-      console.warn("Failed to load initial data from PHP backend:", err);
+      console.warn("Failed to load backend data:", err);
       setIsDbConnected(false);
       setDbError(err.message || "Cannot connect to PHP Database");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -125,7 +134,33 @@ export const ExpenseProvider = ({ children }) => {
   }, [debitTransactions, creditTransactions]);
 
   useEffect(() => {
+    // Initial fetch
     loadBackendData();
+
+    // Auto update background polling every 5 seconds
+    const interval = setInterval(() => {
+      loadBackendData();
+    }, 5000);
+
+    // Instant update on tab focus or window visibility
+    const handleFocus = () => {
+      loadBackendData();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadBackendData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Effective Vault Deposits = Direct Manual Deposits + Completed Company Wallet Credit Transactions (No Duplicates!)
@@ -363,8 +398,10 @@ export const ExpenseProvider = ({ children }) => {
 
     const totalCashAvailable = allocated + cashInReceived;
     const remainingNet = totalCashAvailable - spent;
+    const netBalanceAfterDue = remainingNet - dueSpent;
+
     const remaining = Math.max(0, remainingNet);
-    const needFromCompany = dueSpent + (remainingNet < 0 ? Math.abs(remainingNet) : 0);
+    const needFromCompany = netBalanceAfterDue < 0 ? Math.abs(netBalanceAfterDue) : 0;
 
     return {
       allocated,
@@ -691,6 +728,8 @@ export const ExpenseProvider = ({ children }) => {
         netBalance,
         isDbConnected,
         dbError,
+        isSyncing,
+        lastSyncedAt,
         refetchData: loadBackendData,
         addVaultDeposit,
         updateVaultDeposit,

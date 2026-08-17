@@ -181,13 +181,25 @@ const CreditDebit = ({ isMyView = false }) => {
     });
   }, [rawCreditTxns, selectedUser, creditSearch, creditDepositTo, creditStatus, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
 
-  // Debit Summary Stats (Always calculated from raw debit transactions for 100% accurate totals)
+  // Base Debit Transactions filtered by Selected User
+  const userDebitTxns = useMemo(() => {
+    if (selectedUser === 'All') return rawDebitTxns;
+    return rawDebitTxns.filter((t) => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
+  }, [rawDebitTxns, selectedUser]);
+
+  // Base Credit Transactions filtered by Selected User
+  const userCreditTxns = useMemo(() => {
+    if (selectedUser === 'All') return rawCreditTxns;
+    return rawCreditTxns.filter((t) => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
+  }, [rawCreditTxns, selectedUser]);
+
+  // Debit Summary Stats (User-wise when user selected, or global when All users selected)
   const debitSummary = useMemo(() => {
     let total = 0;
     let doneTotal = 0;
     let dueTotal = 0;
 
-    rawDebitTxns.forEach(t => {
+    userDebitTxns.forEach(t => {
       const amt = parseFloat(t.amount) || 0;
       const isDone = (t.status || 'Done') === 'Done';
       total += amt;
@@ -196,9 +208,9 @@ const CreditDebit = ({ isMyView = false }) => {
     });
 
     return { total, doneTotal, dueTotal };
-  }, [rawDebitTxns]);
+  }, [userDebitTxns]);
 
-  // Credit Summary Stats (Always calculated from raw credit transactions for 100% accurate totals)
+  // Credit Summary Stats (User-wise when user selected, or global when All users selected)
   const creditSummary = useMemo(() => {
     let total = 0;
     let doneTotal = 0;
@@ -211,7 +223,7 @@ const CreditDebit = ({ isMyView = false }) => {
     let walletDone = 0;
     let walletDue = 0;
 
-    rawCreditTxns.forEach(t => {
+    userCreditTxns.forEach(t => {
       const amt = parseFloat(t.amount) || 0;
       const isDone = (t.status || 'Done') === 'Done';
       total += amt;
@@ -230,7 +242,7 @@ const CreditDebit = ({ isMyView = false }) => {
     });
 
     return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue };
-  }, [rawCreditTxns]);
+  }, [userCreditTxns]);
 
   // Filtered Debit Total for Table Footer (exact sum of displayed filtered rows)
   const filteredDebitTotal = useMemo(() => {
@@ -300,6 +312,70 @@ const CreditDebit = ({ isMyView = false }) => {
   const displayCreditDue = useMemo(() => {
     return filteredCreditTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [filteredCreditTxns]);
+
+  // Comprehensive Print Filter Labels (Shows active User, Status, Date range, Account, Search)
+  const debitFilterSummaryText = useMemo(() => {
+    const parts = [];
+
+    if (selectedUser !== 'All') {
+      parts.push(`USER: ${selectedUser.toUpperCase()}`);
+    }
+
+    if (debitStatus !== 'All') {
+      parts.push(`STATUS: ${debitStatus.toUpperCase()}`);
+    }
+
+    if (debitStartDate || debitEndDate) {
+      if (debitStartDate && debitEndDate) {
+        parts.push(`DATE: ${formatDate(debitStartDate)} - ${formatDate(debitEndDate)}`);
+      } else if (debitStartDate) {
+        parts.push(`FROM: ${formatDate(debitStartDate)}`);
+      } else if (debitEndDate) {
+        parts.push(`TO: ${formatDate(debitEndDate)}`);
+      }
+    }
+
+    if (debitSearch.trim()) {
+      parts.push(`SEARCH: "${debitSearch.trim()}"`);
+    }
+
+    if (parts.length === 0) return 'ALL';
+    return parts.join(' | ');
+  }, [selectedUser, debitStatus, debitStartDate, debitEndDate, debitSearch]);
+
+  const creditFilterSummaryText = useMemo(() => {
+    const parts = [];
+
+    if (selectedUser !== 'All') {
+      parts.push(`USER: ${selectedUser.toUpperCase()}`);
+    }
+
+    if (creditDepositTo !== 'All') {
+      const acc = creditDepositTo === 'Company Wallet' ? 'CO. WALLET' : 'MY HAND';
+      parts.push(`ACCOUNT: ${acc}`);
+    }
+
+    if (creditStatus !== 'All') {
+      parts.push(`STATUS: ${creditStatus.toUpperCase()}`);
+    }
+
+    if (creditStartDate || creditEndDate) {
+      if (creditStartDate && creditEndDate) {
+        parts.push(`DATE: ${formatDate(creditStartDate)} - ${formatDate(creditEndDate)}`);
+      } else if (creditStartDate) {
+        parts.push(`FROM: ${formatDate(creditStartDate)}`);
+      } else if (creditEndDate) {
+        parts.push(`TO: ${formatDate(creditEndDate)}`);
+      }
+    }
+
+    if (creditSearch.trim()) {
+      parts.push(`SEARCH: "${creditSearch.trim()}"`);
+    }
+
+    if (parts.length === 0) return 'ALL';
+    return parts.join(' | ');
+  }, [selectedUser, creditDepositTo, creditStatus, creditStartDate, creditEndDate, creditSearch]);
 
   const resetDebitFilters = () => {
     setDebitSearch('');
@@ -517,21 +593,9 @@ const CreditDebit = ({ isMyView = false }) => {
   // Dedicated Print Handlers
 
   return (
-    <div className="space-y-6 print:space-y-4 print:bg-white print:text-black">
-      {/* High-Contrast Black & White Print Header */}
-      <div className="hidden print:block text-center border-b-2 border-black pb-3 mb-4">
-        <h1 className="text-2xl font-black uppercase text-black tracking-wider">SHUKAN PACKAGING</h1>
-        <h2 className="text-sm font-bold text-black uppercase mt-1">
-          {selectedUser !== 'All' ? `${selectedUser} - ` : ''}
-          {printTarget === 'debit' ? 'Debit Statement Audit' : printTarget === 'credit' ? 'Credit Statement Audit' : 'Debit & Credit Audit Ledger'}
-        </h2>
-        <div className="text-xs font-semibold text-black mt-1 flex items-center justify-center space-x-3">
-          <span>Date Printed: {formatDate(new Date())}</span>
-          {selectedUser !== 'All' && <span>| User: {selectedUser}</span>}
-          {printTarget === 'debit' && debitStatus !== 'All' && <span>| Status: {debitStatus}</span>}
-          {printTarget === 'credit' && creditStatus !== 'All' && <span>| Status: {creditStatus}</span>}
-        </div>
-      </div>
+    <>
+      {/* 🖥️ SCREEN DASHBOARD VIEW (Hidden in Print Mode) */}
+      <div className="space-y-6 screen-dashboard print:hidden">
 
       {/* Page Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
@@ -646,23 +710,23 @@ const CreditDebit = ({ isMyView = false }) => {
       {/* 🟠 SECTION 1: DEBIT TRANSACTIONS TABLE & FILTERS (FIRST)  */}
       {/* ======================================================== */}
       {(activeTab === 'all' || activeTab === 'debit' || printTarget === 'all' || printTarget === 'debit') && (
-        <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-rose-50/60 border border-rose-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent ${activeTab !== 'all' && activeTab !== 'debit' ? 'hidden print:block' : ''} ${printTarget === 'credit' ? 'print:hidden' : ''}`}>
+        <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-rose-50/60 border border-rose-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent print:space-y-0 print:mb-4 ${activeTab !== 'all' && activeTab !== 'debit' ? 'hidden print:block' : ''} ${printTarget === 'credit' ? 'print:hidden' : ''}`}>
           {/* Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-200/80 print:border-b-2 print:border-black pb-3 print:pb-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-200/80 print:border-b-2 print:border-black pb-3 print:pb-1 print:mb-1.5 print-section-header">
             <div className="flex items-center space-x-2.5 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-800 border border-rose-200 flex items-center justify-center font-black text-sm shrink-0 print:hidden">
                 🧾
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
-                  <h2 className="text-sm sm:text-base font-extrabold text-rose-950 print:text-lg print:text-black print:font-black leading-tight">
-                    Debit Transactions <span className="text-rose-900/80 font-bold text-xs sm:text-sm print:text-black print:font-bold">(Cash Out)</span>
+                  <h2 className="text-sm sm:text-base font-extrabold text-rose-950 print:text-sm print:text-black print:font-black leading-tight uppercase">
+                    Debit Transactions <span className="text-rose-900/80 font-bold text-xs sm:text-sm print:text-black print:font-semibold print:normal-case">(Cash Out)</span>
                   </h2>
-                  <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-semibold">
-                    {filteredDebitTxns.length} Entries
+                  <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold">
+                    {filteredDebitTxns.length} Entries • Total Debit: {settings.currency}{(filteredDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                <p className="text-[10px] sm:text-[11px] text-rose-800/80 font-medium print:text-black print:font-semibold">Expenses and payments made</p>
+                <p className="text-[10px] sm:text-[11px] text-rose-800/80 font-medium print:text-black print:font-medium">Expenses and payments made</p>
               </div>
             </div>
 
@@ -745,71 +809,45 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
           )}
 
-          {/* Debit Summary Card */}
-          <div className="pt-0.5 print:pt-0.5">
-            <div
-              onClick={() => setDebitStatus('Done')}
-              className={`p-2 sm:p-2.5 rounded-xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-md w-full sm:w-fit sm:min-w-[220px] max-w-xs print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                debitStatus === 'Done' ? 'border-rose-700 ring-2 ring-rose-500/20' : 'border-rose-200/90'
-              }`}
-              title="Click middle to filter Done Debit entries"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] sm:text-[11px] font-black uppercase text-rose-950 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide truncate">TOTAL DONE DEBIT</span>
-                <div className="flex items-center space-x-1">
-                  {hasActiveDebitFilters && (
-                    <span
-                      onClick={(e) => { e.stopPropagation(); resetDebitFilters(); }}
-                      className="text-[9px] font-extrabold text-rose-600 hover:underline print:hidden"
-                    >
-                      Show All ✕
-                    </span>
-                  )}
-                  <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-md bg-rose-100 text-rose-800 flex items-center justify-center text-[10px] sm:text-xs font-black print:hidden">
-                    🧾
+          {/* Debit Summary Card (Table Style matching Dashboard) */}
+          <div className="pt-0.5 grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-4 print:hidden">
+            <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
+              <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
+                <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold text-[9px] sm:text-xs shrink-0">
+                    ⬆️
                   </div>
+                  <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Debit Summary</h3>
                 </div>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 uppercase shrink-0">Outflow</span>
               </div>
-              <div>
-                <div className="text-sm sm:text-lg font-black text-rose-900 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight my-0.5">
-                  {settings.currency}{displayDebitDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+              <div className="divide-y divide-rose-200/50 text-[9.5px] sm:text-xs">
+                <div
+                  onClick={() => setDebitStatus('Done')}
+                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0 ${debitStatus === 'Done' ? 'bg-rose-100/80 font-bold' : ''}`}
+                  title="Click to filter Paid Done Debit entries"
+                >
+                  <span className="text-rose-800 font-semibold truncate mr-1">Done Debit</span>
+                  <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{displayDebitDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
 
-                {/* Web View Interactive Pill Badges */}
-                <div className="flex items-center gap-1 mt-1 text-[8px] sm:text-[10px] font-extrabold flex-wrap print:hidden">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setDebitStatus('All'); }}
-                    className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                      debitStatus === 'All'
-                        ? 'bg-rose-900 text-white border-rose-900 shadow-2xs'
-                        : 'bg-rose-50 text-rose-900 border-rose-200 hover:bg-rose-100'
-                    }`}
-                    title="Click to show all debit transactions"
-                  >
-                    <span>Total:</span>
-                    <span>{settings.currency}{displayDebitTotal.toLocaleString('en-IN')}</span>
-                  </button>
-                  {displayDebitDue > 0 && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setDebitStatus(debitStatus === 'Due' ? 'All' : 'Due'); }}
-                      className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                        debitStatus === 'Due'
-                          ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                          : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
-                      }`}
-                      title="Click to filter Due expenses"
-                    >
-                      <span>Due:</span>
-                      <span>{settings.currency}{displayDebitDue.toLocaleString('en-IN')}</span>
-                    </button>
-                  )}
+                <div
+                  onClick={() => setDebitStatus('Due')}
+                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0 ${debitStatus === 'Due' ? 'bg-rose-100/80 font-bold' : ''}`}
+                  title="Click to filter Unpaid Due Debit entries"
+                >
+                  <span className="text-rose-800 font-semibold truncate mr-1">Due Debit</span>
+                  <span className="font-extrabold text-rose-900 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{displayDebitDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
 
-                {/* Print View Clean Text Line */}
-                <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                  Total: {settings.currency}{displayDebitTotal.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayDebitDue.toLocaleString('en-IN')}
+                <div
+                  onClick={() => setDebitStatus('All')}
+                  className={`pt-1 flex items-center justify-between font-black text-rose-950 cursor-pointer hover:bg-rose-100/70 px-0.5 sm:px-1 rounded-md transition min-w-0 ${debitStatus === 'All' ? 'bg-rose-100/80' : ''}`}
+                  title="Click to filter All Debit entries"
+                >
+                  <span className="truncate mr-1">Total Debit</span>
+                  <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{displayDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -871,19 +909,6 @@ const CreditDebit = ({ isMyView = false }) => {
                           );
                         })}
                       </tbody>
-                      {filteredDebitTxns.length > 0 && (
-                        <tfoot className="bg-rose-50/90 font-bold text-xs text-rose-950 border-t-2 border-rose-200 sticky bottom-0 z-10 shadow-xs">
-                          <tr>
-                            <td colSpan="2" className="py-2.5 px-3 text-right uppercase tracking-wider font-extrabold text-[11px] text-rose-950">
-                              {debitTableFooterLabel}
-                            </td>
-                            <td className="py-2.5 px-2 text-right font-black text-rose-950 text-xs whitespace-nowrap">
-                              {settings.currency}{(filteredDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-2.5 px-1"></td>
-                          </tr>
-                        </tfoot>
-                      )}
                     </table>
                   </div>
                 </div>
@@ -891,89 +916,90 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
 
             {/* Desktop Table View & High-Contrast Print View */}
-            <div className="hidden md:block overflow-x-auto print:block bg-white rounded-2xl border border-rose-200/80 shadow-2xs">
+            <div className="hidden md:block overflow-x-auto print:block bg-white rounded-2xl border border-rose-200/80 shadow-2xs print:border-none print:shadow-none print:rounded-none print:overflow-visible">
               <table className="w-full text-left text-sm text-slate-700 print:text-black print:text-xs border-collapse">
                 <thead className="text-xs uppercase bg-rose-100/70 text-rose-950 border-b border-rose-200 print:bg-slate-100 print:text-black print:border-b-2 print:border-black">
                   <tr>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Sr. No.</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Date</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Type</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">User Name</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Description / Notes</th>
-                    <th className="py-3 px-4 font-bold text-right print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Amount</th>
-                    <th className="py-3 px-4 font-bold text-center print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Status</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[6%]">Sr. No.</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[12%]">Date</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[9%]">Type</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[16%]">User Name</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-auto">Description / Notes</th>
+                    <th className="py-3 px-4 font-bold text-right print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[16%]">Amount</th>
+                    <th className="py-3 px-4 font-bold text-center print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[10%]">Status</th>
                     <th className="py-3 px-4 font-bold text-center print:hidden">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 print:divide-y-0">
                   {filteredDebitTxns.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-slate-300">
+                      <td colSpan="8" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-black">
                         No debit transactions match the criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredDebitTxns.map((t, index) => {
-                      const isDone = (t.status || 'Done') === 'Done';
-                      return (
-                        <tr key={t.id || index} className="hover:bg-rose-50/40 transition print:bg-white">
-                          <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{index + 1}</td>
-                          <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{formatDate(t.date)}</td>
-                          <td className="py-3.5 px-4 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 text-rose-900 border border-rose-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-extrabold print:text-[11px]">
-                              Debit
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-rose-950 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{t.userName}</td>
-                          <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:max-w-none print:whitespace-normal print:break-words">{t.description || '-'}</td>
-                          <td className="py-3.5 px-4 font-black text-right text-rose-950 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:font-black">
-                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
-                            <span className="hidden print:inline-block text-black font-extrabold text-[11px] uppercase print:border-none print:p-0">
-                              {t.status || 'Done'}
-                            </span>
-                            <select
-                              value={t.status || 'Done'}
-                              onChange={(e) => handleStatusChange(t, e.target.value)}
-                              className={`print:hidden text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
-                                isDone
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
-                              }`}
-                            >
-                              <option value="Done">Done</option>
-                              <option value="Due">Due</option>
-                            </select>
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:hidden">
-                            <div className="flex items-center justify-center space-x-1.5">
-                              <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700" title="Edit Entry">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                              </button>
-                              <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600" title="Delete Entry">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    <>
+                      {filteredDebitTxns.map((t, index) => {
+                        const isDone = (t.status || 'Done') === 'Done';
+                        return (
+                          <tr key={t.id || index} className="hover:bg-rose-50/40 transition print:bg-white">
+                            <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2 print:border print:border-black print:text-black text-center">{index + 1}</td>
+                            <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black">{formatDate(t.date)}</td>
+                            <td className="py-3.5 px-4 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black text-center">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 text-rose-900 border border-rose-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:text-xs">
+                                Debit
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 font-bold text-rose-950 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black">{t.userName}</td>
+                            <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2 print:border print:border-black print:text-black print:max-w-none print:whitespace-normal print:break-words">{t.description || '-'}</td>
+                            <td className="py-3.5 px-4 font-black text-right text-rose-950 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black print:font-bold">
+                              {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3.5 px-4 text-center whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black">
+                              <span className="hidden print:inline-block text-black font-bold text-xs uppercase print:border-none print:p-0">
+                                {t.status || 'Done'}
+                              </span>
+                              <select
+                                value={t.status || 'Done'}
+                                onChange={(e) => handleStatusChange(t, e.target.value)}
+                                className={`print:hidden text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
+                                  isDone
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                }`}
+                              >
+                                <option value="Done">Done</option>
+                                <option value="Due">Due</option>
+                              </select>
+                            </td>
+                            <td className="py-3.5 px-4 text-center whitespace-nowrap print:hidden">
+                              <div className="flex items-center justify-center space-x-1.5">
+                                <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700" title="Edit Entry">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                </button>
+                                <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600" title="Delete Entry">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* TOTAL DEBIT ROW — PLACED IN TBODY SO IT RENDERS ONLY ONCE DIRECTLY AFTER THE LAST ENTRY */}
+                      <tr className="bg-rose-100/90 font-black text-rose-950 border-t-2 border-b-2 border-rose-300 print-total-row">
+                        <td colSpan="5" className="py-3 px-4 text-right uppercase tracking-wider font-black text-xs print:py-1.5 print:px-2 print:border print:border-black print:font-black print:text-xs">
+                          {debitTableFooterLabel}
+                        </td>
+                        <td className="py-3 px-4 text-right font-black text-rose-950 text-sm print:py-1.5 print:px-2 print:border print:border-black print:text-black print:font-black print:text-xs whitespace-nowrap">
+                          {settings.currency}{(filteredDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 print:border print:border-black"></td>
+                        <td className="py-3 px-4 print:hidden"></td>
+                      </tr>
+                    </>
                   )}
                 </tbody>
-                {filteredDebitTxns.length > 0 && (
-                  <tfoot className="bg-rose-50/70 font-bold text-xs text-rose-950 border-t-2 border-rose-200 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
-                    <tr>
-                      <td colSpan="5" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black">
-                        {debitTableFooterLabel}
-                      </td>
-                      <td className="py-3 px-4 text-right font-black text-rose-950 text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black">
-                        {settings.currency}{filteredDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td colSpan="2" className="print:border print:border-black"></td>
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
           </div>
@@ -984,23 +1010,23 @@ const CreditDebit = ({ isMyView = false }) => {
       {/* 🟢 SECTION 2: CREDIT TRANSACTIONS TABLE & FILTERS (SECOND)*/}
       {/* ======================================================== */}
       {(activeTab === 'all' || activeTab === 'credit' || printTarget === 'all' || printTarget === 'credit') && (
-        <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-emerald-50/60 border border-emerald-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent ${activeTab !== 'all' && activeTab !== 'credit' ? 'hidden print:block' : ''} ${printTarget === 'debit' ? 'print:hidden' : ''}`}>
+        <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-emerald-50/60 border border-emerald-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent print:space-y-0 print:mb-4 ${activeTab !== 'all' && activeTab !== 'credit' ? 'hidden print:block' : ''} ${printTarget === 'debit' ? 'print:hidden' : ''}`}>
           {/* Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/80 print:border-b-2 print:border-black pb-3 print:pb-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/80 print:border-b-2 print:border-black pb-3 print:pb-1 print:mb-1.5 print-section-header">
             <div className="flex items-center space-x-2.5 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center justify-center font-black text-sm shrink-0 print:hidden">
                 💰
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
-                  <h2 className="text-sm sm:text-base font-extrabold text-emerald-950 print:text-lg print:text-black print:font-black leading-tight">
-                    Credit Transactions <span className="text-emerald-900/80 font-bold text-xs sm:text-sm print:text-black print:font-bold">(Cash In)</span>
+                  <h2 className="text-sm sm:text-base font-extrabold text-emerald-950 print:text-sm print:text-black print:font-black leading-tight uppercase">
+                    Credit Transactions <span className="text-emerald-900/80 font-bold text-xs sm:text-sm print:text-black print:font-semibold print:normal-case">(Cash In)</span>
                   </h2>
-                  <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-semibold">
-                    {filteredCreditTxns.length} Entries
+                  <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold">
+                    {filteredCreditTxns.length} Entries • Total Credit: {settings.currency}{(filteredCreditTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                <p className="text-[10px] sm:text-[11px] text-emerald-800/80 font-medium print:text-black print:font-semibold">Deposits to My Hand or Company Wallet</p>
+                <p className="text-[10px] sm:text-[11px] text-emerald-800/80 font-medium print:text-black print:font-medium">Deposits to My Hand or Company Wallet</p>
               </div>
             </div>
 
@@ -1088,173 +1114,130 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
           )}
 
-          {/* Credit Summary Cards (Print High-Contrast Black & White Compact) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2.5 pt-0.5 print:gap-1.5 print:pt-1">
-            {/* Total Credit Card */}
-            <div
-              onClick={() => { setCreditDepositTo('All'); setCreditStatus('Done'); }}
-              className={`p-2 sm:p-2.5 rounded-xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                creditDepositTo === 'All' && creditStatus === 'Done' ? 'border-emerald-600 ring-2 ring-emerald-500/15' : 'border-emerald-200/90'
-              }`}
-              title="Click middle to view Done Credit entries"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] sm:text-[11px] font-black uppercase text-emerald-950 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide truncate">TOTAL DONE CREDIT</span>
-                <div className="flex items-center space-x-1">
-                  {hasActiveCreditFilters && (
-                    <span
-                      onClick={(e) => { e.stopPropagation(); resetCreditFilters(); }}
-                      className="text-[9px] font-extrabold text-rose-600 hover:underline print:hidden"
-                    >
-                      Show All ✕
-                    </span>
-                  )}
-                  <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-md bg-emerald-100 text-emerald-800 flex items-center justify-center text-[10px] sm:text-xs font-black print:hidden shrink-0">
-                    💰
+          {/* Credit Summary Cards (Table Style matching Dashboard) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 pt-0.5 print:hidden">
+            {/* CARD 1: CREDIT SUMMARY (Light Green Background) */}
+            <div className="h-full bg-emerald-50/70 p-2.5 sm:p-4 rounded-2xl border border-emerald-200/90 border-t-4 border-t-emerald-500 shadow-xs flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1.5">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-[10px] sm:text-xs shrink-0">
+                    ⬇️
                   </div>
+                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-900 truncate">Credit Summary</h3>
                 </div>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 uppercase shrink-0">Inflow</span>
               </div>
-              <div>
-                <div className="text-sm sm:text-lg font-black text-emerald-700 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight my-0.5">
-                  {settings.currency}{displayCreditDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+              <div className="divide-y divide-emerald-200/50 text-[10.5px] sm:text-xs">
+                <div
+                  onClick={() => { setCreditDepositTo('All'); setCreditStatus('Done'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-emerald-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'All' && creditStatus === 'Done' ? 'bg-emerald-100/80 font-bold' : ''}`}
+                  title="Click to view Completed Done Credit entries"
+                >
+                  <span className="text-emerald-800 font-semibold truncate mr-1">Total Done Credit</span>
+                  <span className="font-extrabold text-emerald-700 whitespace-nowrap shrink-0">{settings.currency}{displayCreditDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex items-center gap-1 mt-1 text-[8px] sm:text-[10px] font-extrabold flex-wrap print:hidden">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus('All'); }}
-                    className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                      creditDepositTo === 'All' && creditStatus === 'All'
-                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-2xs'
-                        : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
-                    }`}
-                  >
-                    <span>Total:</span>
-                    <span>{settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN')}</span>
-                  </button>
-                  {displayCreditDue > 0 && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('All'); setCreditStatus(creditStatus === 'Due' ? 'All' : 'Due'); }}
-                      className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                        creditDepositTo === 'All' && creditStatus === 'Due'
-                          ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                          : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
-                      }`}
-                    >
-                      <span>Due:</span>
-                      <span>{settings.currency}{displayCreditDue.toLocaleString('en-IN')}</span>
-                    </button>
-                  )}
+
+                <div
+                  onClick={() => { setCreditDepositTo('All'); setCreditStatus('Due'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-emerald-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'All' && creditStatus === 'Due' ? 'bg-emerald-100/80 font-bold' : ''}`}
+                  title="Click to view Uncollected Due Credit entries"
+                >
+                  <span className="text-emerald-800 font-semibold truncate mr-1">Total Due Credit</span>
+                  <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0">{settings.currency}{displayCreditDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-                {/* Print View Clean Text Line */}
-                <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                  Total: {settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN')}  •  Due: {settings.currency}{displayCreditDue.toLocaleString('en-IN')}
+
+                <div
+                  onClick={() => { setCreditDepositTo('All'); setCreditStatus('All'); }}
+                  className={`pt-1.5 flex items-center justify-between font-black text-emerald-950 cursor-pointer hover:bg-emerald-100/70 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'All' && creditStatus === 'All' ? 'bg-emerald-100/80' : ''}`}
+                  title="Click to view All Credit entries"
+                >
+                  <span className="truncate mr-1">Total Credit</span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{displayCreditTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
 
-            {/* My Hand Card */}
-            <div
-              onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
-              className={`p-2 sm:p-2.5 rounded-xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                creditDepositTo === 'My Hand' && creditStatus === 'Done' ? 'border-blue-600 ring-2 ring-blue-500/15' : 'border-blue-200/90'
-              }`}
-              title="Click middle to filter Done My Hand transactions"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] sm:text-[11px] font-black uppercase text-blue-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide truncate">MY HAND (DONE)</span>
-                <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center text-[10px] sm:text-xs font-black print:hidden shrink-0">
-                  ✋
+            {/* CARD 2: MY HAND SUMMARY (Light Blue Background) */}
+            <div className="h-full bg-blue-50/70 p-2.5 sm:p-4 rounded-2xl border border-blue-200/90 border-t-4 border-t-blue-500 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
+              <div className="flex items-center justify-between border-b border-blue-200/60 pb-1.5">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-[10px] sm:text-xs shrink-0">
+                    ✋
+                  </div>
+                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-blue-900 truncate">My Hand</h3>
                 </div>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-blue-100 text-blue-800 uppercase shrink-0">Cash</span>
               </div>
-              <div>
-                <div className="text-sm sm:text-lg font-black text-blue-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight my-0.5">
-                  {settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+              <div className="divide-y divide-blue-200/50 text-[10.5px] sm:text-xs">
+                <div
+                  onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-blue-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'My Hand' && creditStatus === 'Done' ? 'bg-blue-100/80 font-bold' : ''}`}
+                  title="Click to view Done My Hand entries"
+                >
+                  <span className="text-blue-800 font-semibold truncate mr-1">In Hand (Done)</span>
+                  <span className="font-extrabold text-blue-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex items-center gap-1 mt-1 text-[8px] sm:text-[10px] font-extrabold flex-wrap print:hidden">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus('All'); }}
-                    className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                      creditDepositTo === 'My Hand' && creditStatus === 'All'
-                        ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
-                        : 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80 hover:bg-emerald-200'
-                    }`}
-                  >
-                    <span>Total:</span>
-                    <span>{settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'My Hand' ? filteredCreditTotal : creditSummary.myHandTotal).toLocaleString('en-IN')}</span>
-                  </button>
-                  {creditSummary.myHandDue > 0 && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('My Hand'); setCreditStatus(creditStatus === 'Due' ? 'All' : 'Due'); }}
-                      className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                        creditDepositTo === 'My Hand' && creditStatus === 'Due'
-                          ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                          : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
-                      }`}
-                    >
-                      <span>Due:</span>
-                      <span>{settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}</span>
-                    </button>
-                  )}
+
+                <div
+                  onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Due'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-blue-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'My Hand' && creditStatus === 'Due' ? 'bg-blue-100/80 font-bold' : ''}`}
+                  title="Click to view Due My Hand entries"
+                >
+                  <span className="text-blue-800 font-semibold truncate mr-1">In Hand (Due)</span>
+                  <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-                {/* Print View Clean Text Line */}
-                <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                  Total: {settings.currency}{creditSummary.myHandTotal.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN')}
+
+                <div
+                  onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('All'); }}
+                  className={`pt-1.5 flex items-center justify-between font-black text-blue-950 cursor-pointer hover:bg-blue-100/70 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'My Hand' && creditStatus === 'All' ? 'bg-blue-100/80' : ''}`}
+                  title="Click to view All My Hand entries"
+                >
+                  <span className="truncate mr-1">Total In Hand</span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{creditSummary.myHandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
 
-            {/* Company Wallet Card */}
-            <div
-              onClick={() => { setCreditDepositTo('Company Wallet'); setCreditStatus('Done'); }}
-              className={`p-2 sm:p-2.5 rounded-xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-md print:p-1.5 print:rounded-lg print:border-2 print:border-black print:bg-white print:text-black print:shadow-none print:ring-0 ${
-                creditDepositTo === 'Company Wallet' && creditStatus === 'Done' ? 'border-purple-600 ring-2 ring-purple-500/15' : 'border-purple-200/90'
-              }`}
-              title="Click middle to filter Done Company Wallet transactions"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] sm:text-[11px] font-black uppercase text-purple-900 print:text-[9.5px] print:font-black print:text-black print:tracking-wider tracking-wide truncate">CO. WALLET (DONE)</span>
-                <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-md bg-purple-100 text-purple-800 flex items-center justify-center text-[10px] sm:text-xs font-black print:hidden shrink-0">
-                  🏢
+            {/* CARD 3: COMPANY WALLET SUMMARY (Light Purple Background) */}
+            <div className="h-full bg-purple-50/70 p-2.5 sm:p-4 rounded-2xl border border-purple-200/90 border-t-4 border-t-purple-500 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
+              <div className="flex items-center justify-between border-b border-purple-200/60 pb-1.5">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-[10px] sm:text-xs shrink-0">
+                    🏢
+                  </div>
+                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-purple-900 truncate">Co. Wallet</h3>
                 </div>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-100 text-purple-800 uppercase shrink-0">Wallet</span>
               </div>
-              <div>
-                <div className="text-sm sm:text-lg font-black text-purple-800 print:text-base print:font-black print:text-black print:leading-tight print:my-0.5 tracking-tight my-0.5">
-                  {settings.currency}{creditSummary.walletDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+
+              <div className="divide-y divide-purple-200/50 text-[10.5px] sm:text-xs">
+                <div
+                  onClick={() => { setCreditDepositTo('Company Wallet'); setCreditStatus('Done'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-purple-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'Company Wallet' && creditStatus === 'Done' ? 'bg-purple-100/80 font-bold' : ''}`}
+                  title="Click to view Done Company Wallet entries"
+                >
+                  <span className="text-purple-800 font-semibold truncate mr-1">Wallet (Done)</span>
+                  <span className="font-extrabold text-purple-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.walletDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex items-center gap-1 mt-1 text-[8px] sm:text-[10px] font-extrabold flex-wrap print:hidden">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus('All'); }}
-                    className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                      creditDepositTo === 'Company Wallet' && creditStatus === 'All'
-                        ? 'bg-purple-700 text-white border-purple-800 shadow-2xs'
-                        : 'bg-purple-100/90 text-purple-900 border-purple-200/80 hover:bg-purple-200'
-                    }`}
-                  >
-                    <span>Total:</span>
-                    <span>{settings.currency}{(hasActiveCreditFilters && creditDepositTo === 'Company Wallet' ? filteredCreditTotal : creditSummary.walletTotal).toLocaleString('en-IN')}</span>
-                  </button>
-                  {creditSummary.walletDue > 0 && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setCreditDepositTo('Company Wallet'); setCreditStatus(creditStatus === 'Due' ? 'All' : 'Due'); }}
-                      className={`px-1.5 py-0.5 rounded-md border transition cursor-pointer flex items-center space-x-0.5 ${
-                        creditDepositTo === 'Company Wallet' && creditStatus === 'Due'
-                          ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                          : 'bg-amber-100/90 text-amber-900 border-amber-200/80 hover:bg-amber-200'
-                      }`}
-                    >
-                      <span>Due:</span>
-                      <span>{settings.currency}{creditSummary.walletDue.toLocaleString('en-IN')}</span>
-                    </button>
-                  )}
+
+                <div
+                  onClick={() => { setCreditDepositTo('Company Wallet'); setCreditStatus('Due'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-purple-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'Company Wallet' && creditStatus === 'Due' ? 'bg-purple-100/80 font-bold' : ''}`}
+                  title="Click to view Due Company Wallet entries"
+                >
+                  <span className="text-purple-800 font-semibold truncate mr-1">Wallet (Due)</span>
+                  <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.walletDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-                {/* Print View Clean Text Line */}
-                <div className="hidden print:block text-[9.5px] font-black text-black print:mt-0.5 whitespace-nowrap">
-                  Done: {settings.currency}{creditSummary.walletDone.toLocaleString('en-IN')}  •  Due: {settings.currency}{creditSummary.walletDue.toLocaleString('en-IN')}
+
+                <div
+                  onClick={() => { setCreditDepositTo('Company Wallet'); setCreditStatus('All'); }}
+                  className={`pt-1.5 flex items-center justify-between font-black text-purple-950 cursor-pointer hover:bg-purple-100/70 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'Company Wallet' && creditStatus === 'All' ? 'bg-purple-100/80' : ''}`}
+                  title="Click to view All Company Wallet entries"
+                >
+                  <span className="truncate mr-1">Total Wallet</span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{creditSummary.walletTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -1353,125 +1336,128 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
 
             {/* Desktop Table View & High-Contrast Print View */}
-            <div className="hidden md:block overflow-x-auto print:block bg-white rounded-2xl border border-emerald-200/80 shadow-2xs">
+            <div className="hidden md:block overflow-x-auto print:block bg-white rounded-2xl border border-emerald-200/80 shadow-2xs print:border-none print:shadow-none print:rounded-none print:overflow-visible">
               <table className="w-full text-left text-sm text-slate-700 print:text-black print:text-xs border-collapse">
                 <thead className="text-xs uppercase bg-emerald-100/70 text-emerald-950 border-b border-emerald-200 print:bg-slate-100 print:text-black print:border-b-2 print:border-black">
                   <tr>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Sr. No.</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Date</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Type</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">User Name</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Account / Deposit To</th>
-                    <th className="py-3 px-4 font-bold print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Description / Notes</th>
-                    <th className="py-3 px-4 font-bold text-right print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Amount</th>
-                    <th className="py-3 px-4 font-bold text-center print:py-2 print:px-2 print:border print:border-slate-400 print:font-black">Status</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[6%]">Sr. No.</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[12%]">Date</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[8%]">Type</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[14%]">User Name</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[15%]">Account / Deposit To</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-auto">Description / Notes</th>
+                    <th className="py-3 px-4 font-bold text-right print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[15%]">Amount</th>
+                    <th className="py-3 px-4 font-bold text-center print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[9%]">Status</th>
                     <th className="py-3 px-4 font-bold text-center print:hidden">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 print:divide-y-0">
                   {filteredCreditTxns.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-slate-300">
+                      <td colSpan="9" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-black">
                         No credit transactions match the criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredCreditTxns.map((t, index) => {
-                      const isDone = (t.status || 'Done') === 'Done';
-                      const accountLabel = t.depositTo === 'Company Wallet' ? 'Company Wallet' : 'My Hand';
-                      return (
-                        <tr
-                          key={t.id || index}
-                          className={`transition ${
-                            t.isAllocation
-                              ? 'bg-amber-50/90 hover:bg-amber-100/70 border-l-4 border-l-amber-500 print:bg-white print:border-l-0'
-                              : 'hover:bg-emerald-50/40 print:bg-white'
-                          }`}
-                        >
-                          <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{index + 1}</td>
-                          <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{formatDate(t.date)}</td>
-                          <td className="py-3.5 px-4 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-extrabold print:text-[11px]">
-                              Credit
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-emerald-950 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black">{t.userName}</td>
-                          <td className="py-3.5 px-4 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
-                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:text-xs ${
-                              t.depositTo === 'Company Wallet'
-                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                : 'bg-blue-50 text-blue-800 border border-blue-200'
-                            }`}>
-                              {accountLabel}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:max-w-none print:whitespace-normal print:break-words">
-                            {t.isAllocation && (
-                              <span className="mr-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-2xs border border-amber-600 print:bg-none print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold">
-                                <span className="print:hidden">🏢 </span>Company Allocation
+                    <>
+                      {filteredCreditTxns.map((t, index) => {
+                        const isDone = (t.status || 'Done') === 'Done';
+                        const accountLabel = t.depositTo === 'Company Wallet' ? 'Company Wallet' : 'My Hand';
+                        return (
+                          <tr
+                            key={t.id || index}
+                            className={`transition ${
+                              t.isAllocation
+                                ? 'bg-amber-50/90 hover:bg-amber-100/70 border-l-4 border-l-amber-500 print:bg-white print:border-l-0'
+                                : 'hover:bg-emerald-50/40 print:bg-white'
+                            }`}
+                          >
+                            <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2 print:border print:border-black print:text-black text-center">{index + 1}</td>
+                            <td className="py-3.5 px-4 text-xs font-medium text-slate-500 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black">{formatDate(t.date)}</td>
+                            <td className="py-3.5 px-4 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black text-center">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:text-xs">
+                                Credit
                               </span>
-                            )}
-                            {t.description || '-'}
-                          </td>
-                          <td className="py-3.5 px-4 font-black text-right text-emerald-700 whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300 print:text-black print:font-black">
-                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:py-2 print:px-2 print:border print:border-slate-300">
-                            <span className="hidden print:inline-block text-black font-extrabold text-[11px] uppercase print:border-none print:p-0">
-                              {t.status || 'Done'}
-                            </span>
-                            {t.isAllocation ? (
-                              <span className="print:hidden text-xs font-bold px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 inline-block">
-                                Done
+                            </td>
+                            <td className="py-3.5 px-4 font-bold text-emerald-950 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black">{t.userName}</td>
+                            <td className="py-3.5 px-4 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:text-xs ${
+                                t.depositTo === 'Company Wallet'
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                  : 'bg-blue-50 text-blue-800 border border-blue-200'
+                              }`}>
+                                {accountLabel}
                               </span>
-                            ) : (
-                              <select
-                                value={t.status || 'Done'}
-                                onChange={(e) => handleStatusChange(t, e.target.value)}
-                                className={`print:hidden text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
-                                  isDone
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : 'bg-amber-100 text-amber-800 border border-amber-300'
-                                }`}
-                              >
-                                <option value="Done">Done</option>
-                                <option value="Due">Due</option>
-                              </select>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap print:hidden">
-                            <div className="flex items-center justify-center space-x-1.5">
-                              <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700" title="Edit Entry">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                              </button>
-                              <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600" title="Delete Entry">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2 print:border print:border-black print:text-black print:max-w-none print:whitespace-normal print:break-words">
+                              {t.isAllocation && (
+                                <span className="mr-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-2xs border border-amber-600 print:bg-none print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:mr-1">
+                                  <span className="print:hidden">🏢 </span>Company Allocation{' '}
+                                </span>
+                              )}
+                              {t.description || '-'}
+                            </td>
+                            <td className="py-3.5 px-4 font-black text-right text-emerald-700 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black print:font-bold">
+                              {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3.5 px-4 text-center whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black">
+                              <span className="hidden print:inline-block text-black font-bold text-xs uppercase print:border-none print:p-0">
+                                {t.status || 'Done'}
+                              </span>
+                              {t.isAllocation ? (
+                                <span className="print:hidden text-xs font-bold px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 inline-block">
+                                  Done
+                                </span>
+                              ) : (
+                                <select
+                                  value={t.status || 'Done'}
+                                  onChange={(e) => handleStatusChange(t, e.target.value)}
+                                  className={`print:hidden text-xs font-bold px-3 py-1 rounded-xl cursor-pointer focus:outline-none transition ${
+                                    isDone
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  }`}
+                                >
+                                  <option value="Done">Done</option>
+                                  <option value="Due">Due</option>
+                                </select>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-center whitespace-nowrap print:hidden">
+                              <div className="flex items-center justify-center space-x-1.5">
+                                <button onClick={() => handleOpenEditModal(t)} className="p-1 text-slate-400 hover:text-slate-700" title="Edit Entry">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                </button>
+                                <button onClick={() => handleDelete(t.id)} className="p-1 text-rose-400 hover:text-rose-600" title="Delete Entry">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* TOTAL CREDIT ROW — PLACED IN TBODY SO IT RENDERS ONLY ONCE DIRECTLY AFTER THE LAST ENTRY */}
+                      <tr className="bg-emerald-100/90 font-black text-emerald-950 border-t-2 border-b-2 border-emerald-300 print-total-row">
+                        <td colSpan="6" className="py-3 px-4 text-right uppercase tracking-wider font-black text-xs print:py-1.5 print:px-2 print:border print:border-black print:font-black print:text-xs">
+                          {creditTableFooterLabel}
+                        </td>
+                        <td className="py-3 px-4 text-right font-black text-emerald-950 text-sm print:py-1.5 print:px-2 print:border print:border-black print:text-black print:font-black print:text-xs whitespace-nowrap">
+                          {settings.currency}{(filteredCreditTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 print:border print:border-black"></td>
+                        <td className="py-3 px-4 print:hidden"></td>
+                      </tr>
+                    </>
                   )}
                 </tbody>
-                {filteredCreditTxns.length > 0 && (
-                  <tfoot className="bg-emerald-50/70 font-bold text-xs text-emerald-950 border-t-2 border-emerald-200 print:bg-slate-100 print:text-black print:border-t-2 print:border-black">
-                    <tr>
-                      <td colSpan="6" className="py-3 px-4 text-right uppercase tracking-wider print:py-2 print:px-2 print:border print:border-black print:font-black">
-                        {creditTableFooterLabel}
-                      </td>
-                      <td className="py-3 px-4 text-right font-black text-emerald-700 text-sm print:py-2 print:px-2 print:border print:border-black print:text-black print:font-black">
-                        {settings.currency}{filteredCreditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td colSpan="2" className="print:border print:border-black"></td>
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
           </div>
         </div>
       )}
+
+
 
       {/* ======================================================== */}
       {/* 🟠 DEBIT FILTER MODAL                                    */}
@@ -2069,7 +2055,264 @@ const CreditDebit = ({ isMyView = false }) => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* 🖨️ DEDICATED PRINT-ONLY LEDGER REPORT (Strict B&W, No Cards, No Emojis, No Icons, No Actions) */}
+      <div className="hidden print:block print-ledger-report">
+        {/* Header */}
+        <div className="text-center border-b-2 border-black pb-2 mb-3 print-header">
+          <h1 className="text-xl font-bold uppercase text-black tracking-wider">SHUKAN PACKAGING</h1>
+          <h2 className="text-xs font-bold text-black uppercase mt-0.5">
+            {selectedUser !== 'All' ? `${selectedUser} - ` : ''}
+            {printTarget === 'debit' ? 'Debit Statement Audit' : printTarget === 'credit' ? 'Credit Statement Audit' : 'Debit & Credit Audit Ledger'}
+          </h2>
+          <div className="text-[9pt] font-normal text-black mt-1 flex items-center justify-center space-x-2">
+            <span>Date Printed: {formatDate(new Date())}</span>
+            {selectedUser !== 'All' && <span>| User: {selectedUser}</span>}
+            {(printTarget === 'all' || printTarget === 'debit') && debitStatus !== 'All' && <span>| Debit Status: {debitStatus}</span>}
+            {(printTarget === 'all' || printTarget === 'credit') && creditStatus !== 'All' && <span>| Credit Status: {creditStatus}</span>}
+          </div>
+        </div>
+
+        {/* SECTION 1: DEBIT TRANSACTIONS TABLE */}
+        {(printTarget === 'all' || printTarget === 'debit') && (
+          <div className="mb-4 print-section">
+            <div className="border-b border-black pb-1 mb-2 print-section-header">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-black uppercase">
+                  Debit Transactions <span className="font-normal normal-case">(Cash Out)</span>
+                </h2>
+                <span className="text-[7.5pt] sm:text-xs font-bold text-black uppercase tracking-wider text-right ml-2">
+                  FILTER: {debitFilterSummaryText}
+                </span>
+              </div>
+              <div className="text-[8.5pt] font-semibold text-black mt-0.5">
+                {filteredDebitTxns.length} Entries | Total Debit: {settings.currency}{(filteredDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            {/* Print-Only Debit Summary Card */}
+            <div className="print-debit-card-wrapper">
+              <div className="print-card print-card-debit">
+                <div className="card-title">
+                  DEBIT SUMMARY
+                </div>
+                <div className="card-body">
+                  <div className="card-row">
+                    <span className="card-label">Done Debit</span>
+                    <span className="card-value">{settings.currency}{(displayDebitDone || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="card-row">
+                    <span className="card-label">Due Debit</span>
+                    <span className="card-value">{settings.currency}{(displayDebitDue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+                <div className="card-total">
+                  <span className="card-label">TOTAL DEBIT</span>
+                  <span className="card-value">{settings.currency}{(displayDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+
+            <table className="print-table debit-print-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '6%' }} className="sr-cell">SR. NO.</th>
+                  <th style={{ width: '11%' }} className="date-cell">DATE</th>
+                  <th style={{ width: '9%' }} className="type-cell">TYPE</th>
+                  <th style={{ width: '13%' }} className="user-cell">USER NAME</th>
+                  <th style={{ width: '34%' }} className="description-cell">DESCRIPTION / NOTES</th>
+                  <th style={{ width: '18%' }} className="amount-cell">AMOUNT</th>
+                  <th style={{ width: '9%' }} className="status-cell">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDebitTxns.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-4">
+                      No debit transactions match the criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {filteredDebitTxns.map((t, index) => (
+                      <tr key={t.id || index}>
+                        <td className="sr-cell">{index + 1}</td>
+                        <td className="date-cell">{formatDate(t.date)}</td>
+                        <td className="type-cell">DEBIT</td>
+                        <td className="user-cell">{t.userName}</td>
+                        <td className="description-cell">{t.description || '-'}</td>
+                        <td className="amount-cell">
+                          {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="status-cell">{t.status ? t.status.toUpperCase() : 'DONE'}</td>
+                      </tr>
+                    ))}
+                    <tr className="print-total-row debit-total-row">
+                      <td colSpan={5} className="total-label">
+                        {debitTableFooterLabel}
+                      </td>
+                      <td className="total-amount">
+                        {settings.currency}{(filteredDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="status-cell"></td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* SECTION 2: CREDIT TRANSACTIONS SECTION (Starts at top of Page 2 when printing full report) */}
+        {(printTarget === 'all' || printTarget === 'credit') && (
+          <div className={`mb-4 print-section credit-table-print-section ${printTarget === 'all' ? 'print-page-break-before' : ''}`}>
+            {/* 1. Credit Transactions Heading */}
+            <div className="border-b border-black pb-1 mb-2 print-section-header">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-black uppercase">
+                  Credit Transactions <span className="font-normal normal-case">(Cash In)</span>
+                </h2>
+                <span className="text-[7.5pt] sm:text-xs font-bold text-black uppercase tracking-wider text-right ml-2">
+                  FILTER: {creditFilterSummaryText}
+                </span>
+              </div>
+              <div className="text-[8.5pt] font-semibold text-black mt-0.5">
+                {filteredCreditTxns.length} Entries | Total Credit: {settings.currency}{(filteredCreditTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            {/* 2. Print-Only Credit Summary Cards Grid (3 Columns) - RENDERED DIRECTLY BELOW HEADING & BEFORE TABLE */}
+            <div className="credit-summary-print-wrapper mb-3">
+              <div className="credit-summary-print-grid">
+                {/* CARD 1: CREDIT SUMMARY */}
+                <div className="print-card">
+                  <div className="card-title">
+                    CREDIT SUMMARY
+                  </div>
+                  <div className="card-body">
+                    <div className="card-row">
+                      <span className="card-label">Total Done Credit</span>
+                      <span className="card-value">{settings.currency}{(displayCreditDone || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="card-row">
+                      <span className="card-label">Total Due Credit</span>
+                      <span className="card-value">{settings.currency}{(displayCreditDue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                  <div className="card-total">
+                    <span className="card-label">TOTAL CREDIT</span>
+                    <span className="card-value">{settings.currency}{(displayCreditTotalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                {/* CARD 2: MY HAND */}
+                <div className="print-card">
+                  <div className="card-title">
+                    MY HAND
+                  </div>
+                  <div className="card-body">
+                    <div className="card-row">
+                      <span className="card-label">In Hand (Done)</span>
+                      <span className="card-value">{settings.currency}{(creditSummary?.myHandDone || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="card-row">
+                      <span className="card-label">In Hand (Due)</span>
+                      <span className="card-value">{settings.currency}{(creditSummary?.myHandDue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                  <div className="card-total">
+                    <span className="card-label">TOTAL IN HAND</span>
+                    <span className="card-value">{settings.currency}{(creditSummary?.myHandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                {/* CARD 3: CO. WALLET */}
+                <div className="print-card">
+                  <div className="card-title">
+                    CO. WALLET
+                  </div>
+                  <div className="card-body">
+                    <div className="card-row">
+                      <span className="card-label">Wallet (Done)</span>
+                      <span className="card-value">{settings.currency}{(creditSummary?.walletDone || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="card-row">
+                      <span className="card-label">Wallet (Due)</span>
+                      <span className="card-value">{settings.currency}{(creditSummary?.walletDue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                  <div className="card-total">
+                    <span className="card-label">TOTAL WALLET</span>
+                    <span className="card-value">{settings.currency}{(creditSummary?.walletTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Credit Transactions Table */}
+            <table className="print-table credit-print-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '6%' }} className="sr-cell">SR. NO.</th>
+                  <th style={{ width: '10%' }} className="date-cell">DATE</th>
+                  <th style={{ width: '9%' }} className="type-cell">TYPE</th>
+                  <th style={{ width: '12%' }} className="user-cell">USER NAME</th>
+                  <th style={{ width: '15%' }} className="account-cell">ACCOUNT / DEPOSIT TO</th>
+                  <th style={{ width: '28%' }} className="description-cell">DESCRIPTION / NOTES</th>
+                  <th style={{ width: '13%' }} className="amount-cell">AMOUNT</th>
+                  <th style={{ width: '7%' }} className="status-cell">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCreditTxns.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="text-center py-4">
+                      No credit transactions match the criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {filteredCreditTxns.map((t, index) => {
+                      const accountLabel = t.depositTo === 'Company Wallet' ? 'Company Wallet' : 'My Hand';
+                      const cleanDesc = t.isAllocation ? `Company Allocation - ${t.description || ''}` : (t.description || '-');
+                      return (
+                        <tr key={t.id || index}>
+                          <td className="sr-cell">{index + 1}</td>
+                          <td className="date-cell">{formatDate(t.date)}</td>
+                          <td className="type-cell">CREDIT</td>
+                          <td className="user-cell">{t.userName}</td>
+                          <td className="account-cell">{accountLabel}</td>
+                          <td className="description-cell">{cleanDesc}</td>
+                          <td className="amount-cell">
+                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="status-cell">{t.status ? t.status.toUpperCase() : 'DONE'}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="print-total-row credit-total-row">
+                      <td colSpan={6} className="total-label">
+                        {creditTableFooterLabel}
+                      </td>
+                      <td className="total-amount">
+                        {settings.currency}{(filteredCreditTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="status-cell"></td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="pt-3 text-center border-t border-black text-[8pt] text-black print-footer mt-4">
+          <span>Shukan Packaging - Expense Management Software</span>
+        </div>
+      </div>
+    </>
   );
 };
 
