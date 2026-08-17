@@ -36,15 +36,55 @@ const CreditDebit = ({ isMyView = false }) => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isGlobalFilterOpen, setIsGlobalFilterOpen] = useState(false);
   const [editingTxn, setEditingTxn] = useState(null);
   const [modalTxnType, setModalTxnType] = useState('Cash Out');
   const [selectedTxnForAction, setSelectedTxnForAction] = useState(null);
 
+  // Dynamic PDF Filename Generator
+  const getDynamicPdfTitle = (target = 'all') => {
+    let userNamePart = '';
+    if (selectedUser && selectedUser !== 'All') {
+      const cleanUser = selectedUser.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
+      userNamePart = `_${cleanUser}`;
+    }
+
+    let startDate = '';
+    let endDate = '';
+
+    if (target === 'debit') {
+      startDate = debitStartDate;
+      endDate = debitEndDate;
+    } else if (target === 'credit') {
+      startDate = creditStartDate;
+      endDate = creditEndDate;
+    } else {
+      startDate = debitStartDate || creditStartDate;
+      endDate = debitEndDate || creditEndDate;
+    }
+
+    let datePart = '_ALL';
+    if (startDate || endDate) {
+      const s = startDate ? formatDate(startDate).replace(/\//g, '-') : 'START';
+      const e = endDate ? formatDate(endDate).replace(/\//g, '-') : 'END';
+      datePart = `_${s}_TO_${e}`;
+    }
+
+    return `Shukan${userNamePart}_Transaction_Report${datePart}`;
+  };
+
   // Dedicated Print Handlers
   const triggerPrint = (target) => {
     setPrintTarget(target);
+    const originalTitle = document.title;
+    const pdfTitle = getDynamicPdfTitle(target);
+    document.title = pdfTitle;
+
     setTimeout(() => {
       window.print();
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1000);
     }, 250);
   };
 
@@ -255,8 +295,9 @@ const CreditDebit = ({ isMyView = false }) => {
   }, [filteredCreditTxns]);
 
   // Active filter checks
-  const hasActiveDebitFilters = Boolean(debitSearch || debitStatus !== 'All' || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
-  const hasActiveCreditFilters = Boolean(creditSearch || creditDepositTo !== 'All' || creditStatus !== 'All' || creditStartDate || creditEndDate || creditMinAmt || creditMaxAmt);
+  const hasActiveDebitFilters = Boolean(debitSearch || debitStatus !== 'All' || selectedUser !== 'All' || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
+  const hasActiveCreditFilters = Boolean(creditSearch || creditDepositTo !== 'All' || creditStatus !== 'All' || selectedUser !== 'All' || creditStartDate || creditEndDate || creditMinAmt || creditMaxAmt);
+  const hasAnyActiveFilters = Boolean(hasActiveDebitFilters || hasActiveCreditFilters);
 
   const debitTableFooterLabel = useMemo(() => {
     if (debitStatus === 'Due') return 'TOTAL DUE DEBIT:';
@@ -380,6 +421,7 @@ const CreditDebit = ({ isMyView = false }) => {
   const resetDebitFilters = () => {
     setDebitSearch('');
     setDebitStatus('All');
+    setSelectedUser('All');
     setDebitStartDate('');
     setDebitEndDate('');
     setDebitMinAmt('');
@@ -390,6 +432,7 @@ const CreditDebit = ({ isMyView = false }) => {
     setCreditSearch('');
     setCreditDepositTo('All');
     setCreditStatus('All');
+    setSelectedUser('All');
     setCreditStartDate('');
     setCreditEndDate('');
     setCreditMinAmt('');
@@ -608,33 +651,11 @@ const CreditDebit = ({ isMyView = false }) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap md:flex-nowrap shrink-0">
-          {/* User Selector Dropdown */}
-          {!isMyView ? (
-            <div className="flex-1 sm:flex-none">
-              <select
-                value={selectedUser}
-                onChange={(e) => setSelectedUser(e.target.value)}
-                className="w-full sm:w-auto px-2.5 sm:px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-bold border border-slate-300 focus:outline-none truncate"
-              >
-                <option value="All">All Users & Co.</option>
-                <option value="Shukan Company">🏢 Shukan Co.</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.name}>{u.name}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="flex-1 sm:flex-none px-3 py-2 text-xs rounded-xl bg-white font-bold border border-slate-300 text-[#002B49] flex items-center space-x-1.5 shadow-2xs">
-              <span className="text-slate-400 font-semibold">User:</span>
-              <span className="text-[#002B49] font-extrabold">{user?.name}</span>
-            </div>
-          )}
-
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap w-full sm:w-auto">
           {/* Add Debit Button */}
           <button
             onClick={() => handleOpenAddModal('Cash Out')}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
             <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -645,7 +666,7 @@ const CreditDebit = ({ isMyView = false }) => {
           {/* Add Credit Button */}
           <button
             onClick={() => handleOpenAddModal('Cash In')}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
             <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -653,10 +674,29 @@ const CreditDebit = ({ isMyView = false }) => {
             Credit
           </button>
 
+          {/* Global Filter Button */}
+          <button
+            onClick={() => setIsGlobalFilterOpen(true)}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0 border ${
+              hasAnyActiveFilters
+                ? 'bg-amber-700 hover:bg-amber-800 text-white border-amber-700'
+                : 'bg-white hover:bg-slate-50 text-[#002B49] border-slate-300'
+            }`}
+            title="Filter Ledger Entries"
+          >
+            <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0 ${hasAnyActiveFilters ? 'text-white' : 'text-[#002B49]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filter
+            {hasAnyActiveFilters && (
+              <span className="ml-1 text-emerald-400 font-black">●</span>
+            )}
+          </button>
+
           {/* Print Report Button */}
           <button
             onClick={() => setIsPrintModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2.5 sm:px-3.5 py-2 rounded-xl bg-[#002B49] text-white hover:bg-[#001D33] text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl bg-[#002B49] text-white hover:bg-[#001D33] text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
             title="Print Report"
           >
             <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -782,28 +822,44 @@ const CreditDebit = ({ isMyView = false }) => {
             )}
           </div>
 
-          {/* Active Debit Filter Badge Banner */}
+          {/* Highlighted Active Debit Filter Banner */}
           {hasActiveDebitFilters && (
-            <div className="p-2.5 rounded-xl bg-rose-100/80 border border-rose-300 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+            <div className="p-3 rounded-2xl bg-amber-100/90 border-2 border-amber-400 shadow-xs flex flex-wrap items-center justify-between gap-2.5 text-xs print:hidden">
               <div className="flex flex-wrap items-center gap-2 text-slate-800">
-                <span className="font-extrabold text-rose-950">Active Debit Filters:</span>
+                <div className="flex items-center space-x-1.5 font-black text-amber-950 text-xs tracking-wide">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-600 animate-pulse"></span>
+                  <span>Active Debit Filters:</span>
+                </div>
+                {selectedUser !== 'All' && (
+                  <span className="px-2.5 py-1 rounded-lg bg-[#002B49] text-white font-extrabold text-[11px] shadow-2xs flex items-center">
+                    User: {selectedUser}
+                  </span>
+                )}
                 {debitStatus !== 'All' && (
-                  <span className="px-2 py-0.5 rounded bg-rose-900 text-white font-bold text-[11px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-900 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     Status: {debitStatus}
                   </span>
                 )}
                 {(debitStartDate || debitEndDate) && (
-                  <span className="px-2 py-0.5 rounded bg-white text-slate-800 font-bold text-[11px] border border-rose-200">
-                    Date: {debitStartDate || 'Start'} to {debitEndDate || 'Today'}
+                  <span className="px-2.5 py-1 rounded-lg bg-white text-amber-950 font-extrabold text-[11px] border border-amber-300 shadow-2xs flex items-center">
+                    Date: {debitStartDate ? formatDate(debitStartDate) : 'Start'} to {debitEndDate ? formatDate(debitEndDate) : 'Today'}
                   </span>
                 )}
                 {(debitMinAmt || debitMaxAmt) && (
-                  <span className="px-2 py-0.5 rounded bg-rose-700 text-white font-bold text-[11px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-800 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     Amount: {debitMinAmt ? `${settings.currency}${debitMinAmt}` : 'Min'} - {debitMaxAmt ? `${settings.currency}${debitMaxAmt}` : 'Max'}
                   </span>
                 )}
+                {debitSearch && (
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-950 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
+                    Search: "{debitSearch}"
+                  </span>
+                )}
               </div>
-              <button onClick={resetDebitFilters} className="text-[11px] font-bold text-rose-700 hover:underline">
+              <button
+                onClick={resetDebitFilters}
+                className="px-3.5 py-1 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-extrabold text-[11px] transition cursor-pointer shadow-xs whitespace-nowrap"
+              >
                 Reset Debit Filters
               </button>
             </div>
@@ -909,6 +965,19 @@ const CreditDebit = ({ isMyView = false }) => {
                           );
                         })}
                       </tbody>
+                      {filteredDebitTxns.length > 0 && (
+                        <tfoot className="bg-rose-50/90 font-bold text-xs text-rose-950 border-t-2 border-rose-200 sticky bottom-0 z-10 shadow-xs">
+                          <tr>
+                            <td colSpan="2" className="py-2.5 px-3 text-right uppercase tracking-wider font-extrabold text-[11px] text-rose-950">
+                              {debitTableFooterLabel}
+                            </td>
+                            <td className="py-2.5 px-2 text-right font-black text-rose-950 text-xs whitespace-nowrap">
+                              {settings.currency}{(filteredDebitTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-1"></td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
                 </div>
@@ -1082,33 +1151,49 @@ const CreditDebit = ({ isMyView = false }) => {
             )}
           </div>
 
-          {/* Active Credit Filter Badge Banner */}
+          {/* Highlighted Active Credit Filter Banner */}
           {hasActiveCreditFilters && (
-            <div className="p-2.5 rounded-xl bg-emerald-100/80 border border-emerald-300 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden">
+            <div className="p-3 rounded-2xl bg-amber-100/90 border-2 border-amber-400 shadow-xs flex flex-wrap items-center justify-between gap-2.5 text-xs print:hidden">
               <div className="flex flex-wrap items-center gap-2 text-slate-800">
-                <span className="font-extrabold text-emerald-950">Active Credit Filters:</span>
+                <div className="flex items-center space-x-1.5 font-black text-amber-950 text-xs tracking-wide">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-600 animate-pulse"></span>
+                  <span>Active Credit Filters:</span>
+                </div>
+                {selectedUser !== 'All' && (
+                  <span className="px-2.5 py-1 rounded-lg bg-[#002B49] text-white font-extrabold text-[11px] shadow-2xs flex items-center">
+                    User: {selectedUser}
+                  </span>
+                )}
                 {creditDepositTo !== 'All' && (
-                  <span className="px-2 py-0.5 rounded bg-purple-700 text-white font-bold text-[11px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-800 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     Account: {creditDepositTo}
                   </span>
                 )}
                 {creditStatus !== 'All' && (
-                  <span className="px-2 py-0.5 rounded bg-emerald-800 text-white font-bold text-[11px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-900 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     Status: {creditStatus}
                   </span>
                 )}
                 {(creditStartDate || creditEndDate) && (
-                  <span className="px-2 py-0.5 rounded bg-white text-slate-800 font-bold text-[11px] border border-emerald-200">
-                    Date: {creditStartDate || 'Start'} to {creditEndDate || 'Today'}
+                  <span className="px-2.5 py-1 rounded-lg bg-white text-amber-950 font-extrabold text-[11px] border border-amber-300 shadow-2xs flex items-center">
+                    Date: {creditStartDate ? formatDate(creditStartDate) : 'Start'} to {creditEndDate ? formatDate(creditEndDate) : 'Today'}
                   </span>
                 )}
                 {(creditMinAmt || creditMaxAmt) && (
-                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-[11px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-800 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     Amount: {creditMinAmt ? `${settings.currency}${creditMinAmt}` : 'Min'} - {creditMaxAmt ? `${settings.currency}${creditMaxAmt}` : 'Max'}
                   </span>
                 )}
+                {creditSearch && (
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-950 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
+                    Search: "{creditSearch}"
+                  </span>
+                )}
               </div>
-              <button onClick={resetCreditFilters} className="text-[11px] font-bold text-rose-700 hover:underline">
+              <button
+                onClick={resetCreditFilters}
+                className="px-3.5 py-1 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-extrabold text-[11px] transition cursor-pointer shadow-xs whitespace-nowrap"
+              >
                 Reset Credit Filters
               </button>
             </div>
@@ -1460,6 +1545,176 @@ const CreditDebit = ({ isMyView = false }) => {
 
 
       {/* ======================================================== */}
+      {/* 🌐 GLOBAL LEDGER FILTER MODAL (Debit & Credit)            */}
+      {/* ======================================================== */}
+      {isGlobalFilterOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#002B49] text-white flex items-center justify-center font-black">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Filter All Ledger Entries</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Refine debit & credit records by user, status & date</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsGlobalFilterOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* User / Party Filter */}
+              {!isMyView && (
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">User / Party</label>
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Users & Co.</option>
+                    <option value="Shukan Company">🏢 Shukan Co.</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.name}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Account / Deposit To */}
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Account (Credit)</label>
+                  <select
+                    value={creditDepositTo}
+                    onChange={(e) => setCreditDepositTo(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Accounts</option>
+                    <option value="My Hand">✋ My Hand</option>
+                    <option value="Company Wallet">🏢 Company Wallet</option>
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Status</label>
+                  <select
+                    value={debitStatus === creditStatus ? debitStatus : 'All'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDebitStatus(val);
+                      setCreditStatus(val);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Done">Done</option>
+                    <option value="Due">Due</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Start & End Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
+                  <DateInput
+                    value={debitStartDate || creditStartDate}
+                    max={debitEndDate || creditEndDate || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDebitStartDate(val);
+                      setCreditStartDate(val);
+                    }}
+                    className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">End Date</label>
+                  <DateInput
+                    value={debitEndDate || creditEndDate}
+                    min={debitStartDate || creditStartDate || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDebitEndDate(val);
+                      setCreditEndDate(val);
+                    }}
+                    className="w-full pl-3 pr-9 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* Min & Max Amounts */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Min Amount ({settings.currency})</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 100"
+                    value={debitMinAmt || creditMinAmt}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDebitMinAmt(val);
+                      setCreditMinAmt(val);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Max Amount ({settings.currency})</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 5000"
+                    value={debitMaxAmt || creditMaxAmt}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDebitMaxAmt(val);
+                      setCreditMaxAmt(val);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 focus:outline-none border border-slate-200"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3">
+              <button
+                onClick={() => {
+                  resetDebitFilters();
+                  resetCreditFilters();
+                  setSelectedUser('All');
+                  setIsGlobalFilterOpen(false);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => setIsGlobalFilterOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* 🟠 DEBIT FILTER MODAL                                    */}
       {/* ======================================================== */}
       {isDebitFilterOpen && (
@@ -1489,17 +1744,36 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Status</label>
-                <select
-                  value={debitStatus}
-                  onChange={(e) => setDebitStatus(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
-                >
-                  <option value="All">All Statuses</option>
-                  <option value="Done">Done</option>
-                  <option value="Due">Due</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                {!isMyView && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">User / Party</label>
+                    <select
+                      value={selectedUser}
+                      onChange={(e) => setSelectedUser(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                    >
+                      <option value="All">All Users & Co.</option>
+                      <option value="Shukan Company">🏢 Shukan Co.</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.name}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className={isMyView ? "col-span-2" : ""}>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Status</label>
+                  <select
+                    value={debitStatus}
+                    onChange={(e) => setDebitStatus(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Done">Done</option>
+                    <option value="Due">Due</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1582,7 +1856,7 @@ const CreditDebit = ({ isMyView = false }) => {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-[#002B49]">Filter Credit Entries</h3>
-                  <p className="text-[11px] text-slate-500 font-medium">Refine credit records by account, status & date</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Refine credit records by user, account, status & date</p>
                 </div>
               </div>
 
@@ -1597,6 +1871,23 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
 
             <div className="space-y-4">
+              {!isMyView && (
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">User / Party</label>
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                  >
+                    <option value="All">All Users & Co.</option>
+                    <option value="Shukan Company">🏢 Shukan Co.</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.name}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Account / Deposit To</label>

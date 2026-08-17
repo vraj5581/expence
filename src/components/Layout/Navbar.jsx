@@ -80,7 +80,6 @@ const Navbar = ({ onToggleSidebar }) => {
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-2.5">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Portal Mode: </span>
             <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">{effectiveRole} View</span>
           </div>
           {/* Live Sync Badge */}
@@ -108,9 +107,9 @@ const Navbar = ({ onToggleSidebar }) => {
               className="w-full h-full object-contain"
             />
           </div>
-          <div className="hidden sm:block text-left">
-            <div className="text-xs font-extrabold text-[#002B49] leading-tight">{user?.name || 'User'}</div>
-            <div className="text-[10px] text-[#c69255] font-bold uppercase tracking-wider">{effectiveRole}</div>
+          <div className="text-left max-w-[85px] sm:max-w-none min-w-0">
+            <div className="text-xs font-extrabold text-[#002B49] leading-tight truncate">{user?.name || 'User'}</div>
+            <div className="text-[9.5px] sm:text-[10px] text-[#c69255] font-bold uppercase tracking-wider truncate">{effectiveRole}</div>
           </div>
           <svg
             className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-[#002B49]' : ''}`}
