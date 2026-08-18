@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS `allocations_history` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 6. Settings Table
+-- 7. Settings Table
 CREATE TABLE IF NOT EXISTS `settings` (
   `id` INT PRIMARY KEY DEFAULT 1,
   `currency` VARCHAR(10) DEFAULT '₹',
@@ -103,5 +103,19 @@ CREATE TABLE IF NOT EXISTS `tasks` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 9. Audit Logs Table (Entry modifications & edit history)
+CREATE TABLE IF NOT EXISTS `audit_logs` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `editorName` VARCHAR(100) NOT NULL,
+  `txnId` VARCHAR(50) DEFAULT NULL,
+  `txnType` VARCHAR(50) DEFAULT 'Entry',
+  `entrySummary` TEXT,
+  `changeDetails` TEXT,
+  `date` DATE NOT NULL,
+  `time` VARCHAR(30) DEFAULT '',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- NOTE: The old `transactions` table has been dropped.
 -- All data is stored in separate `debit_transactions` and `credit_transactions` tables.
+

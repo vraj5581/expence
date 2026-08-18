@@ -60,11 +60,56 @@ export const ExpenseProvider = ({ children }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
+  // Edit Audit Logs State (Database Backed)
+  const [editLogs, setEditLogs] = useState([]);
+
+  // Auto-clear legacy localStorage on mount to ensure clean blank storage
+  useEffect(() => {
+    try {
+      localStorage.clear();
+    } catch (e) {}
+  }, []);
+
+  const recordEditLog = async (editorName, txnId, txnType, entrySummary, changeDetails) => {
+    const now = new Date();
+    const formattedDate = now.toISOString().split('T')[0];
+    const formattedTime = now.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    const newLog = {
+      id: `EDT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      editorName: editorName || 'Admin',
+      txnId: txnId || 'N/A',
+      txnType: txnType || 'Entry',
+      entrySummary: entrySummary || 'Edited Entry',
+      changeDetails: changeDetails || 'Updated entry details',
+      date: formattedDate,
+      time: formattedTime,
+      createdAt: now.toISOString()
+    };
+
+    setEditLogs(prev => [newLog, ...prev]);
+
+    // Persist to MySQL database via API
+    try {
+      const res = await apiService.addAuditLog(newLog);
+      if (!res || res.success === false) {
+        console.error("Failed to save audit log to database:", res?.error || res?.message);
+      }
+    } catch (err) {
+      console.error("Failed to save audit log to database:", err);
+    }
+  };
+
   // Fetch state from PHP backend database (Ultra-fast single request)
   const loadBackendData = async () => {
     setIsSyncing(true);
     try {
-      // 1. Try single-request bulk bootstrap API (1 HTTP request instead of 7)
+      // 1. Try single-request bulk bootstrap API (1 HTTP request instead of 8)
       const bootRes = await apiService.getBootstrapData();
       if (bootRes && bootRes.success) {
         if (Array.isArray(bootRes.debits)) setDebitTransactions(bootRes.debits);
@@ -75,20 +120,22 @@ export const ExpenseProvider = ({ children }) => {
         if (Array.isArray(bootRes.users) && bootRes.users.length > 0) setUsers(bootRes.users);
         if (bootRes.settings) setSettings(bootRes.settings);
         if (Array.isArray(bootRes.tasks)) setTasks(bootRes.tasks);
+        if (Array.isArray(bootRes.auditLogs)) setEditLogs(bootRes.auditLogs);
 
         setIsDbConnected(true);
         setDbError(null);
         setLastSyncedAt(new Date());
       } else {
         // Fallback to parallel requests if bootstrap endpoint is unavailable
-        const [debitRes, creditRes, depRes, alcRes, userRes, setRes, taskRes] = await Promise.all([
+        const [debitRes, creditRes, depRes, alcRes, userRes, setRes, taskRes, auditRes] = await Promise.all([
           apiService.getDebits(),
           apiService.getCredits(),
           apiService.getVaultDeposits(),
           apiService.getAllocations(),
           apiService.getUsers(),
           apiService.getSettings(),
-          apiService.getTasks()
+          apiService.getTasks(),
+          apiService.getAuditLogs()
         ]);
 
         let backendErr = null;
@@ -104,6 +151,7 @@ export const ExpenseProvider = ({ children }) => {
         if (userRes?.success && Array.isArray(userRes.users) && userRes.users.length > 0) setUsers(userRes.users);
         if (setRes?.success && setRes.settings) setSettings(setRes.settings);
         if (taskRes?.success && Array.isArray(taskRes.tasks)) setTasks(taskRes.tasks);
+        if (auditRes?.success && Array.isArray(auditRes.auditLogs)) setEditLogs(auditRes.auditLogs);
 
         if (backendErr) {
           setIsDbConnected(false);
@@ -296,7 +344,7 @@ export const ExpenseProvider = ({ children }) => {
     return { success: true, allocationLog };
   };
 
-  const updateAllocation = async (id, updatedData) => {
+  const updateAllocation = async (id, updatedData, editorName = null) => {
     const oldAlloc = allocationsHistory.find(a => a.id === id);
     if (!oldAlloc) return { success: false, message: 'Allocation record not found' };
 
@@ -340,6 +388,15 @@ export const ExpenseProvider = ({ children }) => {
       amount: newAmount,
       userName: updatedData.userName || a.userName
     } : a));
+
+    const finalEditor = editorName || updatedData.editorName || 'Admin';
+    await recordEditLog(
+      finalEditor,
+      id,
+      'Money Transfer',
+      `Transfer to ${updatedData.userName || oldAlloc.userName}: ${updatedData.notes || oldAlloc.notes || 'Petty Cash'} (${settings.currency}${newAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
+      `Updated transfer amount: ${settings.currency}${oldAmount} ➔ ${settings.currency}${newAmount}`
+    );
 
     return { success: true };
   };
@@ -467,13 +524,14 @@ export const ExpenseProvider = ({ children }) => {
     return { success: true, txn: savedTxn };
   };
 
-  const updateTransaction = async (id, updatedData) => {
+  const updateTransaction = async (id, updatedData, editorName = null) => {
     const oldTxn = transactions.find(t => t.id === id);
     if (!oldTxn) return { success: false, message: 'Transaction record not found' };
 
     const newAmount = parseFloat(updatedData.amount !== undefined ? updatedData.amount : oldTxn.amount);
     const newUserName = updatedData.userName || oldTxn.userName;
     const newStatus = updatedData.status !== undefined ? updatedData.status : oldTxn.status;
+    const newDescription = updatedData.description !== undefined ? updatedData.description : oldTxn.description;
 
     const isCompanyTxn = newUserName === 'Shukan Company' || newUserName === 'Shukan Packaging (Company)' || newUserName === 'Company Vault';
 
@@ -504,6 +562,23 @@ export const ExpenseProvider = ({ children }) => {
     } else {
       setDebitTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t));
     }
+
+    // Record Edit Audit Log
+    const changes = [];
+    if (parseFloat(oldTxn.amount) !== parseFloat(newAmount)) changes.push(`Amount: ${settings.currency}${oldTxn.amount} ➔ ${settings.currency}${newAmount}`);
+    if ((oldTxn.status || 'Done') !== newStatus) changes.push(`Status: ${oldTxn.status || 'Done'} ➔ ${newStatus}`);
+    if ((oldTxn.description || '') !== newDescription) changes.push(`Notes: "${oldTxn.description || '-'}" ➔ "${newDescription || '-'}"`);
+    if (oldTxn.userName !== newUserName) changes.push(`User: ${oldTxn.userName} ➔ ${newUserName}`);
+
+    const activeUser = editorName || updatedData.editorName || oldTxn.userName || 'Admin';
+
+    await recordEditLog(
+      activeUser,
+      id,
+      isCredit ? 'Credit' : 'Debit',
+      `${newUserName}: ${newDescription || oldTxn.description || 'Entry'} (${settings.currency}${(parseFloat(newAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
+      changes.length > 0 ? changes.join(' | ') : 'Updated entry details'
+    );
 
     // Synchronize linked vault deposit status if this is a Company Wallet credit entry
     const finalType = updatedData.type || oldTxn.type;
@@ -730,6 +805,8 @@ export const ExpenseProvider = ({ children }) => {
         dbError,
         isSyncing,
         lastSyncedAt,
+        editLogs,
+        recordEditLog,
         refetchData: loadBackendData,
         addVaultDeposit,
         updateVaultDeposit,

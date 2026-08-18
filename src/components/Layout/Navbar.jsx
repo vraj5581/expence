@@ -140,7 +140,8 @@ const Navbar = ({ onToggleSidebar }) => {
               <button
                 onClick={() => {
                   setIsProfileDropdownOpen(false);
-                  navigate('/admin/settings', { state: { tab: 'password' } });
+                  const isUserAdmin = user?.id === 'admin' || user?.role === 'Administrator' || user?.name?.toLowerCase() === 'vraj';
+                  navigate(isUserAdmin ? '/admin/settings' : '/user/settings', { state: { tab: 'password' } });
                 }}
                 className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-[#002B49] flex items-center space-x-2.5 transition cursor-pointer"
               >

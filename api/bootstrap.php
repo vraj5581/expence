@@ -31,7 +31,7 @@ try {
     }
 
     // 5. Users
-    $stmt5 = $pdo->query("SELECT id, name, username, role, status, createdAt FROM users ORDER BY createdAt DESC");
+    $stmt5 = $pdo->query("SELECT id, name, username, role, status, avatar, created_at, created_at as createdAt FROM users ORDER BY created_at DESC");
     $users = $stmt5->fetchAll();
 
     // 6. Settings
@@ -40,8 +40,12 @@ try {
     $settings = $settingsRow ?: null;
 
     // 7. Tasks
-    $stmt7 = $pdo->query("SELECT * FROM tasks ORDER BY createdAt DESC");
+    $stmt7 = $pdo->query("SELECT *, created_at as createdAt FROM tasks ORDER BY created_at DESC");
     $tasks = $stmt7->fetchAll();
+
+    // 8. Audit Logs
+    $stmt8 = $pdo->query("SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC");
+    $auditLogs = $stmt8->fetchAll();
 
     echo json_encode([
         'success' => true,
@@ -52,7 +56,8 @@ try {
         'userAllocations' => $userAllocations,
         'users' => $users,
         'settings' => $settings,
-        'tasks' => $tasks
+        'tasks' => $tasks,
+        'auditLogs' => $auditLogs
     ]);
 } catch (\Exception $e) {
     echo json_encode([

@@ -96,4 +96,10 @@ export const apiService = {
   addTask: (taskData) => request('tasks.php', { method: 'POST', body: taskData }),
   updateTask: (id, taskData) => request('tasks.php', { method: 'PUT', body: { id, ...taskData } }),
   deleteTask: (id) => request(`tasks.php?id=${id}`, { method: 'DELETE', body: { id } }),
+
+  // Audit Logs (backed by database)
+  getAuditLogs: () => request('audit_logs.php', { method: 'GET' }),
+  addAuditLog: (logData) => request('audit_logs.php', { method: 'POST', body: logData }),
+  deleteAuditLog: (id) => request(`audit_logs.php?id=${id}`, { method: 'DELETE', body: { id } }),
 };
+

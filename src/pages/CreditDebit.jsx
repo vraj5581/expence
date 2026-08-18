@@ -514,7 +514,7 @@ const CreditDebit = ({ isMyView = false }) => {
             notes: data.description,
             date: formattedDate,
             userName: data.userName || editingTxn.userName
-          });
+          }, user?.name || 'Admin');
           if (res && res.success === false) {
             toast.error(res.message, { theme: 'light' });
             return;
@@ -525,7 +525,7 @@ const CreditDebit = ({ isMyView = false }) => {
             ...data,
             amount: numAmount,
             date: formattedDate
-          });
+          }, user?.name || 'Admin');
           if (res && res.success === false) {
             toast.error(res.message, { theme: 'light' });
             return;
@@ -588,7 +588,7 @@ const CreditDebit = ({ isMyView = false }) => {
       toast.info('Company allocation status is fixed as Done', { theme: 'light' });
       return;
     }
-    const res = await updateTransaction(txn.id, { ...txn, status: newStatus });
+    const res = await updateTransaction(txn.id, { ...txn, status: newStatus }, user?.name || 'Admin');
     if (res && res.success === false) {
       toast.error(res.message || 'Failed to update transaction status in PHP database', { theme: 'light' });
       return;

@@ -21,11 +21,12 @@ import Tasks from './pages/Tasks';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Component to handle default redirection based on authentication state
+// Component to handle default redirection based on authentication state and user role
 const DefaultRedirect = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   if (isAuthenticated) {
-    return <Navigate to="/admin/dashboard" replace />;
+    const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || user?.name?.toLowerCase() === 'vraj';
+    return <Navigate to={isAdmin ? "/admin/dashboard" : "/user/dashboard"} replace />;
   }
   return <Navigate to="/login" replace />;
 };
@@ -33,8 +34,8 @@ const DefaultRedirect = () => {
 // Route wrapper for Admin-only pages
 const AdminOnlyRoute = ({ children }) => {
   const { user } = useAuth();
-  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator';
-  return isAdmin ? children : <Navigate to="/admin/dashboard" replace />;
+  const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || user?.name?.toLowerCase() === 'vraj';
+  return isAdmin ? children : <Navigate to="/user/dashboard" replace />;
 };
 
 function App() {
@@ -50,14 +51,15 @@ function App() {
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/admin" element={<AdminLayout />}>
+              {/* Admin Portal Routes (/admin/...) */}
+              <Route path="/admin" element={<AdminOnlyRoute><AdminLayout /></AdminOnlyRoute>}>
                 <Route index element={<DefaultRedirect />} />
                 <Route path="dashboard" element={<Dashboard />} />
-                <Route path="credit-debit" element={<AdminOnlyRoute><CreditDebit /></AdminOnlyRoute>} />
-                <Route path="deposit-allocate" element={<AdminOnlyRoute><DepositAllocate /></AdminOnlyRoute>} />
-                <Route path="team" element={<AdminOnlyRoute><TeamAccounts /></AdminOnlyRoute>} />
-                <Route path="tasks" element={<AdminOnlyRoute><Tasks /></AdminOnlyRoute>} />
-                <Route path="reports" element={<AdminOnlyRoute><Reports /></AdminOnlyRoute>} />
+                <Route path="credit-debit" element={<CreditDebit />} />
+                <Route path="deposit-allocate" element={<DepositAllocate />} />
+                <Route path="team" element={<TeamAccounts />} />
+                <Route path="tasks" element={<Tasks />} />
+                <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="my-credit-debit" element={<MyCreditDebit />} />
 
@@ -69,6 +71,21 @@ function App() {
                 <Route path="cash-in-out" element={<Navigate to="/admin/credit-debit" replace />} />
                 <Route path="add-money" element={<Navigate to="/admin/deposit-allocate" replace />} />
                 <Route path="users" element={<Navigate to="/admin/team" replace />} />
+              </Route>
+
+              {/* User / Staff Portal Routes (/user/...) */}
+              <Route path="/user" element={<AdminLayout />}>
+                <Route index element={<DefaultRedirect />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="my-credit-debit" element={<MyCreditDebit />} />
+                <Route path="tasks" element={<Tasks />} />
+                <Route path="settings" element={<Settings />} />
+
+                {/* Backward Compatible Redirects for User URLs */}
+                <Route path="credit-debit" element={<Navigate to="/user/my-credit-debit" replace />} />
+                <Route path="money-received" element={<Navigate to="/user/my-credit-debit" replace />} />
+                <Route path="expenses" element={<Navigate to="/user/my-credit-debit" replace />} />
+                <Route path="my-expenses" element={<Navigate to="/user/my-credit-debit" replace />} />
               </Route>
             </Route>
 

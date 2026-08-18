@@ -6,16 +6,17 @@ import { useAuth } from '../context/AuthContext';
 import { useExpense } from '../context/ExpenseContext';
 
 const Login = () => {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const { users } = useExpense();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/admin/dashboard', { replace: true });
+      const isAdmin = user?.id === 'admin' || user?.role === 'Administrator' || user?.name?.toLowerCase() === 'vraj';
+      navigate(isAdmin ? '/admin/dashboard' : '/user/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, user, navigate]);
 
   const {
     register,
@@ -35,7 +36,8 @@ const Login = () => {
         position: 'top-right',
         theme: 'light'
       });
-      navigate('/admin/dashboard');
+      const isAdmin = res.user?.id === 'admin' || res.user?.role === 'Administrator' || res.user?.name?.toLowerCase() === 'vraj';
+      navigate(isAdmin ? '/admin/dashboard' : '/user/dashboard');
     } else {
       toast.error(res.message, {
         position: 'top-right',

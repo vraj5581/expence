@@ -17,10 +17,11 @@ const Reports = () => {
     users,
     settings,
     totalAllocatedToTeam,
-    totalCashOut
+    totalCashOut,
+    editLogs
   } = useExpense();
 
-  // Active View Tab: 'all', 'transfers', 'expenses'
+  // Active View Tab: 'all', 'transfers', 'expenses', 'edits'
   const [activeTab, setActiveTab] = useState('all');
 
   // Filter Popup Modal Toggle
@@ -193,6 +194,36 @@ const Reports = () => {
     expenseSearchQuery
   ]);
 
+  // Filtered Entry Edit Audit Log
+  const filteredEditLogs = useMemo(() => {
+    return (editLogs || []).filter((log) => {
+      // Date filter
+      if (!isDateInPeriod(log.date)) return false;
+
+      // Global User Filter
+      if (globalUserFilter !== 'All' && log.editorName !== globalUserFilter) return false;
+
+      // Global Search Query
+      if (globalSearchQuery.trim()) {
+        const query = globalSearchQuery.toLowerCase();
+        const editorMatch = (log.editorName || '').toLowerCase().includes(query);
+        const summaryMatch = (log.entrySummary || '').toLowerCase().includes(query);
+        const detailsMatch = (log.changeDetails || '').toLowerCase().includes(query);
+        const dateMatch = (log.date || '').toLowerCase().includes(query);
+        if (!editorMatch && !summaryMatch && !detailsMatch && !dateMatch) return false;
+      }
+
+      return true;
+    });
+  }, [
+    editLogs,
+    filterPeriod,
+    customStartDate,
+    customEndDate,
+    globalUserFilter,
+    globalSearchQuery
+  ]);
+
   // Summary totals for filtered view
   const totalFilteredTransfers = useMemo(() => {
     return filteredAllocations.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -362,7 +393,7 @@ const Reports = () => {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            All ({filteredAllocations.length + filteredTransactions.length})
+            All ({filteredAllocations.length + filteredTransactions.length + filteredEditLogs.length})
           </button>
 
           <button
@@ -385,6 +416,17 @@ const Reports = () => {
             }`}
           >
             Expenses ({filteredTransactions.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('edits')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeTab === 'edits'
+                ? 'bg-amber-700 text-white shadow-xs'
+                : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200/80'
+            }`}
+          >
+            Edited Entries ({filteredEditLogs.length})
           </button>
         </div>
       </div>
@@ -641,6 +683,119 @@ const Reports = () => {
                   </tr>
                 </tfoot>
               )}
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT 3: Entry Edit Audit Log */}
+      {(activeTab === 'all' || activeTab === 'edits') && (
+        <div id="report-edits-card" className="glass-card p-3.5 sm:p-6 rounded-2xl space-y-4">
+          {/* Header Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-lg font-extrabold text-[#002B49]">Entry Edit Audit Log</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                  {filteredEditLogs.length} Edit History Logs
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Audit history of modified entries showing user name, edited entry details, date, and time
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePrint('all')}
+                className="flex items-center px-3.5 py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                title="Print Audit Report"
+              >
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Report
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile View Card List */}
+          <div className="block md:hidden space-y-3">
+            {filteredEditLogs.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
+                No entry edit logs match the selected filter.
+              </div>
+            ) : (
+              filteredEditLogs.map((log, index) => (
+                <div key={log.id || index} className="p-3.5 rounded-2xl bg-white border border-amber-200/80 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
+                      <span className="text-sm font-extrabold text-[#002B49]">{log.editorName}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900">{log.txnType}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-slate-700 font-extrabold">{formatDate(log.date)}</div>
+                      <div className="text-[10px] text-slate-500 font-bold">{log.time}</div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 space-y-1">
+                    <div className="text-xs text-slate-800 font-bold">
+                      {log.entrySummary}
+                    </div>
+                    <div className="text-[11px] text-amber-900 font-semibold bg-amber-50 p-2 rounded-lg border border-amber-200/80">
+                      Changes: {log.changeDetails}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead className="text-xs uppercase bg-amber-50 text-amber-950 border-b border-amber-200">
+                <tr>
+                  <th className="py-3 px-4 font-bold">Sr. No.</th>
+                  <th className="py-3 px-4 font-bold">User Name</th>
+                  <th className="py-3 px-4 font-bold">Edited Entry</th>
+                  <th className="py-3 px-4 font-bold">Changes Made</th>
+                  <th className="py-3 px-4 font-bold">Date</th>
+                  <th className="py-3 px-4 font-bold text-right">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredEditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-slate-500 text-xs font-medium">
+                      No entry edit logs match the selected filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredEditLogs.map((log, index) => (
+                    <tr key={log.id || index} className="hover:bg-amber-50/40 transition">
+                      <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
+                      <td className="py-3.5 px-4 font-extrabold text-[#002B49]">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-[#002B49] text-xs border border-slate-200">
+                          👤 {log.editorName}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 text-xs max-w-xs truncate">
+                        {log.entrySummary}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-semibold text-amber-900">
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 inline-block font-bold">
+                          {log.changeDetails}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-bold text-slate-600">{formatDate(log.date)}</td>
+                      <td className="py-3.5 px-4 text-xs font-extrabold text-right text-[#002B49] whitespace-nowrap">{log.time}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
             </table>
           </div>
         </div>

@@ -53,10 +53,10 @@ const Dashboard = () => {
   } = useExpense();
 
   const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.id === 'admin' || currentUser?.role === 'Administrator';
+  const isAdmin = currentUser?.id === 'admin' || currentUser?.role === 'Administrator' || currentUser?.name?.toLowerCase() === 'vraj';
 
   const handleRowClick = (accountName) => {
-    const targetPath = isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit';
+    const targetPath = isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit';
     navigate(targetPath, { state: { selectedUser: accountName } });
   };
 
@@ -452,7 +452,7 @@ const Dashboard = () => {
   };
 
   const handleAccountClick = (userName, typeFilter = 'All', statusFilter = 'All') => {
-    const targetRoute = isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit';
+    const targetRoute = isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit';
     navigate(targetRoute, {
       state: {
         selectedUser: userName,
@@ -708,7 +708,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           {/* 1. TOTAL CREDIT */}
           <div
-            onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
+            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
             className="p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
             title="Click middle to view Money Received entries"
           >
@@ -724,7 +724,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
                 className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                 title="Click to view My Hand Credit entries"
               >
@@ -732,7 +732,7 @@ const Dashboard = () => {
                 <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Company Wallet' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Company Wallet' } }); }}
                 className="hover:text-purple-700 hover:underline transition cursor-pointer"
                 title="Click to view Company Wallet Credit entries"
               >
@@ -744,7 +744,7 @@ const Dashboard = () => {
 
           {/* 2. TOTAL DEBIT */}
           <div
-            onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
             className="p-2.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
             title="Click middle to view Total Spent entries"
           >
@@ -760,7 +760,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
                 className="hover:text-amber-900 hover:underline transition cursor-pointer"
                 title="Click to view All Debit entries"
               >
@@ -768,7 +768,7 @@ const Dashboard = () => {
                 <span className="text-slate-800">{settings.currency}{myDebitTotal.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
                 className="hover:text-amber-700 hover:underline transition cursor-pointer"
                 title="Click to view Unpaid Due Debit entries"
               >
@@ -780,7 +780,7 @@ const Dashboard = () => {
 
           {/* 3. CASH IN HAND */}
           <div
-            onClick={() => navigate('/admin/my-credit-debit', { state: { statusFilter: 'Done' } })}
+            onClick={() => navigate('/user/my-credit-debit', { state: { statusFilter: 'Done' } })}
             className="p-2.5 rounded-xl bg-white border border-blue-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
             title="Click middle to view Done entries"
           >
@@ -796,7 +796,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
                 className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                 title="Click to view Hand Received Credits"
               >
@@ -804,7 +804,7 @@ const Dashboard = () => {
                 <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
                 className="hover:text-slate-900 hover:underline transition cursor-pointer"
                 title="Click to view Spent Debits"
               >
@@ -822,7 +822,7 @@ const Dashboard = () => {
             const companyOwesMe = outOfPocket + netDueOwed;
             return (
               <div
-                onClick={() => navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+                onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
                 className={`p-2.5 rounded-xl bg-white border shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between ${
                   companyOwesMe > 0 ? 'border-rose-200/90 bg-rose-50/20' : 'border-slate-200/80'
                 }`}
@@ -848,7 +848,7 @@ const Dashboard = () => {
                 </div>
                 <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
                     className="hover:text-rose-700 hover:underline transition cursor-pointer"
                     title="Click to view All Debit entries"
                   >
@@ -856,7 +856,7 @@ const Dashboard = () => {
                     <span className="text-slate-800">{settings.currency}{companyOwesMe.toLocaleString('en-IN')}</span>
                   </div>
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
                     className="hover:text-amber-700 hover:underline transition cursor-pointer"
                     title="Click to view Due Debit entries"
                   >
@@ -1179,7 +1179,7 @@ const Dashboard = () => {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 mt-4 pt-3 border-t border-slate-100 text-center">
             {/* 1. Total Done Credit (Light Green) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-col justify-center cursor-pointer hover:bg-emerald-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Done Credit"
             >
@@ -1191,7 +1191,7 @@ const Dashboard = () => {
 
             {/* 2. Total Done Debit (Light Red) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex flex-col justify-center cursor-pointer hover:bg-rose-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Done Debit"
             >
@@ -1203,7 +1203,7 @@ const Dashboard = () => {
 
             {/* 3. Total Pending Credit (Light Green) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Due' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Due' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-300 flex flex-col justify-center cursor-pointer hover:bg-emerald-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Pending Credit"
             >
@@ -1215,7 +1215,7 @@ const Dashboard = () => {
 
             {/* 4. Total Pending Debit (Light Red) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-rose-50/80 border border-rose-300 flex flex-col justify-center cursor-pointer hover:bg-rose-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Pending Debit"
             >
@@ -1227,7 +1227,7 @@ const Dashboard = () => {
 
             {/* 5. Total Allocations (Sky Blue) */}
             <div
-              onClick={() => navigate('/admin/deposit-allocate')}
+              onClick={() => navigate(isAdmin ? '/admin/deposit-allocate' : '/user/my-credit-debit')}
               className="p-2 sm:p-2.5 rounded-xl bg-sky-50 border border-sky-200 flex flex-col justify-center cursor-pointer hover:bg-sky-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Allocations"
             >
@@ -1239,7 +1239,7 @@ const Dashboard = () => {
 
             {/* 6. Company Must Pay (Light Red) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/admin/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-rose-100 border border-rose-300 flex flex-col justify-center cursor-pointer hover:bg-rose-200 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Company Must Pay"
             >
