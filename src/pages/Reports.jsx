@@ -308,20 +308,25 @@ const Reports = () => {
     return filteredTransactions.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   }, [filteredTransactions]);
 
+  const [printTarget, setPrintTarget] = useState('all');
+
   // Print Handlers
   const handlePrint = (target = 'all') => {
-    document.body.classList.remove('print-target-transfers', 'print-target-expenses');
+    setPrintTarget(target);
+    document.body.classList.remove('print-target-transfers', 'print-target-expenses', 'print-target-edits');
 
     if (target === 'transfers') {
       document.body.classList.add('print-target-transfers');
     } else if (target === 'expenses') {
       document.body.classList.add('print-target-expenses');
+    } else if (target === 'edits') {
+      document.body.classList.add('print-target-edits');
     }
 
     window.print();
 
     setTimeout(() => {
-      document.body.classList.remove('print-target-transfers', 'print-target-expenses');
+      document.body.classList.remove('print-target-transfers', 'print-target-expenses', 'print-target-edits');
     }, 1000);
   };
 
@@ -370,7 +375,8 @@ const Reports = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <>
+      <div className="space-y-8 print:hidden">
       {/* Header & Primary Actions */}
       <div className="flex flex-row items-center justify-between gap-3">
         <div>
@@ -576,7 +582,7 @@ const Reports = () => {
               </button>
 
               <button
-                onClick={() => handlePrint('all')}
+                onClick={() => handlePrint('edits')}
                 className="flex-1 sm:flex-none inline-flex items-center justify-center px-3.5 py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold transition shadow-xs cursor-pointer whitespace-nowrap"
                 title="Print Audit Report"
               >
@@ -1257,7 +1263,198 @@ const Reports = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* 🖨️ DEDICATED PRINT-ONLY LEDGER REPORT (Strict B&W Table Format) */}
+      <div className="hidden print:block print-ledger-report">
+        {/* Header */}
+        <div className="text-center border-b-2 border-black pb-2 mb-3 print-header">
+          <h1 className="text-xl font-bold uppercase text-black tracking-wider">SHUKAN PACKAGING</h1>
+          <h2 className="text-xs font-bold text-black uppercase mt-0.5">
+            {printTarget === 'edits'
+              ? 'Entry Edit Audit Log'
+              : printTarget === 'transfers'
+              ? 'Company Money Transfer Log'
+              : printTarget === 'expenses'
+              ? 'User Expense Receipts Log'
+              : 'Full Reports & Audit Ledger'}
+          </h2>
+          <div className="text-[9pt] font-normal text-black mt-1 flex items-center justify-center space-x-2">
+            <span>Date Printed: {formatDate(new Date())}</span>
+            {globalUserFilter !== 'All' && <span>| User: {globalUserFilter}</span>}
+            {filterPeriod !== 'All' && <span>| Period: {filterPeriod}</span>}
+          </div>
+        </div>
+
+        {/* SECTION 1: ENTRY EDIT AUDIT LOG TABLE */}
+        {(printTarget === 'all' || printTarget === 'edits') && (
+          <div className="mb-4 print-section">
+            <div className="border-b border-black pb-1 mb-2 print-section-header">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-black uppercase">
+                  Entry Edit Audit Log
+                </h2>
+                <span className="text-[8.5pt] font-semibold text-black">
+                  {filteredEditLogs.length} Edit History Logs
+                </span>
+              </div>
+            </div>
+
+            <table className="print-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '7%' }} className="sr-cell">SR. NO.</th>
+                  <th style={{ width: '15%' }} className="user-cell">USER NAME</th>
+                  <th style={{ width: '30%' }} className="description-cell">EDITED ENTRY</th>
+                  <th style={{ width: '28%' }} className="description-cell">CHANGES MADE</th>
+                  <th style={{ width: '10%' }} className="date-cell">DATE</th>
+                  <th style={{ width: '10%' }} className="date-cell">TIME</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-4">
+                      No entry edit logs match the selected filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredEditLogs.map((log, index) => (
+                    <tr key={log.id || index}>
+                      <td className="sr-cell">{index + 1}</td>
+                      <td className="user-cell">{log.editorName}</td>
+                      <td className="description-cell">{log.entrySummary}</td>
+                      <td className="description-cell">{log.changeDetails}</td>
+                      <td className="date-cell">{formatDate(log.date)}</td>
+                      <td className="date-cell">{log.time}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* SECTION 2: COMPANY MONEY TRANSFER LOG TABLE */}
+        {(printTarget === 'all' || printTarget === 'transfers') && (
+          <div className={`mb-4 print-section ${printTarget === 'all' ? 'print-page-break-before' : ''}`}>
+            <div className="border-b border-black pb-1 mb-2 print-section-header">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-black uppercase">
+                  Company Money Transfer Log
+                </h2>
+                <span className="text-[8.5pt] font-semibold text-black">
+                  {filteredAllocations.length} Records | Total: {settings.currency}{totalFilteredTransfers.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <table className="print-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '8%' }} className="sr-cell">SR. NO.</th>
+                  <th style={{ width: '14%' }} className="date-cell">DATE</th>
+                  <th style={{ width: '22%' }} className="user-cell">GIVEN TO USER</th>
+                  <th style={{ width: '36%' }} className="description-cell">NOTES / PURPOSE</th>
+                  <th style={{ width: '20%' }} className="amount-cell">AMOUNT GIVEN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAllocations.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-4">
+                      No money transfer logs match the selected filter.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {filteredAllocations.map((log, index) => (
+                      <tr key={log.id || index}>
+                        <td className="sr-cell">{index + 1}</td>
+                        <td className="date-cell">{formatDate(log.date)}</td>
+                        <td className="user-cell">{log.userName}</td>
+                        <td className="description-cell">{log.notes || '-'}</td>
+                        <td className="amount-cell">
+                          +{settings.currency}{(parseFloat(log.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="print-total-row">
+                      <td colSpan={4} className="total-label">Total Money Transferred:</td>
+                      <td className="total-amount">
+                        +{settings.currency}{totalFilteredTransfers.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* SECTION 3: USER EXPENSE RECEIPTS LOG TABLE */}
+        {(printTarget === 'all' || printTarget === 'expenses') && (
+          <div className={`mb-4 print-section ${printTarget === 'all' ? 'print-page-break-before' : ''}`}>
+            <div className="border-b border-black pb-1 mb-2 print-section-header">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-black uppercase">
+                  User Expense Receipts Log
+                </h2>
+                <span className="text-[8.5pt] font-semibold text-black">
+                  {filteredTransactions.length} Receipts | Total: {settings.currency}{totalFilteredExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <table className="print-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '8%' }} className="sr-cell">SR. NO.</th>
+                  <th style={{ width: '14%' }} className="date-cell">DATE</th>
+                  <th style={{ width: '22%' }} className="user-cell">USER NAME</th>
+                  <th style={{ width: '36%' }} className="description-cell">DESCRIPTION / NOTES</th>
+                  <th style={{ width: '20%' }} className="amount-cell">AMOUNT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-4">
+                      No expense receipt logs match the selected filter.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {filteredTransactions.map((t, index) => (
+                      <tr key={t.id || index}>
+                        <td className="sr-cell">{index + 1}</td>
+                        <td className="date-cell">{formatDate(t.date)}</td>
+                        <td className="user-cell">{t.userName}</td>
+                        <td className="description-cell">{t.description || '-'}</td>
+                        <td className="amount-cell">
+                          {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="print-total-row">
+                      <td colSpan={4} className="total-label">Total Expenses Spent:</td>
+                      <td className="total-amount">
+                        {settings.currency}{totalFilteredExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="pt-3 text-center border-t border-black text-[8pt] text-black print-footer mt-4">
+          <span>Shukan Packaging - Expense Management Software</span>
+        </div>
+      </div>
+    </>
   );
 };
 

@@ -452,14 +452,23 @@
 
   /* Target specific report printing */
   body.print-target-transfers #report-expenses-card,
+  body.print-target-transfers #report-edits-card,
   body.print-target-transfers #reports-kpi-summary,
   body.print-target-transfers #reports-global-filter-bar {
     display: none !important;
   }
 
   body.print-target-expenses #report-transfers-card,
+  body.print-target-expenses #report-edits-card,
   body.print-target-expenses #reports-kpi-summary,
   body.print-target-expenses #reports-global-filter-bar {
+    display: none !important;
+  }
+
+  body.print-target-edits #report-transfers-card,
+  body.print-target-edits #report-expenses-card,
+  body.print-target-edits #reports-kpi-summary,
+  body.print-target-edits #reports-global-filter-bar {
     display: none !important;
   }
 }
