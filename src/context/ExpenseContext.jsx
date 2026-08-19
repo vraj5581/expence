@@ -70,7 +70,7 @@ export const ExpenseProvider = ({ children }) => {
     } catch (e) {}
   }, []);
 
-  const recordEditLog = async (editorName, txnId, txnType, entrySummary, changeDetails) => {
+  const recordEditLog = async (editorName, txnId, txnType, entrySummary, changeDetails, oldData = null) => {
     const now = new Date();
     const formattedDate = now.toISOString().split('T')[0];
     const formattedTime = now.toLocaleTimeString('en-IN', {
@@ -89,7 +89,8 @@ export const ExpenseProvider = ({ children }) => {
       changeDetails: changeDetails || 'Updated entry details',
       date: formattedDate,
       time: formattedTime,
-      createdAt: now.toISOString()
+      createdAt: now.toISOString(),
+      oldData: oldData ? (typeof oldData === 'string' ? oldData : JSON.stringify(oldData)) : null
     };
 
     setEditLogs(prev => [newLog, ...prev]);
@@ -103,6 +104,94 @@ export const ExpenseProvider = ({ children }) => {
     } catch (err) {
       console.error("Failed to save audit log to database:", err);
     }
+  };
+
+  const parseOldValuesFromLog = (log) => {
+    if (!log) return null;
+    if (log.oldData) {
+      try {
+        return typeof log.oldData === 'string' ? JSON.parse(log.oldData) : log.oldData;
+      } catch (e) {}
+    }
+
+    const details = log.changeDetails || '';
+    const parsed = {};
+
+    const amountMatch = details.match(/Amount:\s*[^0-9]*([0-9,.]+)\s*➔/i);
+    if (amountMatch) {
+      parsed.amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+    }
+
+    const statusMatch = details.match(/Status:\s*([A-Za-z]+)\s*➔/i);
+    if (statusMatch) {
+      parsed.status = statusMatch[1].trim();
+    }
+
+    const notesMatch = details.match(/Notes:\s*"([^"]*)"\s*➔/i);
+    if (notesMatch) {
+      parsed.description = notesMatch[1] === '-' ? '' : notesMatch[1];
+      parsed.notes = parsed.description;
+    }
+
+    const userMatch = details.match(/User:\s*([^➔|]+)\s*➔/i);
+    if (userMatch) {
+      parsed.userName = userMatch[1].trim();
+    }
+
+    return parsed;
+  };
+
+  const revertAuditLog = async (log) => {
+    if (!log) return { success: false, message: 'Invalid log record' };
+
+    const oldValues = parseOldValuesFromLog(log);
+    if (!oldValues || Object.keys(oldValues).length === 0) {
+      return { success: false, message: 'Could not parse original values to revert' };
+    }
+
+    const targetTxnId = log.txnId;
+    let res = null;
+
+    if (log.txnType === 'Money Transfer') {
+      res = await updateAllocation(targetTxnId, oldValues);
+    } else {
+      res = await updateTransaction(targetTxnId, oldValues);
+    }
+
+    if (res && res.success) {
+      await deleteAuditLog(log.id);
+      return { success: true, message: 'Successfully reverted edit and restored original entry values!' };
+    }
+
+    return { success: false, message: res?.message || 'Failed to revert entry in database' };
+  };
+
+  const updateAuditLog = async (id, updatedData) => {
+    const res = await apiService.updateAuditLog(id, updatedData);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update audit log' };
+    }
+    setEditLogs(prev => prev.map(log => log.id === id ? { ...log, ...updatedData } : log));
+    return { success: true };
+  };
+
+  const deleteAuditLog = async (id) => {
+    const res = await apiService.deleteAuditLog(id);
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete audit log' };
+    }
+    setEditLogs(prev => prev.filter(log => log.id !== id));
+    return { success: true };
+  };
+
+  const deleteLastMonthAuditLogs = async () => {
+    const res = await apiService.deleteLastMonthAuditLogs();
+    if (!res || res.success === false) {
+      return { success: false, message: res?.error || res?.message || 'Database error: Failed to clear previous month audit logs' };
+    }
+    const currentMonthStart = new Date().toISOString().slice(0, 7) + '-01';
+    setEditLogs(prev => prev.filter(log => log.date >= currentMonthStart));
+    return { success: true };
   };
 
   // Fetch state from PHP backend database (Ultra-fast single request)
@@ -390,12 +479,20 @@ export const ExpenseProvider = ({ children }) => {
     } : a));
 
     const finalEditor = editorName || updatedData.editorName || 'Admin';
+    const oldAllocSnapshot = {
+      amount: oldAlloc.amount,
+      userName: oldAlloc.userName,
+      notes: oldAlloc.notes || '',
+      date: oldAlloc.date
+    };
+
     await recordEditLog(
       finalEditor,
       id,
       'Money Transfer',
       `Transfer to ${updatedData.userName || oldAlloc.userName}: ${updatedData.notes || oldAlloc.notes || 'Petty Cash'} (${settings.currency}${newAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
-      `Updated transfer amount: ${settings.currency}${oldAmount} ➔ ${settings.currency}${newAmount}`
+      `Updated transfer amount: ${settings.currency}${oldAmount} ➔ ${settings.currency}${newAmount}`,
+      oldAllocSnapshot
     );
 
     return { success: true };
@@ -571,13 +668,22 @@ export const ExpenseProvider = ({ children }) => {
     if (oldTxn.userName !== newUserName) changes.push(`User: ${oldTxn.userName} ➔ ${newUserName}`);
 
     const activeUser = editorName || updatedData.editorName || oldTxn.userName || 'Admin';
+    const oldTxnSnapshot = {
+      amount: oldTxn.amount,
+      status: oldTxn.status || 'Done',
+      description: oldTxn.description || '',
+      userName: oldTxn.userName,
+      type: oldTxn.type,
+      date: oldTxn.date
+    };
 
     await recordEditLog(
       activeUser,
       id,
       isCredit ? 'Credit' : 'Debit',
       `${newUserName}: ${newDescription || oldTxn.description || 'Entry'} (${settings.currency}${(parseFloat(newAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
-      changes.length > 0 ? changes.join(' | ') : 'Updated entry details'
+      changes.length > 0 ? changes.join(' | ') : 'Updated entry details',
+      oldTxnSnapshot
     );
 
     // Synchronize linked vault deposit status if this is a Company Wallet credit entry
@@ -807,6 +913,10 @@ export const ExpenseProvider = ({ children }) => {
         lastSyncedAt,
         editLogs,
         recordEditLog,
+        updateAuditLog,
+        deleteAuditLog,
+        revertAuditLog,
+        deleteLastMonthAuditLogs,
         refetchData: loadBackendData,
         addVaultDeposit,
         updateVaultDeposit,

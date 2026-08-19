@@ -100,6 +100,8 @@ export const apiService = {
   // Audit Logs (backed by database)
   getAuditLogs: () => request('audit_logs.php', { method: 'GET' }),
   addAuditLog: (logData) => request('audit_logs.php', { method: 'POST', body: logData }),
+  updateAuditLog: (id, logData) => request('audit_logs.php', { method: 'PUT', body: { id, ...logData } }),
   deleteAuditLog: (id) => request(`audit_logs.php?id=${id}`, { method: 'DELETE', body: { id } }),
+  deleteLastMonthAuditLogs: () => request('audit_logs.php?id=last_month', { method: 'DELETE', body: { id: 'last_month' } }),
 };
 

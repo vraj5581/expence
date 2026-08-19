@@ -18,7 +18,11 @@ const Reports = () => {
     settings,
     totalAllocatedToTeam,
     totalCashOut,
-    editLogs
+    editLogs,
+    updateAuditLog,
+    deleteAuditLog,
+    revertAuditLog,
+    deleteLastMonthAuditLogs
   } = useExpense();
 
   // Active View Tab: 'all', 'transfers', 'expenses', 'edits'
@@ -26,6 +30,77 @@ const Reports = () => {
 
   // Filter Popup Modal Toggle
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
+  // Edit Audit Log Modal State
+  const [editingAuditLog, setEditingAuditLog] = useState(null);
+  const [isEditAuditModalOpen, setIsEditAuditModalOpen] = useState(false);
+  const [editAuditForm, setEditAuditForm] = useState({
+    editorName: '',
+    txnType: 'Entry',
+    entrySummary: '',
+    changeDetails: '',
+    date: '',
+    time: ''
+  });
+  const [isDeletingLastMonth, setIsDeletingLastMonth] = useState(false);
+
+  const handleOpenEditAuditModal = (log) => {
+    setEditingAuditLog(log);
+    setEditAuditForm({
+      editorName: log.editorName || '',
+      txnType: log.txnType || 'Entry',
+      entrySummary: log.entrySummary || '',
+      changeDetails: log.changeDetails || '',
+      date: log.date || new Date().toISOString().split('T')[0],
+      time: log.time || ''
+    });
+    setIsEditAuditModalOpen(true);
+  };
+
+  const handleSaveAuditEdit = async (e) => {
+    e.preventDefault();
+    if (!editingAuditLog) return;
+    const res = await updateAuditLog(editingAuditLog.id, editAuditForm);
+    if (res.success) {
+      setIsEditAuditModalOpen(false);
+      setEditingAuditLog(null);
+    } else {
+      alert(res.message || 'Failed to update audit log');
+    }
+  };
+
+  const handleDeleteAuditLog = async (id) => {
+    if (window.confirm('Are you sure you want to delete this audit log entry?')) {
+      const res = await deleteAuditLog(id);
+      if (!res.success) {
+        alert(res.message || 'Failed to delete audit log entry');
+      }
+    }
+  };
+
+  const handleDeleteLastMonthLogs = async () => {
+    if (window.confirm('Are you sure you want to delete all audit logs from previous months?')) {
+      setIsDeletingLastMonth(true);
+      const res = await deleteLastMonthAuditLogs();
+      setIsDeletingLastMonth(false);
+      if (!res.success) {
+        alert(res.message || 'Failed to delete last month audit logs');
+      }
+    }
+  };
+
+  const handleRevertAuditLog = async (log) => {
+    if (window.confirm('Are you sure you want to revert this edit and restore the original entry values in the database?')) {
+      const res = await revertAuditLog(log);
+      if (res.success) {
+        setIsEditAuditModalOpen(false);
+        setEditingAuditLog(null);
+        alert(res.message);
+      } else {
+        alert(res.message || 'Failed to revert entry');
+      }
+    }
+  };
 
   // Global Filter States
   const [filterPeriod, setFilterPeriod] = useState('All');
@@ -397,6 +472,17 @@ const Reports = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('edits')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeTab === 'edits'
+                ? 'bg-amber-700 text-white shadow-xs'
+                : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200/80'
+            }`}
+          >
+            Edited Entries ({filteredEditLogs.length})
+          </button>
+
+          <button
             onClick={() => setActiveTab('transfers')}
             className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
               activeTab === 'transfers'
@@ -416,17 +502,6 @@ const Reports = () => {
             }`}
           >
             Expenses ({filteredTransactions.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('edits')}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-              activeTab === 'edits'
-                ? 'bg-amber-700 text-white shadow-xs'
-                : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200/80'
-            }`}
-          >
-            Edited Entries ({filteredEditLogs.length})
           </button>
         </div>
       </div>
@@ -470,7 +545,199 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* REPORT 1: Company Money Transfer Log */}
+      {/* REPORT 1 (TOP): Entry Edit Audit Log */}
+      {(activeTab === 'all' || activeTab === 'edits') && (
+        <div id="report-edits-card" className="glass-card p-3.5 sm:p-6 rounded-2xl space-y-4">
+          {/* Header Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base sm:text-lg font-extrabold text-[#002B49]">Entry Edit Audit Log</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                  {filteredEditLogs.length} Edit History Logs
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Audit history of modified entries showing user name, edited entry details, date, and time
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                onClick={handleDeleteLastMonthLogs}
+                disabled={isDeletingLastMonth}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center px-3 py-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                title="Auto-delete or manually purge logs older than current month"
+              >
+                <svg className="w-3.5 h-3.5 mr-1.5 text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                {isDeletingLastMonth ? 'Deleting...' : 'Delete Last Month Logs'}
+              </button>
+
+              <button
+                onClick={() => handlePrint('all')}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center px-3.5 py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold transition shadow-xs cursor-pointer whitespace-nowrap"
+                title="Print Audit Report"
+              >
+                <svg className="w-3.5 h-3.5 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Report
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile View Card List */}
+          <div className="block md:hidden space-y-3">
+            {filteredEditLogs.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
+                No entry edit logs match the selected filter.
+              </div>
+            ) : (
+              filteredEditLogs.map((log, index) => (
+                <div key={log.id || index} className="p-3.5 rounded-2xl bg-white border border-amber-200/80 shadow-xs space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <span className="text-[11px] font-bold text-slate-400 shrink-0">#{index + 1}</span>
+                      <span className="text-sm font-extrabold text-[#002B49] truncate">{log.editorName}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 shrink-0">{log.txnType}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[11px] text-slate-700 font-extrabold">{formatDate(log.date)}</div>
+                      <div className="text-[10px] text-slate-500 font-bold">{log.time}</div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                    <div className="text-xs text-slate-800 font-bold break-words">
+                      {log.entrySummary}
+                    </div>
+                    <div className="text-[11px] text-amber-900 font-semibold bg-amber-50 p-2 rounded-lg border border-amber-200/80 break-words">
+                      <span className="font-extrabold uppercase text-[10px] text-amber-700 block mb-0.5">Changes:</span>
+                      {log.changeDetails}
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100">
+                      <button
+                        onClick={() => handleRevertAuditLog(log)}
+                        className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 text-xs font-bold transition cursor-pointer shrink-0"
+                        title="Revert edit and restore original entry values"
+                      >
+                        <svg className="w-3.5 h-3.5 mr-1 text-amber-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Revert Old
+                      </button>
+
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <button
+                          onClick={() => handleOpenEditAuditModal(log)}
+                          className="inline-flex items-center justify-center px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold transition cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAuditLog(log.id)}
+                          className="inline-flex items-center justify-center px-3 py-1.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead className="text-xs uppercase bg-amber-50 text-amber-950 border-b border-amber-200">
+                <tr>
+                  <th className="py-3 px-4 font-bold">Sr. No.</th>
+                  <th className="py-3 px-4 font-bold">User Name</th>
+                  <th className="py-3 px-4 font-bold">Edited Entry</th>
+                  <th className="py-3 px-4 font-bold">Changes Made</th>
+                  <th className="py-3 px-4 font-bold">Date</th>
+                  <th className="py-3 px-4 font-bold text-right">Time</th>
+                  <th className="py-3 px-4 font-bold text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredEditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="py-8 text-center text-slate-500 text-xs font-medium">
+                      No entry edit logs match the selected filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredEditLogs.map((log, index) => (
+                    <tr key={log.id || index} className="hover:bg-amber-50/40 transition">
+                      <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
+                      <td className="py-3.5 px-4 font-extrabold text-[#002B49]">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-[#002B49] text-xs border border-slate-200">
+                          👤 {log.editorName}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 text-xs max-w-xs truncate">
+                        {log.entrySummary}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-semibold text-amber-900">
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 inline-block font-bold">
+                          {log.changeDetails}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-bold text-slate-600">{formatDate(log.date)}</td>
+                      <td className="py-3.5 px-4 text-xs font-extrabold text-right text-[#002B49] whitespace-nowrap">{log.time}</td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <button
+                            onClick={() => handleRevertAuditLog(log)}
+                            className="p-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
+                            title="Revert Edit & Restore Original Entry"
+                          >
+                            <svg className="w-4 h-4 text-amber-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditAuditModal(log)}
+                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition cursor-pointer"
+                            title="Edit Audit Log Entry"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAuditLog(log.id)}
+                            className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800 transition cursor-pointer"
+                            title="Delete Audit Log Entry"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT 2: Company Money Transfer Log */}
       {(activeTab === 'all' || activeTab === 'transfers') && (
         <div id="report-transfers-card" className="glass-card p-3.5 sm:p-6 rounded-2xl space-y-4">
           {/* Header Actions */}
@@ -579,7 +846,7 @@ const Reports = () => {
         </div>
       )}
 
-      {/* REPORT 2: User Expense Receipts Log */}
+      {/* REPORT 3: User Expense Receipts Log */}
       {(activeTab === 'all' || activeTab === 'expenses') && (
         <div id="report-expenses-card" className="glass-card p-3.5 sm:p-6 rounded-2xl space-y-4">
           {/* Header Actions */}
@@ -683,119 +950,6 @@ const Reports = () => {
                   </tr>
                 </tfoot>
               )}
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* REPORT 3: Entry Edit Audit Log */}
-      {(activeTab === 'all' || activeTab === 'edits') && (
-        <div id="report-edits-card" className="glass-card p-3.5 sm:p-6 rounded-2xl space-y-4">
-          {/* Header Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-extrabold text-[#002B49]">Entry Edit Audit Log</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                  {filteredEditLogs.length} Edit History Logs
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Audit history of modified entries showing user name, edited entry details, date, and time
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePrint('all')}
-                className="flex items-center px-3.5 py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold transition shadow-xs cursor-pointer"
-                title="Print Audit Report"
-              >
-                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Print Report
-              </button>
-            </div>
-          </div>
-
-          {/* Mobile View Card List */}
-          <div className="block md:hidden space-y-3">
-            {filteredEditLogs.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-xl">
-                No entry edit logs match the selected filter.
-              </div>
-            ) : (
-              filteredEditLogs.map((log, index) => (
-                <div key={log.id || index} className="p-3.5 rounded-2xl bg-white border border-amber-200/80 shadow-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[11px] font-bold text-slate-400">#{index + 1}</span>
-                      <span className="text-sm font-extrabold text-[#002B49]">{log.editorName}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900">{log.txnType}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[11px] text-slate-700 font-extrabold">{formatDate(log.date)}</div>
-                      <div className="text-[10px] text-slate-500 font-bold">{log.time}</div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 space-y-1">
-                    <div className="text-xs text-slate-800 font-bold">
-                      {log.entrySummary}
-                    </div>
-                    <div className="text-[11px] text-amber-900 font-semibold bg-amber-50 p-2 rounded-lg border border-amber-200/80">
-                      Changes: {log.changeDetails}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-700">
-              <thead className="text-xs uppercase bg-amber-50 text-amber-950 border-b border-amber-200">
-                <tr>
-                  <th className="py-3 px-4 font-bold">Sr. No.</th>
-                  <th className="py-3 px-4 font-bold">User Name</th>
-                  <th className="py-3 px-4 font-bold">Edited Entry</th>
-                  <th className="py-3 px-4 font-bold">Changes Made</th>
-                  <th className="py-3 px-4 font-bold">Date</th>
-                  <th className="py-3 px-4 font-bold text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredEditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-500 text-xs font-medium">
-                      No entry edit logs match the selected filter.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredEditLogs.map((log, index) => (
-                    <tr key={log.id || index} className="hover:bg-amber-50/40 transition">
-                      <td className="py-3.5 px-4 font-bold text-slate-600 text-xs">{index + 1}</td>
-                      <td className="py-3.5 px-4 font-extrabold text-[#002B49]">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-[#002B49] text-xs border border-slate-200">
-                          👤 {log.editorName}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800 text-xs max-w-xs truncate">
-                        {log.entrySummary}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs font-semibold text-amber-900">
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 inline-block font-bold">
-                          {log.changeDetails}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs font-bold text-slate-600">{formatDate(log.date)}</td>
-                      <td className="py-3.5 px-4 text-xs font-extrabold text-right text-[#002B49] whitespace-nowrap">{log.time}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
             </table>
           </div>
         </div>
@@ -968,6 +1122,138 @@ const Reports = () => {
                 Apply Filters
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT AUDIT LOG POPUP MODAL */}
+      {isEditAuditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto print:hidden">
+          <div className="bg-white w-full max-w-lg p-6 rounded-3xl border border-slate-200 relative shadow-2xl space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#002B49]">Edit Audit Log Entry</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Modify record details for audit history log</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsEditAuditModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAuditEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1">User Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editAuditForm.editorName}
+                    onChange={(e) => setEditAuditForm({ ...editAuditForm, editorName: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-semibold border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1">Type</label>
+                  <select
+                    value={editAuditForm.txnType}
+                    onChange={(e) => setEditAuditForm({ ...editAuditForm, txnType: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-semibold border border-slate-200"
+                  >
+                    <option value="Entry">Entry</option>
+                    <option value="Debit">Debit</option>
+                    <option value="Credit">Credit</option>
+                    <option value="Money Transfer">Money Transfer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1">Edited Entry Summary</label>
+                <input
+                  type="text"
+                  required
+                  value={editAuditForm.entrySummary}
+                  onChange={(e) => setEditAuditForm({ ...editAuditForm, entrySummary: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-medium border border-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1">Changes Made</label>
+                <textarea
+                  rows="2"
+                  value={editAuditForm.changeDetails}
+                  onChange={(e) => setEditAuditForm({ ...editAuditForm, changeDetails: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-medium border border-slate-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={editAuditForm.date}
+                    onChange={(e) => setEditAuditForm({ ...editAuditForm, date: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-semibold border border-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1">Time</label>
+                  <input
+                    type="text"
+                    value={editAuditForm.time}
+                    placeholder="e.g. 11:58:49 am"
+                    onChange={(e) => setEditAuditForm({ ...editAuditForm, time: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white font-semibold border border-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => handleRevertAuditLog(editingAuditLog)}
+                  className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold transition cursor-pointer flex items-center justify-center shrink-0"
+                  title="Revert edit and restore entry back to original values"
+                >
+                  <svg className="w-3.5 h-3.5 mr-1.5 text-amber-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  Revert Edit & Restore Old Entry
+                </button>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditAuditModalOpen(false)}
+                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer text-center"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white text-xs font-bold shadow-md transition cursor-pointer text-center whitespace-nowrap"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

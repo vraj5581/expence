@@ -43,7 +43,12 @@ try {
     $stmt7 = $pdo->query("SELECT *, created_at as createdAt FROM tasks ORDER BY created_at DESC");
     $tasks = $stmt7->fetchAll();
 
-    // 8. Audit Logs
+    // 8. Audit Logs (auto-clean previous month logs when month changes)
+    $firstDayOfCurrentMonth = date('Y-m-01');
+    try {
+        $pdo->prepare("DELETE FROM audit_logs WHERE date < :current_month_start")->execute(['current_month_start' => $firstDayOfCurrentMonth]);
+    } catch (\Exception $e) {}
+
     $stmt8 = $pdo->query("SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC");
     $auditLogs = $stmt8->fetchAll();
 
