@@ -128,7 +128,6 @@ const Navbar = ({ onToggleSidebar }) => {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black text-[#002B49] truncate">{user?.name || 'User'}</p>
-                <p className="text-[10px] font-semibold text-[#c69255] truncate">@{user?.username || user?.id || 'user'}</p>
                 <span className="inline-block mt-1 px-2 py-0.5 text-[9.5px] font-extrabold bg-[#002B49]/10 text-[#002B49] rounded-md">
                   {effectiveRole}
                 </span>
