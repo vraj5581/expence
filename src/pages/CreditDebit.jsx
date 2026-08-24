@@ -93,6 +93,242 @@ const CreditDebit = ({ isMyView = false }) => {
     triggerPrint(target);
   };
 
+  // Direct WhatsApp Report Sharing Generator (No download required)
+  const generateWhatsAppMessage = (target = 'all') => {
+    const isAll = target === 'all';
+    const isDebit = target === 'debit';
+    const isCredit = target === 'credit';
+
+    const companyName = settings.companyName || 'Shukan Packaging';
+    const reportTitle = isDebit
+      ? 'DEBIT STATEMENT REPORT (Cash Out)'
+      : isCredit
+        ? 'CREDIT STATEMENT REPORT (Cash In)'
+        : 'DEBIT & CREDIT AUDIT LEDGER';
+
+    const userLabel = selectedUser !== 'All' ? selectedUser : 'All Users';
+    const dateStr = formatDate(new Date());
+
+    let lines = [];
+    lines.push(`🏢 *${companyName.toUpperCase()}*`);
+    lines.push(`📋 *${reportTitle}*`);
+    lines.push(`📅 *Report Date:* ${dateStr}`);
+    lines.push(``);
+
+    // Explicit Applied Filters Block
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`🔍 *APPLIED FILTERS:*`);
+    const activeFiltersList = [];
+
+    if (selectedUser !== 'All') {
+      activeFiltersList.push(`• *User/Party:* ${selectedUser}`);
+    }
+
+    if (isDebit || isAll) {
+      if (debitStatus !== 'All') activeFiltersList.push(`• *Debit Status:* ${debitStatus}`);
+      if (debitStartDate || debitEndDate) {
+        const s = debitStartDate ? formatDate(debitStartDate) : 'Start';
+        const e = debitEndDate ? formatDate(debitEndDate) : 'Today';
+        activeFiltersList.push(`• *Debit Date:* ${s} to ${e}`);
+      }
+      if (debitMinAmt || debitMaxAmt) {
+        const min = debitMinAmt ? `${settings.currency}${debitMinAmt}` : '0';
+        const max = debitMaxAmt ? `${settings.currency}${debitMaxAmt}` : 'Max';
+        activeFiltersList.push(`• *Debit Amount:* ${min} - ${max}`);
+      }
+      if (debitSearch.trim()) activeFiltersList.push(`• *Debit Search:* "${debitSearch.trim()}"`);
+    }
+
+    if (isCredit || isAll) {
+      if (creditDepositTo !== 'All') activeFiltersList.push(`• *Deposit Account:* ${creditDepositTo}`);
+      if (creditStatus !== 'All') activeFiltersList.push(`• *Credit Status:* ${creditStatus}`);
+      if (creditStartDate || creditEndDate) {
+        const s = creditStartDate ? formatDate(creditStartDate) : 'Start';
+        const e = creditEndDate ? formatDate(creditEndDate) : 'Today';
+        activeFiltersList.push(`• *Credit Date:* ${s} to ${e}`);
+      }
+      if (creditMinAmt || creditMaxAmt) {
+        const min = creditMinAmt ? `${settings.currency}${creditMinAmt}` : '0';
+        const max = creditMaxAmt ? `${settings.currency}${creditMaxAmt}` : 'Max';
+        activeFiltersList.push(`• *Credit Amount:* ${min} - ${max}`);
+      }
+      if (creditSearch.trim()) activeFiltersList.push(`• *Credit Search:* "${creditSearch.trim()}"`);
+    }
+
+    if (activeFiltersList.length === 0) {
+      lines.push(`• *Filters:* None (All Ledger Entries)`);
+    } else {
+      activeFiltersList.forEach(f => lines.push(f));
+    }
+    lines.push(``);
+
+    // Calculate exact filtered metrics
+    const debitDoneVal = filteredDebitTxns
+      .filter(t => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const debitDueVal = filteredDebitTxns
+      .filter(t => (t.status || 'Done') === 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const debitTotalVal = debitDoneVal + debitDueVal;
+
+    const creditDoneVal = filteredCreditTxns
+      .filter(t => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const creditDueVal = filteredCreditTxns
+      .filter(t => (t.status || 'Done') === 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const creditTotalVal = creditDoneVal + creditDueVal;
+
+    const myHandDoneVal = filteredCreditTxns
+      .filter(t => (t.depositTo || 'My Hand') !== 'Company Wallet' && (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const walletDoneVal = filteredCreditTxns
+      .filter(t => t.depositTo === 'Company Wallet' && (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    // Dynamic Filter-aware labels (Person + Status/Account combined)
+    let debitLabel = 'Total Debit';
+    let creditLabel = 'Total Credit';
+    const personName = selectedUser !== 'All' ? selectedUser : '';
+
+    let debitStatusPart = debitStatus !== 'All' ? ` ${debitStatus}` : '';
+    if (personName) {
+      debitLabel = `${personName}'s Total${debitStatusPart} Debit`;
+    } else {
+      debitLabel = `Total${debitStatusPart} Debit`;
+    }
+
+    let creditAccountOrStatusPart = '';
+    if (creditDepositTo !== 'All') {
+      creditAccountOrStatusPart = creditDepositTo === 'Company Wallet' ? ' Co. Wallet' : ' In Hand';
+    } else if (creditStatus !== 'All') {
+      creditAccountOrStatusPart = ` ${creditStatus}`;
+    }
+
+    if (personName) {
+      creditLabel = `${personName}'s Total${creditAccountOrStatusPart} Credit`;
+    } else {
+      creditLabel = `Total${creditAccountOrStatusPart} Credit`;
+    }
+
+    // Financial Summary Block (Filter-Aware & Sleek)
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`📊 *FINANCIAL SUMMARY*`);
+
+    if (isAll || isDebit) {
+      if (debitDueVal > 0) {
+        lines.push(`• *${debitLabel}:* ${settings.currency}${debitTotalVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${filteredDebitTxns.length} entries | Done: ${settings.currency}${debitDoneVal.toLocaleString('en-IN')} | Due: ${settings.currency}${debitDueVal.toLocaleString('en-IN')})`);
+      } else {
+        lines.push(`• *${debitLabel}:* ${settings.currency}${debitTotalVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${filteredDebitTxns.length} entries)`);
+      }
+    }
+
+    if (isAll || isCredit) {
+      const parts = [];
+      if (myHandDoneVal > 0 && creditDepositTo !== 'Company Wallet') parts.push(`In Hand: ${settings.currency}${myHandDoneVal.toLocaleString('en-IN')}`);
+      if (walletDoneVal > 0 && creditDepositTo !== 'My Hand') parts.push(`Co. Wallet: ${settings.currency}${walletDoneVal.toLocaleString('en-IN')}`);
+      if (creditDueVal > 0) parts.push(`Due: ${settings.currency}${creditDueVal.toLocaleString('en-IN')}`);
+
+      const breakdown = parts.length > 0 ? ` | ${parts.join(' • ')}` : '';
+      lines.push(`• *${creditLabel}:* ${settings.currency}${creditTotalVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${filteredCreditTxns.length} entries${breakdown})`);
+    }
+
+    if (isAll) {
+      const availCash = Math.max(0, myHandDoneVal - debitDoneVal);
+      const companyOwesMe = Math.max(0, debitDoneVal - myHandDoneVal);
+
+      const targetPerson = personName ? personName : 'Staff';
+
+      if (companyOwesMe > 0) {
+        lines.push(`• *Net Position:* Company Owes ${targetPerson} ${settings.currency}${companyOwesMe.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`);
+      } else if (availCash > 0) {
+        lines.push(`• *Net Position:* ${personName ? `${personName} Has Cash In Hand` : 'Cash In Hand'} ${settings.currency}${availCash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`);
+      } else {
+        lines.push(`• *Net Position:* Settled (${settings.currency}0.00)`);
+      }
+    }
+
+    // Detailed Itemized Entries Block
+    if (isAll || isDebit) {
+      if (filteredDebitTxns.length > 0) {
+        lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+        lines.push(`📝 *DEBIT ENTRIES (${filteredDebitTxns.length}):*`);
+        lines.push(`─────────────────────────────`);
+        filteredDebitTxns.slice(0, 35).forEach((t, i) => {
+          const statusFlag = (t.status || 'Done') === 'Done' ? '✅ Done' : '⏳ Due';
+          const desc = t.description ? ` - ${t.description}` : '';
+          const dateStr = formatDate(t.date);
+          lines.push(`${i + 1}. ${dateStr} | *${t.userName}*: ${settings.currency}${(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} [${statusFlag}]${desc}`);
+          lines.push(`─────────────────────────────`);
+        });
+        if (filteredDebitTxns.length > 35) {
+          lines.push(`_... and ${filteredDebitTxns.length - 35} more debit entries_`);
+        }
+
+        const debitFooterLabel = personName
+          ? `TOTAL ${personName.toUpperCase()}${debitStatus !== 'All' ? ` ${debitStatus.toUpperCase()}` : ''} DEBIT`
+          : `TOTAL ${debitStatus !== 'All' ? `${debitStatus.toUpperCase()} ` : ''}DEBIT`;
+
+        lines.push(`📊 *${debitFooterLabel}:* ${settings.currency}${debitTotalVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${filteredDebitTxns.length} Entries)`);
+        lines.push(``);
+      }
+    }
+
+    if (isAll || isCredit) {
+      if (filteredCreditTxns.length > 0) {
+        lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+        lines.push(`📥 *CREDIT ENTRIES (${filteredCreditTxns.length}):*`);
+        lines.push(`─────────────────────────────`);
+        filteredCreditTxns.slice(0, 35).forEach((t, i) => {
+          const statusFlag = (t.status || 'Done') === 'Done' ? '✅ Done' : '⏳ Due';
+          const accLabel = t.depositTo === 'Company Wallet' ? 'Co. Wallet' : 'In Hand';
+          const desc = t.description ? ` - ${t.description}` : '';
+          const dateStr = formatDate(t.date);
+          lines.push(`${i + 1}. ${dateStr} | *${t.userName}* (${accLabel}): ${settings.currency}${(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} [${statusFlag}]${desc}`);
+          lines.push(`─────────────────────────────`);
+        });
+        if (filteredCreditTxns.length > 35) {
+          lines.push(`_... and ${filteredCreditTxns.length - 35} more credit entries_`);
+        }
+
+        const creditAccPart = creditDepositTo !== 'All' ? ` ${creditDepositTo.toUpperCase()}` : '';
+        const creditStatPart = creditStatus !== 'All' ? ` ${creditStatus.toUpperCase()}` : '';
+        const creditFooterLabel = personName
+          ? `TOTAL ${personName.toUpperCase()}${creditAccPart}${creditStatPart} CREDIT`
+          : `TOTAL${creditAccPart}${creditStatPart} CREDIT`;
+
+        lines.push(`📊 *${creditFooterLabel}:* ${settings.currency}${creditTotalVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${filteredCreditTxns.length} Entries)`);
+        lines.push(``);
+      }
+    }
+
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`_Generated via Shukan Expense ERP_`);
+
+    return lines.join('\n');
+  };
+
+  const handleShareWhatsApp = (target = 'all') => {
+    const textMessage = generateWhatsAppMessage(target);
+    const encodedText = encodeURIComponent(textMessage);
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({
+        title: `${settings.companyName || 'Shukan'} Transaction Report`,
+        text: textMessage
+      }).catch(() => {
+        window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+      });
+    } else {
+      window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+    }
+  };
+
   // Independent Debit Filter State
   const [debitSearch, setDebitSearch] = useState('');
   const [debitStatus, setDebitStatus] = useState('All');
@@ -2140,61 +2376,88 @@ const CreditDebit = ({ isMyView = false }) => {
             {/* Options List */}
             <div className="space-y-2.5">
               {/* Option 1: All (Debit & Credit) */}
-              <button
-                onClick={() => handlePrintSelection('all')}
-                className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-left transition flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#002B49] text-white flex items-center justify-center font-black text-base shrink-0 group-hover:scale-105 transition">
-                    📄
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handlePrintSelection('all')}
+                  className="flex-1 p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-left transition flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[#002B49] text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
+                      📄
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-extrabold text-[#002B49] group-hover:text-amber-600 transition truncate">
+                        All Audit Ledger
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-medium truncate">Both Debit & Credit records</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-extrabold text-[#002B49] group-hover:text-amber-600 transition">
-                      All Audit Ledger (Both Debit & Credit)
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-medium">Complete financial statement containing all records</p>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-slate-400 group-hover:text-amber-600 shrink-0 ml-2">➔</span>
-              </button>
+                  <span className="text-xs font-bold text-slate-400 shrink-0 ml-1">🖨️</span>
+                </button>
+                <button
+                  onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('all'); }}
+                  className="px-3 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition cursor-pointer flex items-center shrink-0"
+                  title="Direct Share All Ledger on WhatsApp"
+                >
+                  💬 Share
+                </button>
+              </div>
 
               {/* Option 2: Debit Only */}
-              <button
-                onClick={() => handlePrintSelection('debit')}
-                className="w-full p-3.5 rounded-2xl bg-rose-50/60 hover:bg-rose-100/70 border border-rose-200/80 text-left transition flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-700 text-white flex items-center justify-center font-black text-base shrink-0 group-hover:scale-105 transition">
-                    🧾
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handlePrintSelection('debit')}
+                  className="flex-1 p-3 rounded-2xl bg-rose-50/60 hover:bg-rose-100/70 border border-rose-200/80 text-left transition flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-rose-700 text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
+                      🧾
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-extrabold text-rose-950 group-hover:text-rose-700 transition truncate">
+                        Debit Statement Only
+                      </h4>
+                      <p className="text-[10px] text-rose-800/80 font-medium truncate">Cash Out expense entries</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-extrabold text-rose-950 group-hover:text-rose-700 transition">
-                      Debit Statement Only (Cash Out)
-                    </h4>
-                    <p className="text-[11px] text-rose-800/80 font-medium">All company expense entries & payments made</p>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-rose-400 group-hover:text-rose-700 shrink-0 ml-2">➔</span>
-              </button>
+                  <span className="text-xs font-bold text-rose-400 shrink-0 ml-1">🖨️</span>
+                </button>
+                <button
+                  onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('debit'); }}
+                  className="px-3 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition cursor-pointer flex items-center shrink-0"
+                  title="Direct Share Debit Statement on WhatsApp"
+                >
+                  💬 Share
+                </button>
+              </div>
 
               {/* Option 3: Credit Only */}
-              <button
-                onClick={() => handlePrintSelection('credit')}
-                className="w-full p-3.5 rounded-2xl bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-200/80 text-left transition flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black text-base shrink-0 group-hover:scale-105 transition">
-                    💰
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handlePrintSelection('credit')}
+                  className="flex-1 p-3 rounded-2xl bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-200/80 text-left transition flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
+                      💰
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-extrabold text-emerald-950 group-hover:text-emerald-700 transition truncate">
+                        Credit Statement Only
+                      </h4>
+                      <p className="text-[10px] text-emerald-800/80 font-medium truncate">Cash In & Allocations</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-extrabold text-emerald-950 group-hover:text-emerald-700 transition">
-                      Credit Statement Only (Cash In)
-                    </h4>
-                    <p className="text-[11px] text-emerald-800/80 font-medium">All money deposits & company allocations</p>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-emerald-400 group-hover:text-emerald-700 shrink-0 ml-2">➔</span>
-              </button>
+                  <span className="text-xs font-bold text-emerald-400 shrink-0 ml-1">🖨️</span>
+                </button>
+                <button
+                  onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('credit'); }}
+                  className="px-3 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition cursor-pointer flex items-center shrink-0"
+                  title="Direct Share Credit Statement on WhatsApp"
+                >
+                  💬 Share
+                </button>
+              </div>
             </div>
 
             {/* Modal Footer */}

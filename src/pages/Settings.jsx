@@ -17,7 +17,8 @@ const Settings = () => {
     transactions,
     vaultDeposits,
     allocationsHistory,
-    users
+    users,
+    recordEditLog
   } = useExpense();
   const { user, changePassword } = useAuth();
 
@@ -275,10 +276,42 @@ const Settings = () => {
       await deleteAllocation(a.id);
       count++;
     }
+
+    // Record Bulk Deletion event in Entry Edit Audit Log
+    const editor = user?.name || 'Admin';
+    const dateRangeStr = (backupStartDate || backupEndDate)
+      ? `${backupStartDate || 'Start'} to ${backupEndDate || 'End'}`
+      : 'All Time';
+
+    const breakdownItems = [];
+    if (txns.length > 0) breakdownItems.push(`${txns.length} Expense(s)`);
+    if (deposits.length > 0) breakdownItems.push(`${deposits.length} Vault Deposit(s)`);
+    if (allocs.length > 0) breakdownItems.push(`${allocs.length} Allocation(s)`);
+
+    const summaryText = `Bulk Delete: ${count} Filtered Records (Category: ${backupCategory}, User: ${backupUser})`;
+    const detailsText = `Deleted ${count} record(s) [${breakdownItems.join(', ')}] | Date Range: ${dateRangeStr}`;
+
+    await recordEditLog(
+      editor,
+      'N/A',
+      'Bulk Delete',
+      summaryText,
+      detailsText,
+      {
+        action: 'Bulk Filtered Deletion',
+        category: backupCategory,
+        user: backupUser,
+        startDate: backupStartDate || 'All',
+        endDate: backupEndDate || 'All',
+        deletedCount: count,
+        breakdown: { expenses: txns.length, deposits: deposits.length, allocations: allocs.length }
+      }
+    );
+
     setDeleteLoading(false);
     setIsDeleteModalOpen(false);
     setDeletePassword('');
-    toast.success(`Successfully deleted ${count} matching record(s) from PHP database!`, { theme: 'light' });
+    toast.success(`Successfully deleted ${count} matching record(s) and logged in Audit Log!`, { theme: 'light' });
   };
 
   const filteredStats = getFilteredData();

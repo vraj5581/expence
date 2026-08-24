@@ -56,10 +56,14 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
-    $id = $data['id'] ?? ($_GET['id'] ?? null);
+    $id = $_GET['id'] ?? ($data['id'] ?? null);
     if (!$id) { echo json_encode(['success' => false, 'message' => 'ID missing']); exit(); }
     $stmt = $pdo->prepare("DELETE FROM debit_transactions WHERE id = :id");
     $stmt->execute(['id' => $id]);
+    try {
+        $stmtAudit = $pdo->prepare("DELETE FROM audit_logs WHERE txnId = :id OR entrySummary LIKE CONCAT('%', :id, '%')");
+        $stmtAudit->execute(['id' => $id]);
+    } catch (\Exception $e) {}
     echo json_encode(['success' => true]);
     exit();
 }

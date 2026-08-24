@@ -68,7 +68,7 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
-    $id = $data['id'] ?? ($_GET['id'] ?? null);
+    $id = $_GET['id'] ?? ($data['id'] ?? null);
     if (!$id) { echo json_encode(['success' => false, 'message' => 'Transaction ID missing']); exit(); }
 
     // Try delete from both tables (one will match)
@@ -76,6 +76,10 @@ if ($method === 'DELETE') {
     $stmt1->execute(['id' => $id]);
     $stmt2 = $pdo->prepare("DELETE FROM credit_transactions WHERE id = :id");
     $stmt2->execute(['id' => $id]);
+    try {
+        $stmtAudit = $pdo->prepare("DELETE FROM audit_logs WHERE txnId = :id OR entrySummary LIKE CONCAT('%', :id, '%')");
+        $stmtAudit->execute(['id' => $id]);
+    } catch (\Exception $e) {}
 
     echo json_encode(['success' => true]);
     exit();

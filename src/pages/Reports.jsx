@@ -14,6 +14,7 @@ const Reports = () => {
     adminVaultBalance,
     allocationsHistory,
     transactions,
+    vaultDeposits,
     users,
     settings,
     totalAllocatedToTeam,
@@ -269,9 +270,20 @@ const Reports = () => {
     expenseSearchQuery
   ]);
 
-  // Filtered Entry Edit Audit Log
+  // Filtered Entry Edit Audit Log (auto-hides logs for deleted entries)
   const filteredEditLogs = useMemo(() => {
+    const validEntryIds = new Set([
+      ...(transactions || []).map(t => t.id),
+      ...(allocationsHistory || []).map(a => a.id),
+      ...(vaultDeposits || []).map(v => v.id)
+    ]);
+
     return (editLogs || []).filter((log) => {
+      // If this audit log belongs to a specific entry (txnId), omit if the entry was deleted
+      if (log.txnId && log.txnId !== 'N/A' && !validEntryIds.has(log.txnId)) {
+        return false;
+      }
+
       // Date filter
       if (!isDateInPeriod(log.date)) return false;
 
@@ -292,6 +304,9 @@ const Reports = () => {
     });
   }, [
     editLogs,
+    transactions,
+    allocationsHistory,
+    vaultDeposits,
     filterPeriod,
     customStartDate,
     customEndDate,
@@ -625,16 +640,18 @@ const Reports = () => {
                     </div>
 
                     <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100">
-                      <button
-                        onClick={() => handleRevertAuditLog(log)}
-                        className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 text-xs font-bold transition cursor-pointer shrink-0"
-                        title="Revert edit and restore original entry values"
-                      >
-                        <svg className="w-3.5 h-3.5 mr-1 text-amber-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                        </svg>
-                        Revert Old
-                      </button>
+                      {log.txnType !== 'Bulk Delete' && (
+                        <button
+                          onClick={() => handleRevertAuditLog(log)}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 text-xs font-bold transition cursor-pointer shrink-0"
+                          title="Revert edit and restore original entry values"
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1 text-amber-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                          </svg>
+                          Revert Old
+                        </button>
+                      )}
 
                       <div className="flex items-center space-x-2 shrink-0">
                         <button
@@ -694,10 +711,17 @@ const Reports = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-800 text-xs max-w-xs truncate">
+                        {log.txnType === 'Bulk Delete' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200 mr-1.5 shrink-0">
+                            🗑️ BULK DELETE
+                          </span>
+                        ) : null}
                         {log.entrySummary}
                       </td>
                       <td className="py-3.5 px-4 text-xs font-semibold text-amber-900">
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 inline-block font-bold">
+                        <span className={`px-2.5 py-1 rounded-lg border inline-block font-bold ${
+                          log.txnType === 'Bulk Delete' ? 'bg-rose-50 border-rose-200 text-rose-900' : 'bg-amber-50 border-amber-200'
+                        }`}>
                           {log.changeDetails}
                         </span>
                       </td>
@@ -705,15 +729,17 @@ const Reports = () => {
                       <td className="py-3.5 px-4 text-xs font-extrabold text-right text-[#002B49] whitespace-nowrap">{log.time}</td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center space-x-1.5">
-                          <button
-                            onClick={() => handleRevertAuditLog(log)}
-                            className="p-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
-                            title="Revert Edit & Restore Original Entry"
-                          >
-                            <svg className="w-4 h-4 text-amber-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
-                          </button>
+                          {log.txnType !== 'Bulk Delete' && (
+                            <button
+                              onClick={() => handleRevertAuditLog(log)}
+                              className="p-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
+                              title="Revert Edit & Restore Original Entry"
+                            >
+                              <svg className="w-4 h-4 text-amber-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenEditAuditModal(log)}
                             className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition cursor-pointer"

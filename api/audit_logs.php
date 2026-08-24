@@ -11,11 +11,21 @@ try {
     // Column already exists
 }
 
-// Auto-delete entries older than the current month (when month changes)
+// Auto-delete entries older than current month & orphan logs for deleted entries
 $firstDayOfCurrentMonth = date('Y-m-01');
 try {
     $stmtClean = $pdo->prepare("DELETE FROM audit_logs WHERE date < :current_month_start");
     $stmtClean->execute(['current_month_start' => $firstDayOfCurrentMonth]);
+    $pdo->exec("
+        DELETE FROM audit_logs
+        WHERE txnId IS NOT NULL
+          AND txnId != ''
+          AND txnId != 'N/A'
+          AND txnId NOT IN (SELECT id FROM debit_transactions)
+          AND txnId NOT IN (SELECT id FROM credit_transactions)
+          AND txnId NOT IN (SELECT id FROM allocations_history)
+          AND txnId NOT IN (SELECT id FROM vault_deposits)
+    ");
 } catch (\Exception $e) {
     // Ignore error if table is empty or missing
 }
@@ -114,7 +124,11 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
-    $id = $data['id'] ?? ($_GET['id'] ?? null);
+    $id = $_GET['id'] ?? ($data['id'] ?? null);
+    if (!$id && isset($data['id'])) {
+        $id = $data['id'];
+    }
+
     if ($id === 'last_month') {
         $stmt = $pdo->prepare("DELETE FROM audit_logs WHERE date < :current_month_start");
         $stmt->execute(['current_month_start' => $firstDayOfCurrentMonth]);

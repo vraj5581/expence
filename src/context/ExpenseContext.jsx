@@ -394,6 +394,7 @@ export const ExpenseProvider = ({ children }) => {
     }
 
     setVaultDeposits(prev => prev.filter(d => d.id !== id));
+    setEditLogs(prev => prev.filter(log => log.txnId !== id));
     return { success: true };
   };
 
@@ -512,6 +513,7 @@ export const ExpenseProvider = ({ children }) => {
       [targetAlloc.userName]: Math.max(0, (prev[targetAlloc.userName] || 0) - targetAlloc.amount)
     }));
     setAllocationsHistory(prev => prev.filter(a => a.id !== id));
+    setEditLogs(prev => prev.filter(log => log.txnId !== id));
 
     return { success: true };
   };
@@ -552,10 +554,9 @@ export const ExpenseProvider = ({ children }) => {
 
     const totalCashAvailable = allocated + cashInReceived;
     const remainingNet = totalCashAvailable - spent;
-    const netBalanceAfterDue = remainingNet - dueSpent;
 
     const remaining = Math.max(0, remainingNet);
-    const needFromCompany = netBalanceAfterDue < 0 ? Math.abs(netBalanceAfterDue) : 0;
+    const needFromCompany = spent > totalCashAvailable ? (spent - totalCashAvailable) : 0;
 
     return {
       allocated,
@@ -740,6 +741,7 @@ export const ExpenseProvider = ({ children }) => {
     } else {
       setDebitTransactions(prev => prev.filter(t => t.id !== id));
     }
+    setEditLogs(prev => prev.filter(log => log.txnId !== id));
     return { success: true };
   };
 

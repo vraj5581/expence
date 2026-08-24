@@ -360,8 +360,8 @@ const Dashboard = () => {
   const dueTotal = isAdmin ? teamDueTotal : myDueDebit;
   const moneyGiven = isAdmin ? totalAllocatedToTeam : myHandDoneCredit;
   const neededFromAdmin = isAdmin
-    ? Math.max(0, (doneTotal + dueTotal) - moneyGiven)
-    : Math.max(0, (myDoneDebit + myDueDebit) - myHandDoneCredit);
+    ? Math.max(0, adminDoneDebit - totalAllocatedToTeam)
+    : Math.max(0, myDoneDebit - myHandDoneCredit);
 
   const overviewBarChartLabels = isAdmin
     ? [['Done', 'Credit'], ['Done', 'Debit'], ['Pending', 'Credit'], ['Pending', 'Debit'], ['Allocations'], ['Must Pay']]
@@ -850,79 +850,7 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-          {/* 1. TOTAL CREDIT */}
-          <div
-            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
-            className="p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
-            title="Click middle to view Money Received entries"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-[11px] font-black uppercase text-emerald-800 tracking-wider">TOTAL CREDIT</span>
-              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0 font-bold">💰</span>
-            </div>
-            <div className="my-1 text-center">
-              <div className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
-                {settings.currency}{myDoneCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[9px] font-black uppercase text-emerald-700/80 tracking-wider">Money Received</span>
-            </div>
-            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
-              <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
-                className="hover:text-emerald-700 hover:underline transition cursor-pointer"
-                title="Click to view My Hand Credit entries"
-              >
-                <span className="text-slate-400">In Hand: </span>
-                <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
-              </div>
-              <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Company Wallet' } }); }}
-                className="hover:text-purple-700 hover:underline transition cursor-pointer"
-                title="Click to view Company Wallet Credit entries"
-              >
-                <span className="text-slate-400">In Wallet: </span>
-                <span className="text-purple-700">{settings.currency}{myWalletDoneCredit.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. TOTAL DEBIT */}
-          <div
-            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
-            className="p-2.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
-            title="Click middle to view Total Spent entries"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-[11px] font-black uppercase text-amber-900 tracking-wider">TOTAL DEBIT</span>
-              <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center text-xs shrink-0 font-bold">🧾</span>
-            </div>
-            <div className="my-1 text-center">
-              <div className="text-lg sm:text-xl font-black text-amber-900 tracking-tight">
-                {settings.currency}{myDoneDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[9px] font-black uppercase text-amber-800/80 tracking-wider">Total Spent</span>
-            </div>
-            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
-              <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
-                className="hover:text-amber-900 hover:underline transition cursor-pointer"
-                title="Click to view All Debit entries"
-              >
-                <span className="text-slate-400">All Bills: </span>
-                <span className="text-slate-800">{settings.currency}{myDebitTotal.toLocaleString('en-IN')}</span>
-              </div>
-              <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
-                className="hover:text-amber-700 hover:underline transition cursor-pointer"
-                title="Click to view Unpaid Due Debit entries"
-              >
-                <span className="text-slate-400">Unpaid Due: </span>
-                <span className="text-amber-700">{settings.currency}{myDueDebit.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. CASH IN HAND */}
+          {/* 1. CASH IN HAND */}
           <div
             onClick={() => navigate('/user/my-credit-debit', { state: { statusFilter: 'Done' } })}
             className="p-2.5 rounded-xl bg-white border border-blue-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
@@ -958,12 +886,9 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* 4. COMPANY OWES ME */}
+          {/* 2. COMPANY OWES ME */}
           {(() => {
-            const availCash = Math.max(0, myHandDoneCredit - myDoneDebit);
-            const outOfPocket = Math.max(0, myDoneDebit - myHandDoneCredit);
-            const netDueOwed = Math.max(0, myDueDebit - availCash);
-            const companyOwesMe = outOfPocket + netDueOwed;
+            const companyOwesMe = Math.max(0, myDoneDebit - myHandDoneCredit);
             return (
               <div
                 onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
@@ -983,34 +908,106 @@ const Dashboard = () => {
                   </span>
                 </div>
                 <div className="my-1 text-center">
-                  <div className={`text-lg sm:text-xl font-black tracking-tight ${outOfPocket > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
-                    {settings.currency}{outOfPocket.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <div className={`text-lg sm:text-xl font-black tracking-tight ${companyOwesMe > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+                    {settings.currency}{companyOwesMe.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-wider ${outOfPocket > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                  <span className={`text-[9px] font-black uppercase tracking-wider ${companyOwesMe > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
                     Payback Needed
                   </span>
                 </div>
                 <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
                     className="hover:text-rose-700 hover:underline transition cursor-pointer"
-                    title="Click to view All Debit entries"
+                    title="Click to view Total Spent"
                   >
-                    <span className="text-slate-400">Total Owed: </span>
-                    <span className="text-slate-800">{settings.currency}{companyOwesMe.toLocaleString('en-IN')}</span>
+                    <span className="text-slate-400">Total Spent: </span>
+                    <span className="text-slate-800">{settings.currency}{myDoneDebit.toLocaleString('en-IN')}</span>
                   </div>
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
-                    className="hover:text-amber-700 hover:underline transition cursor-pointer"
-                    title="Click to view Due Debit entries"
+                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } }); }}
+                    className="hover:text-emerald-700 hover:underline transition cursor-pointer"
+                    title="Click to view Money Received"
                   >
-                    <span className="text-slate-400">Due Bills: </span>
-                    <span className="text-amber-700">{settings.currency}{myDueDebit.toLocaleString('en-IN')}</span>
+                    <span className="text-slate-400">Total Credit: </span>
+                    <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
             );
           })()}
+
+          {/* 3. TOTAL DEBIT */}
+          <div
+            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+            className="p-2.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+            title="Click middle to view Total Spent entries"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] font-black uppercase text-amber-900 tracking-wider">TOTAL DEBIT</span>
+              <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center text-xs shrink-0 font-bold">🧾</span>
+            </div>
+            <div className="my-1 text-center">
+              <div className="text-lg sm:text-xl font-black text-amber-900 tracking-tight">
+                {settings.currency}{myDoneDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[9px] font-black uppercase text-amber-800/80 tracking-wider">Total Spent</span>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                className="hover:text-amber-900 hover:underline transition cursor-pointer"
+                title="Click to view All Debit entries"
+              >
+                <span className="text-slate-400">All Bills: </span>
+                <span className="text-slate-800">{settings.currency}{myDebitTotal.toLocaleString('en-IN')}</span>
+              </div>
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                className="hover:text-amber-700 hover:underline transition cursor-pointer"
+                title="Click to view Unpaid Due Debit entries"
+              >
+                <span className="text-slate-400">Unpaid Due: </span>
+                <span className="text-amber-700">{settings.currency}{myDueDebit.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. TOTAL CREDIT */}
+          <div
+            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
+            className="p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+            title="Click middle to view Money Received entries"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] font-black uppercase text-emerald-800 tracking-wider">TOTAL CREDIT</span>
+              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0 font-bold">💰</span>
+            </div>
+            <div className="my-1 text-center">
+              <div className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
+                {settings.currency}{myDoneCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[9px] font-black uppercase text-emerald-700/80 tracking-wider">Money Received</span>
+            </div>
+            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                className="hover:text-emerald-700 hover:underline transition cursor-pointer"
+                title="Click to view My Hand Credit entries"
+              >
+                <span className="text-slate-400">In Hand: </span>
+                <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
+              </div>
+              <div
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Company Wallet' } }); }}
+                className="hover:text-purple-700 hover:underline transition cursor-pointer"
+                title="Click to view Company Wallet Credit entries"
+              >
+                <span className="text-slate-400">In Wallet: </span>
+                <span className="text-purple-700">{settings.currency}{myWalletDoneCredit.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
