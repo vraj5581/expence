@@ -12,6 +12,7 @@ const CreditDebit = ({ isMyView = false }) => {
   const { user } = useAuth();
   const {
     transactions,
+    vaultDeposits,
     users,
     allocationsHistory,
     settings,
@@ -20,7 +21,9 @@ const CreditDebit = ({ isMyView = false }) => {
     deleteTransaction,
     updateAllocation,
     deleteAllocation,
-    addVaultDeposit
+    addVaultDeposit,
+    updateVaultDeposit,
+    deleteVaultDeposit
   } = useExpense();
 
   // Tab & Print View State
@@ -40,6 +43,11 @@ const CreditDebit = ({ isMyView = false }) => {
   const [editingTxn, setEditingTxn] = useState(null);
   const [modalTxnType, setModalTxnType] = useState('Cash Out');
   const [selectedTxnForAction, setSelectedTxnForAction] = useState(null);
+
+  const availableBanks = (settings?.banks || 'IOB Bank, BOB Bank')
+    .split(',')
+    .map(b => b.trim())
+    .filter(Boolean);
 
   // Dynamic PDF Filename Generator
   const getDynamicPdfTitle = (target = 'all') => {
@@ -381,7 +389,7 @@ const CreditDebit = ({ isMyView = false }) => {
     }
   }, []);
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
   const selectedSpender = watch('userName', 'Shukan Company');
 
   // Separate raw arrays
@@ -391,19 +399,37 @@ const CreditDebit = ({ isMyView = false }) => {
 
   const rawCreditTxns = useMemo(() => {
     const directCredits = transactions.filter(t => t.type === 'Cash In' || t.type === 'Credit');
-    const mappedAllocations = (allocationsHistory || []).map(a => ({
-      id: a.id,
-      type: 'Credit',
-      depositTo: 'My Hand',
-      userName: a.userName,
-      amount: parseFloat(a.amount) || 0,
-      date: a.date,
-      description: a.notes || `Company Cash Allocation (${a.userName})`,
-      status: 'Done',
-      isAllocation: true
-    }));
-    return [...mappedAllocations, ...directCredits].sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [transactions, allocationsHistory]);
+    const directCreditIds = new Set(directCredits.map(t => t.id));
+
+    // Map all Vault Deposits into Credit transactions (excluding duplicates linked by txnId)
+    const mappedVaultDeposits = (vaultDeposits || [])
+      .filter(d => !d.txnId || !directCreditIds.has(d.txnId))
+      .map(d => ({
+        id: d.id,
+        type: 'Credit',
+        depositTo: d.depositTo || 'Company Wallet',
+        userName: (d.userName && d.userName !== 'Shukan Admin') ? d.userName : 'Vraj',
+        amount: parseFloat(d.amount) || 0,
+        date: d.date,
+        description: d.notes ? d.notes.replace(/Admin Capital/g, 'Company Capital') : 'Vault Capital Deposit',
+        status: d.status || 'Done',
+        isVaultDeposit: true,
+        rawItem: d
+      }));
+
+    return [...mappedVaultDeposits, ...directCredits].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  }, [transactions, vaultDeposits]);
+
+  // User-filtered raw arrays for accurate tab badge counts
+  const userFilteredDebitTxns = useMemo(() => {
+    if (selectedUser === 'All') return rawDebitTxns;
+    return rawDebitTxns.filter(t => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
+  }, [rawDebitTxns, selectedUser]);
+
+  const userFilteredCreditTxns = useMemo(() => {
+    if (selectedUser === 'All') return rawCreditTxns;
+    return rawCreditTxns.filter(t => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
+  }, [rawCreditTxns, selectedUser]);
 
   // Filtered Debit Transactions
   const filteredDebitTxns = useMemo(() => {
@@ -443,7 +469,11 @@ const CreditDebit = ({ isMyView = false }) => {
       }
       if (creditDepositTo !== 'All') {
         const target = t.depositTo || 'My Hand';
-        if (target !== creditDepositTo) return false;
+        if (creditDepositTo === 'Banks') {
+          if (target === 'My Hand' || target === 'Company Wallet') return false;
+        } else {
+          if (target !== creditDepositTo) return false;
+        }
       }
       if (creditStatus !== 'All' && (t.status || 'Done') !== creditStatus) return false;
       if (creditStartDate && t.date < creditStartDate) return false;
@@ -499,6 +529,10 @@ const CreditDebit = ({ isMyView = false }) => {
     let walletDone = 0;
     let walletDue = 0;
 
+    let bankTotal = 0;
+    let bankDone = 0;
+    let bankDue = 0;
+
     userCreditTxns.forEach(t => {
       const amt = parseFloat(t.amount) || 0;
       const isDone = (t.status || 'Done') === 'Done';
@@ -506,18 +540,24 @@ const CreditDebit = ({ isMyView = false }) => {
       if (isDone) doneTotal += amt;
       else dueTotal += amt;
 
-      if (t.depositTo === 'Company Wallet') {
+      const dep = t.depositTo || 'My Hand';
+      if (dep === 'Company Wallet') {
         walletTotal += amt;
         if (isDone) walletDone += amt;
         else walletDue += amt;
-      } else {
+      } else if (dep === 'My Hand') {
         myHandTotal += amt;
         if (isDone) myHandDone += amt;
         else myHandDue += amt;
+      } else {
+        // Banks
+        bankTotal += amt;
+        if (isDone) bankDone += amt;
+        else bankDue += amt;
       }
     });
 
-    return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue };
+    return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue, bankTotal, bankDone, bankDue };
   }, [userCreditTxns]);
 
   // Filtered Debit Total for Table Footer (exact sum of displayed filtered rows)
@@ -687,7 +727,7 @@ const CreditDebit = ({ isMyView = false }) => {
     reset({
       type: defaultType,
       amount: '',
-      depositTo: defaultType === 'Cash In' ? 'My Hand' : 'My Hand',
+      depositTo: defaultType === 'Cash In' ? 'My Hand' : (initialUser === 'Shukan Company' ? 'Company Wallet' : 'My Hand'),
       userName: initialUser,
       date: new Date().toISOString().split('T')[0],
       status: 'Done',
@@ -695,6 +735,27 @@ const CreditDebit = ({ isMyView = false }) => {
     });
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (isModalOpen) {
+      const currentType = watch('type');
+      const currentUser = watch('userName');
+      const currentDeposit = watch('depositTo');
+      if (currentType === 'Cash In') {
+        if (!currentDeposit) {
+          setValue('depositTo', 'My Hand');
+        }
+      } else {
+        if (currentUser === 'Shukan Company') {
+          if (!currentDeposit || currentDeposit === 'My Hand') {
+            setValue('depositTo', 'Company Wallet');
+          }
+        } else if (currentUser) {
+          setValue('depositTo', 'My Hand');
+        }
+      }
+    }
+  }, [watch('type'), watch('userName'), isModalOpen]);
 
   const handleOpenEditModal = (txn) => {
     setEditingTxn(txn);
@@ -744,7 +805,21 @@ const CreditDebit = ({ isMyView = false }) => {
       const formattedDate = normalizeToYYYYMMDD(data.date);
 
       if (editingTxn) {
-        if (editingTxn.isAllocation) {
+        if (editingTxn.isVaultDeposit) {
+          const res = await updateVaultDeposit(editingTxn.id, {
+            amount: numAmount,
+            notes: data.description,
+            date: formattedDate,
+            userName: data.userName || editingTxn.userName,
+            depositTo: data.depositTo || editingTxn.depositTo || 'Company Wallet',
+            status: data.status || 'Done'
+          });
+          if (res && res.success === false) {
+            toast.error(res.message, { theme: 'light' });
+            return;
+          }
+          toast.success(`Vault Deposit updated successfully!`, { theme: 'light' });
+        } else if (editingTxn.isAllocation) {
           const res = await updateAllocation(editingTxn.id, {
             amount: numAmount,
             notes: data.description,
@@ -770,11 +845,10 @@ const CreditDebit = ({ isMyView = false }) => {
         }
       } else {
         const finalType = data.type || modalTxnType || 'Cash Out';
-        const finalDepositTo = finalType === 'Cash In' ? (data.depositTo || 'My Hand') : 'My Hand';
-
         let finalUserName = isMyView ? (user?.name || '') : (data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company')));
-        if (!isMyView && finalType === 'Cash In' && (finalUserName === 'Shukan Company' || finalUserName === 'Shukan Packaging (Company)' || finalUserName === 'Company Vault')) {
-          finalUserName = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
+        let finalDepositTo = data.depositTo || 'My Hand';
+        if (finalType === 'Cash Out' && finalUserName !== 'Shukan Company') {
+          finalDepositTo = 'My Hand';
         }
 
         const newTxn = {
@@ -847,9 +921,19 @@ const CreditDebit = ({ isMyView = false }) => {
 
   const handleDelete = async (tOrId) => {
     const id = typeof tOrId === 'object' ? tOrId.id : tOrId;
+    const isVaultDep = typeof tOrId === 'object' ? tOrId.isVaultDeposit : (vaultDeposits || []).some(d => d.id === id);
     const isAlloc = typeof tOrId === 'object' ? tOrId.isAllocation : allocationsHistory.some(a => a.id === id);
 
-    if (isAlloc) {
+    if (isVaultDep) {
+      if (window.confirm(`Delete Vault Deposit entry ${id}?`)) {
+        const res = await deleteVaultDeposit(id);
+        if (res && res.success) {
+          toast.info(`Vault Deposit record removed.`, { theme: 'light' });
+        } else {
+          toast.error(res?.message || 'Failed to delete deposit from PHP database', { theme: 'light' });
+        }
+      }
+    } else if (isAlloc) {
       if (window.confirm(`Delete Company Cash Allocation record ${id}?`)) {
         const res = await deleteAllocation(id);
         if (res && res.success) {
@@ -954,8 +1038,8 @@ const CreditDebit = ({ isMyView = false }) => {
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <span className="hidden sm:inline">All Tables ({rawDebitTxns.length + rawCreditTxns.length})</span>
-          <span className="sm:hidden">All ({rawDebitTxns.length + rawCreditTxns.length})</span>
+          <span className="hidden sm:inline">All Tables ({userFilteredDebitTxns.length + userFilteredCreditTxns.length})</span>
+          <span className="sm:hidden">All ({userFilteredDebitTxns.length + userFilteredCreditTxns.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('debit')}
@@ -966,8 +1050,8 @@ const CreditDebit = ({ isMyView = false }) => {
           }`}
         >
           <span className="w-2 h-2 rounded-full bg-amber-300 shrink-0"></span>
-          <span className="hidden sm:inline">Debit Table ({rawDebitTxns.length})</span>
-          <span className="sm:hidden">Debit ({rawDebitTxns.length})</span>
+          <span className="hidden sm:inline">Debit Table ({userFilteredDebitTxns.length})</span>
+          <span className="sm:hidden">Debit ({userFilteredDebitTxns.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('credit')}
@@ -978,8 +1062,8 @@ const CreditDebit = ({ isMyView = false }) => {
           }`}
         >
           <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-          <span className="hidden sm:inline">Credit Table ({rawCreditTxns.length})</span>
-          <span className="sm:hidden">Credit ({rawCreditTxns.length})</span>
+          <span className="hidden sm:inline">Credit Table ({userFilteredCreditTxns.length})</span>
+          <span className="sm:hidden">Credit ({userFilteredCreditTxns.length})</span>
         </button>
       </div>
 
@@ -1437,7 +1521,7 @@ const CreditDebit = ({ isMyView = false }) => {
           )}
 
           {/* Credit Summary Cards (Table Style matching Dashboard) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 pt-0.5 print:hidden">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 pt-0.5 print:hidden">
             {/* CARD 1: CREDIT SUMMARY (Light Green Background) */}
             <div className="h-full bg-emerald-50/70 p-2.5 sm:p-4 rounded-2xl border border-emerald-200/90 border-t-4 border-t-emerald-500 shadow-xs flex flex-col justify-between space-y-2">
               <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1.5">
@@ -1563,6 +1647,48 @@ const CreditDebit = ({ isMyView = false }) => {
                 </div>
               </div>
             </div>
+
+            {/* CARD 4: BANKS SUMMARY (Light Indigo Background) */}
+            <div className="h-full bg-indigo-50/70 p-2.5 sm:p-4 rounded-2xl border border-indigo-200/90 border-t-4 border-t-indigo-600 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
+              <div className="flex items-center justify-between border-b border-indigo-200/60 pb-1.5">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[10px] sm:text-xs shrink-0">
+                    🏦
+                  </div>
+                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-indigo-900 truncate">Banks</h3>
+                </div>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-100 text-indigo-800 uppercase shrink-0">Bank</span>
+              </div>
+
+              <div className="divide-y divide-indigo-200/50 text-[10.5px] sm:text-xs">
+                <div
+                  onClick={() => { setCreditDepositTo('Banks'); setCreditStatus('Done'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'Banks' && creditStatus === 'Done' ? 'bg-indigo-100/80 font-bold' : ''}`}
+                  title="Click to view Done Bank entries"
+                >
+                  <span className="text-indigo-800 font-semibold truncate mr-1">Bank (Done)</span>
+                  <span className="font-extrabold text-indigo-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.bankDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div
+                  onClick={() => { setCreditDepositTo('Banks'); setCreditStatus('Due'); }}
+                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'Banks' && creditStatus === 'Due' ? 'bg-indigo-100/80 font-bold' : ''}`}
+                  title="Click to view Due Bank entries"
+                >
+                  <span className="text-indigo-800 font-semibold truncate mr-1">Bank (Due)</span>
+                  <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.bankDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div
+                  onClick={() => { setCreditDepositTo('Banks'); setCreditStatus('All'); }}
+                  className={`pt-1.5 flex items-center justify-between font-black text-indigo-950 cursor-pointer hover:bg-indigo-100/70 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'Banks' && creditStatus === 'All' ? 'bg-indigo-100/80' : ''}`}
+                  title="Click to view All Bank entries"
+                >
+                  <span className="truncate mr-1">Total Bank</span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{creditSummary.bankTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Credit Table Content */}
@@ -1588,7 +1714,7 @@ const CreditDebit = ({ isMyView = false }) => {
                       <tbody className="divide-y divide-slate-100 text-[11px]">
                         {filteredCreditTxns.map((t, index) => {
                           const isDone = (t.status || 'Done') === 'Done';
-                          const accountLabel = t.depositTo === 'Company Wallet' ? '🏢 Wallet' : '✋ Hand';
+                          const accountLabel = t.depositTo === 'Company Wallet' ? '🏢 Wallet' : (t.depositTo && t.depositTo !== 'My Hand' ? `🏦 ${t.depositTo}` : '✋ Hand');
                           return (
                             <tr
                               key={t.id || index}
@@ -1684,7 +1810,7 @@ const CreditDebit = ({ isMyView = false }) => {
                     <>
                       {filteredCreditTxns.map((t, index) => {
                         const isDone = (t.status || 'Done') === 'Done';
-                        const accountLabel = t.depositTo === 'Company Wallet' ? 'Company Wallet' : 'My Hand';
+                        const accountLabel = t.depositTo || 'My Hand';
                         return (
                           <tr
                             key={t.id || index}
@@ -1841,6 +1967,9 @@ const CreditDebit = ({ isMyView = false }) => {
                     <option value="All">All Accounts</option>
                     <option value="My Hand">✋ My Hand</option>
                     <option value="Company Wallet">🏢 Company Wallet</option>
+                    {availableBanks.map(b => (
+                      <option key={b} value={b}>🏦 {b}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -2136,6 +2265,10 @@ const CreditDebit = ({ isMyView = false }) => {
                     <option value="All">All Accounts</option>
                     <option value="My Hand">✋ My Hand</option>
                     <option value="Company Wallet">🏢 Company Wallet</option>
+                    <option value="Banks">🏦 All Bank Accounts</option>
+                    {availableBanks.map(b => (
+                      <option key={b} value={b}>🏦 {b}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -2259,11 +2392,24 @@ const CreditDebit = ({ isMyView = false }) => {
                 ) : (
                   <select
                     {...register('userName')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setValue('userName', val);
+                      if (watch('type') === 'Cash Out') {
+                        if (val === 'Shukan Company') {
+                          setValue('depositTo', 'Company Wallet');
+                        } else {
+                          setValue('depositTo', 'My Hand');
+                        }
+                      } else {
+                        if (!watch('depositTo')) {
+                          setValue('depositTo', 'My Hand');
+                        }
+                      }
+                    }}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                   >
-                    {watch('type') !== 'Cash In' && (
-                      <option value="Shukan Company">🏢 Shukan Company</option>
-                    )}
+                    <option value="Shukan Company">🏢 Shukan Company</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
                     ))}
@@ -2283,16 +2429,30 @@ const CreditDebit = ({ isMyView = false }) => {
                 {errors.amount && <p className="text-xs text-rose-500 mt-1">{errors.amount.message}</p>}
               </div>
 
-              {watch('type') === 'Cash In' && (
+              {watch('type') === 'Cash Out' && watch('userName') && watch('userName') !== 'Shukan Company' ? (
                 <div>
-                  <label className="block text-xs font-bold text-[#002B49] mb-1">Deposit To</label>
+                  <label className="block text-xs font-bold text-[#002B49] mb-1">Paid From</label>
+                  <div className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-slate-100/90 border border-slate-200 font-bold text-xs flex items-center justify-between">
+                    <span>✋ My Hand</span>
+                    <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-600 font-extrabold">Fixed for User</span>
+                    <input type="hidden" {...register('depositTo')} value="My Hand" />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-[#002B49] mb-1">
+                    {watch('type') === 'Cash In' ? 'Deposit To (Account / Bank)' : 'Paid From / Bank Account'}
+                  </label>
                   <select
                     {...register('depositTo')}
-                    defaultValue="My Hand"
+                    defaultValue={watch('type') === 'Cash In' ? 'My Hand' : 'Company Wallet'}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                   >
                     <option value="My Hand">My Hand</option>
                     <option value="Company Wallet">Company Wallet</option>
+                    {availableBanks.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -2690,19 +2850,22 @@ const CreditDebit = ({ isMyView = false }) => {
                   </tr>
                 ) : (
                   <>
-                    {filteredDebitTxns.map((t, index) => (
-                      <tr key={t.id || index}>
-                        <td className="sr-cell">{index + 1}</td>
-                        <td className="date-cell">{formatDate(t.date)}</td>
-                        <td className="type-cell">DEBIT</td>
-                        <td className="user-cell">{t.userName}</td>
-                        <td className="description-cell">{t.description || '-'}</td>
-                        <td className="amount-cell">
-                          {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="status-cell">{t.status ? t.status.toUpperCase() : 'DONE'}</td>
-                      </tr>
-                    ))}
+                    {filteredDebitTxns.map((t, index) => {
+                      const paidFromNote = t.depositTo && t.depositTo !== 'My Hand' ? ` [Paid From: ${t.depositTo}]` : '';
+                      return (
+                        <tr key={t.id || index}>
+                          <td className="sr-cell">{index + 1}</td>
+                          <td className="date-cell">{formatDate(t.date)}</td>
+                          <td className="type-cell">DEBIT</td>
+                          <td className="user-cell">{t.userName}</td>
+                          <td className="description-cell">{(t.description || '-') + paidFromNote}</td>
+                          <td className="amount-cell">
+                            {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="status-cell">{t.status ? t.status.toUpperCase() : 'DONE'}</td>
+                        </tr>
+                      );
+                    })}
                     <tr className="print-total-row debit-total-row">
                       <td colSpan={5} className="total-label">
                         {debitTableFooterLabel}
@@ -2802,6 +2965,27 @@ const CreditDebit = ({ isMyView = false }) => {
                     <span className="card-value">{settings.currency}{(creditSummary?.walletTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
+
+                {/* CARD 4: BANKS */}
+                <div className="print-card">
+                  <div className="card-title">
+                    BANKS
+                  </div>
+                  <div className="card-body">
+                    <div className="card-row">
+                      <span className="card-label">Bank (Done)</span>
+                      <span className="card-value">{settings.currency}{(creditSummary?.bankDone || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="card-row">
+                      <span className="card-label">Bank (Due)</span>
+                      <span className="card-value">{settings.currency}{(creditSummary?.bankDue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                  <div className="card-total">
+                    <span className="card-label">TOTAL BANK</span>
+                    <span className="card-value">{settings.currency}{(creditSummary?.bankTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2829,7 +3013,7 @@ const CreditDebit = ({ isMyView = false }) => {
                 ) : (
                   <>
                     {filteredCreditTxns.map((t, index) => {
-                      const accountLabel = t.depositTo === 'Company Wallet' ? 'Company Wallet' : 'My Hand';
+                      const accountLabel = t.depositTo || 'My Hand';
                       const cleanDesc = t.isAllocation ? `Company Allocation - ${t.description || ''}` : (t.description || '-');
                       return (
                         <tr key={t.id || index}>

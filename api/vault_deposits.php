@@ -15,18 +15,20 @@ if ($method === 'POST') {
     $id = $data['id'] ?? ('DEP-' . rand(1000, 9999));
     $date = $data['date'] ?? date('Y-m-d');
     $userName = $data['userName'] ?? 'Vraj';
+    $depositTo = $data['depositTo'] ?? 'Company Wallet';
     $amount = floatval($data['amount'] ?? 0);
     $notes = $data['notes'] ?? '';
     $txnId = $data['txnId'] ?? null;
     $status = $data['status'] ?? 'Done';
 
-    $stmt = $pdo->prepare("INSERT INTO vault_deposits (id, date, userName, amount, notes, txnId, status)
-        VALUES (:id, :date, :userName, :amount, :notes, :txnId, :status)");
+    $stmt = $pdo->prepare("INSERT INTO vault_deposits (id, date, userName, depositTo, amount, notes, txnId, status)
+        VALUES (:id, :date, :userName, :depositTo, :amount, :notes, :txnId, :status)");
 
     $stmt->execute([
         'id' => $id,
         'date' => $date,
         'userName' => $userName,
+        'depositTo' => $depositTo,
         'amount' => $amount,
         'notes' => $notes,
         'txnId' => $txnId,
@@ -34,7 +36,7 @@ if ($method === 'POST') {
     ]);
 
     $inserted = [
-        'id' => $id, 'date' => $date, 'userName' => $userName,
+        'id' => $id, 'date' => $date, 'userName' => $userName, 'depositTo' => $depositTo,
         'amount' => $amount, 'notes' => $notes, 'txnId' => $txnId, 'status' => $status
     ];
 
@@ -52,7 +54,7 @@ if ($method === 'PUT') {
     $fields = [];
     $params = ['id' => $id];
 
-    $allowed = ['date', 'userName', 'amount', 'notes', 'txnId', 'status'];
+    $allowed = ['date', 'userName', 'depositTo', 'amount', 'notes', 'txnId', 'status'];
     foreach ($allowed as $field) {
         if (array_key_exists($field, $data)) {
             $fields[] = "`$field` = :$field";

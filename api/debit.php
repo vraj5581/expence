@@ -21,16 +21,17 @@ if ($method === 'POST') {
     $status      = $data['status'] ?? 'Done';
     $notes       = $data['notes'] ?? '';
     $createdBy   = $data['createdBy'] ?? 'Admin';
+    $depositTo   = $data['depositTo'] ?? 'My Hand';
 
-    $stmt = $pdo->prepare("INSERT INTO debit_transactions (id, date, userName, amount, category, description, status, notes, createdBy)
-        VALUES (:id, :date, :userName, :amount, :category, :description, :status, :notes, :createdBy)");
+    $stmt = $pdo->prepare("INSERT INTO debit_transactions (id, date, userName, amount, category, description, status, notes, createdBy, depositTo)
+        VALUES (:id, :date, :userName, :amount, :category, :description, :status, :notes, :createdBy, :depositTo)");
     $stmt->execute([
         'id' => $id, 'date' => $date, 'userName' => $userName,
         'amount' => $amount, 'category' => $category, 'description' => $description,
-        'status' => $status, 'notes' => $notes, 'createdBy' => $createdBy
+        'status' => $status, 'notes' => $notes, 'createdBy' => $createdBy, 'depositTo' => $depositTo
     ]);
 
-    echo json_encode(['success' => true, 'debit' => array_merge(compact('id','date','userName','amount','category','description','status','notes','createdBy'), ['type' => 'Cash Out'])]);
+    echo json_encode(['success' => true, 'debit' => array_merge(compact('id','date','userName','amount','category','description','status','notes','createdBy','depositTo'), ['type' => 'Cash Out'])]);
     exit();
 }
 
@@ -40,7 +41,7 @@ if ($method === 'PUT') {
 
     $fields = [];
     $params = ['id' => $id];
-    $allowed = ['date', 'userName', 'amount', 'category', 'description', 'status', 'notes', 'createdBy'];
+    $allowed = ['date', 'userName', 'amount', 'category', 'description', 'status', 'notes', 'createdBy', 'depositTo'];
     foreach ($allowed as $f) {
         if (array_key_exists($f, $data)) {
             $fields[] = "`$f` = :$f";

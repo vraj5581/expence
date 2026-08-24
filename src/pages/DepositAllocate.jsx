@@ -39,6 +39,12 @@ const DepositAllocate = () => {
   const [endDate, setEndDate] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedTxnForAction, setSelectedTxnForAction] = useState(null);
+  const [selectedDepositType, setSelectedDepositType] = useState('All');
+
+  const availableBanks = (settings?.banks || 'IOB Bank, BOB Bank')
+    .split(',')
+    .map(b => b.trim())
+    .filter(Boolean);
 
   useEffect(() => {
     if (location.state?.selectedUser) {
@@ -115,6 +121,7 @@ const DepositAllocate = () => {
     reset({
       date: new Date().toISOString().split('T')[0],
       userName: shukanPartners[0],
+      depositTo: 'Company Wallet',
       amount: '',
       notes: ''
     });
@@ -126,6 +133,7 @@ const DepositAllocate = () => {
     reset({
       date: deposit.date,
       userName: deposit.userName || shukanPartners[0],
+      depositTo: deposit.depositTo || 'Company Wallet',
       amount: deposit.amount,
       notes: deposit.notes || ''
     });
@@ -135,7 +143,8 @@ const DepositAllocate = () => {
   const onSubmitForm = async (data) => {
     const depositData = {
       ...data,
-      userName: data.userName || editingDeposit?.userName || shukanPartners[0]
+      userName: data.userName || editingDeposit?.userName || shukanPartners[0],
+      depositTo: data.depositTo || 'Company Wallet'
     };
     if (editingDeposit) {
       const res = await updateVaultDeposit(editingDeposit.id, depositData);
@@ -174,16 +183,58 @@ const DepositAllocate = () => {
     }
   };
 
+  const getDynamicPdfTitle = () => {
+    let userNamePart = '';
+    if (selectedUser && selectedUser !== 'All') {
+      const cleanUser = selectedUser.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
+      userNamePart = `_${cleanUser}`;
+    }
+
+    let datePart = '_ALL';
+    if (startDate || endDate) {
+      const s = startDate ? formatDate(startDate).replace(/\//g, '-') : 'START';
+      const e = endDate ? formatDate(endDate).replace(/\//g, '-') : 'END';
+      datePart = `_${s}_TO_${e}`;
+    }
+
+    return `Shukan${userNamePart}_Vault_Deposit_Report${datePart}`;
+  };
+
   const handleExportPDF = () => {
-    window.print();
+    const originalTitle = document.title;
+    document.title = getDynamicPdfTitle();
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 1000);
+    }, 250);
   };
 
   // Combine Vault Deposits (+ Add Money) and Allocations (Give Money to User)
   const activeVaultDepositsList = (vaultDeposits || []).filter(d => isDepositDue ? !isDepositDue(d) : d.status !== 'Due');
+
+  const vaultBreakdown = useMemo(() => {
+    let cashDeposited = 0;
+    let bankDeposited = 0;
+
+    activeVaultDepositsList.forEach(d => {
+      const amt = parseFloat(d.amount) || 0;
+      const dep = d.depositTo || 'Company Wallet';
+      if (dep === 'Company Wallet' || dep === 'My Hand') {
+        cashDeposited += amt;
+      } else {
+        bankDeposited += amt;
+      }
+    });
+
+    return { cashDeposited, bankDeposited };
+  }, [activeVaultDepositsList]);
   const formattedVaultDeposits = activeVaultDepositsList.map((d) => ({
     id: d.id || `DEP-${Math.random()}`,
     date: d.date || new Date().toISOString().split('T')[0],
     userName: (d.userName && d.userName !== 'Shukan Admin') ? d.userName : 'Vraj',
+    depositTo: d.depositTo || 'Company Wallet',
     amount: parseFloat(d.amount) || 0,
     notes: d.notes ? d.notes.replace(/Admin Capital/g, 'Company Capital') : 'Company Capital Deposit',
     txnCategory: 'Add Money',
@@ -204,7 +255,7 @@ const DepositAllocate = () => {
     (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
   );
 
-  const hasActiveFilters = Boolean(selectedUser !== 'All' || startDate || endDate);
+  const hasActiveFilters = Boolean(selectedUser !== 'All' || selectedDepositType !== 'All' || startDate || endDate);
 
   const filteredTransactions = combinedList.filter((t) => {
     if (!t) return false;
@@ -214,11 +265,22 @@ const DepositAllocate = () => {
     if (startDate && t.date < startDate) return false;
     if (endDate && t.date > endDate) return false;
 
+    if (selectedDepositType === 'Cash') {
+      if (t.txnCategory !== 'Add Money') return false;
+      const dep = t.depositTo || 'Company Wallet';
+      if (dep !== 'Company Wallet' && dep !== 'My Hand') return false;
+    } else if (selectedDepositType === 'Bank') {
+      if (t.txnCategory !== 'Add Money') return false;
+      const dep = t.depositTo || 'Company Wallet';
+      if (dep === 'Company Wallet' || dep === 'My Hand') return false;
+    }
+
     if (!searchTerm.trim()) return true;
     const query = searchTerm.toLowerCase();
     return (
       (t.userName || '').toLowerCase().includes(query) ||
       (t.notes || '').toLowerCase().includes(query) ||
+      (t.depositTo || '').toLowerCase().includes(query) ||
       (t.txnCategory || '').toLowerCase().includes(query) ||
       (t.date || '').includes(query) ||
       formatDate(t.date).includes(query)
@@ -237,26 +299,27 @@ const DepositAllocate = () => {
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [filteredTransactions]);
 
+  const printFilterSummaryText = useMemo(() => {
+    const parts = [];
+    if (selectedUser !== 'All') parts.push(`USER: ${selectedUser}`);
+    if (selectedDepositType !== 'All') parts.push(`ACCOUNT: ${selectedDepositType === 'Cash' ? 'CASH (COMPANY WALLET)' : 'BANK ACCOUNTS'}`);
+    if (activeTab !== 'All') parts.push(`TYPE: ${activeTab === 'Add Money' ? 'DEPOSIT' : 'ALLOCATION'}`);
+    if (startDate || endDate) {
+      const s = startDate ? formatDate(startDate) : 'START';
+      const e = endDate ? formatDate(endDate) : 'TODAY';
+      parts.push(`DATE: ${s} TO ${e}`);
+    }
+    if (searchTerm.trim()) parts.push(`SEARCH: "${searchTerm.trim()}"`);
+    return parts.length > 0 ? parts.join(' | ') : 'ALL RECORDED TRANSACTIONS';
+  }, [selectedUser, selectedDepositType, activeTab, startDate, endDate, searchTerm]);
+
   return (
     <div className="space-y-6">
-      {/* Print-Only Header with Filter & User Details */}
-      <div className="hidden print:block text-center border-b border-slate-300 pb-3 mb-4">
-        <h1 className="text-2xl font-black uppercase text-[#002B49] tracking-wider">SHUKAN PACKAGING</h1>
-        <h2 className="text-sm font-extrabold text-[#c69255] uppercase mt-0.5">
-          {selectedUser !== 'All' ? `${selectedUser} - Deposit & Allocation Statement` : 'Company Vault Deposit Logs & Capital Audit Report'}
-        </h2>
-        <div className="text-xs font-semibold text-slate-700 mt-1 flex items-center justify-center space-x-3">
-          <span>Printed: {formatDate(new Date())}</span>
-          {selectedUser !== 'All' && <span>| User: <strong>{selectedUser}</strong></span>}
-          {activeTab !== 'All' && <span>| Type: <strong>{activeTab === 'Add Money' ? 'Deposit' : 'Allocate'}</strong></span>}
-          {(startDate || endDate) && <span>| Date Range: <strong>{formatDate(startDate) || 'Start'} to {formatDate(endDate) || 'Today'}</strong></span>}
-        </div>
-      </div>
 
       <div className="flex flex-row items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
-            Deposit & Allocate
+            Deposit & Allocate 
           </h1>
         </div>
 
@@ -308,6 +371,11 @@ const DepositAllocate = () => {
                 User: {selectedUser}
               </span>
             )}
+            {selectedDepositType !== 'All' && (
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-700 text-white font-bold">
+                Deposit Account: {selectedDepositType === 'Cash' ? '💵 Cash Deposits' : '🏦 Bank Deposits'}
+              </span>
+            )}
             {activeTab !== 'All' && (
               <span className="px-2.5 py-0.5 rounded-md bg-[#c69255] text-white font-bold">
                 Type: {activeTab === 'Add Money' ? 'Deposit' : 'Allocate'}
@@ -325,7 +393,7 @@ const DepositAllocate = () => {
             )}
           </div>
           <button
-            onClick={() => { setSelectedUser('All'); setActiveTab('All'); setStartDate(''); setEndDate(''); setSearchTerm(''); }}
+            onClick={() => { setSelectedUser('All'); setActiveTab('All'); setSelectedDepositType('All'); setStartDate(''); setEndDate(''); setSearchTerm(''); }}
             className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline cursor-pointer"
           >
             Clear Filter
@@ -333,21 +401,52 @@ const DepositAllocate = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-5 print:grid-cols-2 print:gap-2">
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Total Deposited</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#9e6e34] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
-            {settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">{activeVaultDepositsList.length} Entries</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-5 print:hidden">
+        {/* CARD 1: COMPANY VAULT (Available Cash Reserve) */}
+        <div className="glass-card p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white flex flex-col justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Company Vault</p>
+            <p className="text-xl sm:text-3xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
+              {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">Available Cash Reserve</p>
         </div>
 
-        <div className="glass-card p-3 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white">
-          <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Company Vault</p>
-          <p className="text-base sm:text-2xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
-            {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">Available Reserve</p>
+        {/* CARD 2: DEPOSIT BREAKDOWN (CASH, BANK & TOTAL DEPOSITED) */}
+        <div className="glass-card p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5 mb-1.5">
+            <p className="text-[10px] sm:text-xs uppercase font-extrabold text-slate-700 truncate print:text-[10px] print:text-slate-800">Deposit Breakdown</p>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500">{activeVaultDepositsList.length} Entries</span>
+          </div>
+          <div className="space-y-1 text-xs font-bold text-slate-800">
+            <div
+              onClick={() => { setSelectedDepositType('Cash'); setActiveTab('Add Money'); }}
+              className={`flex items-center justify-between p-1 px-1.5 rounded-lg transition cursor-pointer hover:bg-emerald-100/70 ${selectedDepositType === 'Cash' ? 'bg-emerald-100/90 ring-1 ring-emerald-500/50 font-black' : ''}`}
+              title="Click to view Cash Deposits"
+            >
+              <span className="text-slate-700 font-semibold text-[11px] sm:text-xs">💵 Total Cash Deposit:</span>
+              <span className="text-emerald-700 font-extrabold">{settings?.currency || '₹'}{vaultBreakdown.cashDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            </div>
+
+            <div
+              onClick={() => { setSelectedDepositType('Bank'); setActiveTab('Add Money'); }}
+              className={`flex items-center justify-between p-1 px-1.5 rounded-lg transition cursor-pointer hover:bg-indigo-100/70 ${selectedDepositType === 'Bank' ? 'bg-indigo-100/90 ring-1 ring-indigo-500/50 font-black' : ''}`}
+              title="Click to view Bank Deposits"
+            >
+              <span className="text-slate-700 font-semibold text-[11px] sm:text-xs">🏦 Total Bank Deposit:</span>
+              <span className="text-indigo-700 font-extrabold">{settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            </div>
+
+            <div
+              onClick={() => { setSelectedDepositType('All'); setActiveTab('Add Money'); }}
+              className={`flex items-center justify-between p-1 px-1.5 rounded-lg transition cursor-pointer hover:bg-amber-100/70 pt-1 border-t border-slate-200/80 ${selectedDepositType === 'All' && activeTab === 'Add Money' ? 'bg-amber-100/90 ring-1 ring-amber-500/50 font-black' : ''}`}
+              title="Click to view All Deposits"
+            >
+              <span className="text-[#002B49] font-black text-xs sm:text-sm">📥 Total Deposited:</span>
+              <span className="text-[#9e6e34] font-black text-xs sm:text-sm">{settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -577,7 +676,7 @@ const DepositAllocate = () => {
         </div>
       )}
 
-      <div className="glass-card p-3.5 sm:p-6 rounded-xl sm:rounded-2xl">
+      <div className="glass-card p-3.5 sm:p-6 rounded-xl sm:rounded-2xl print:hidden">
         {/* Mobile Compact Line-by-Line Table View */}
         <div className="block md:hidden print:hidden">
           {filteredTransactions.length === 0 ? (
@@ -831,6 +930,20 @@ const DepositAllocate = () => {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-[#002B49] mb-1">Deposit To</label>
+                <select
+                  {...register('depositTo')}
+                  defaultValue="Company Wallet"
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
+                >
+                  <option value="Company Wallet">🏢 Company Wallet</option>
+                  {availableBanks.map((b) => (
+                    <option key={b} value={b}>🏦 {b}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-[#002B49] mb-1">Amount ({settings.currency})</label>
                 <input
                   type="number"
@@ -1051,6 +1164,118 @@ const DepositAllocate = () => {
           </div>
         </div>
       )}
+
+      {/* ======================================================== */}
+      {/* 🖨️ PURE BLACK & WHITE A4 PRINTABLE REPORT CONTAINER     */}
+      {/* ======================================================== */}
+      <div className="hidden print:block print-ledger-report">
+        {/* 1. Header */}
+        <div className="border-b-2 border-black pb-2 mb-3 text-center print-header">
+          <h1 className="text-xl font-black uppercase text-black tracking-wider">
+            {settings?.companyName || 'SHUKAN PACKAGING'}
+          </h1>
+          <h2 className="text-xs font-bold text-black uppercase mt-0.5">
+            COMPANY VAULT DEPOSIT & ALLOCATION STATEMENT
+          </h2>
+          <div className="text-[8pt] font-semibold text-black mt-1 flex items-center justify-between border-t border-black pt-1">
+            <span>PRINTED: {formatDate(new Date())}</span>
+            <span>FILTER: {printFilterSummaryText}</span>
+            <span>ENTRIES: {filteredTransactions.length}</span>
+          </div>
+        </div>
+
+        {/* 2. Print Summary Cards Grid */}
+        <div className="credit-summary-print-wrapper mb-3">
+          <div className="grid grid-cols-2 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4mm' }}>
+            {/* CARD 1: COMPANY VAULT */}
+            <div className="print-card">
+              <div className="card-title">
+                COMPANY VAULT
+              </div>
+              <div className="card-body">
+                <div className="card-row">
+                  <span className="card-label">Available Reserve</span>
+                  <span className="card-value">{settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+              <div className="card-total">
+                <span className="card-label">VAULT CASH BALANCE</span>
+                <span className="card-value">{settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            {/* CARD 2: DEPOSIT BREAKDOWN */}
+            <div className="print-card">
+              <div className="card-title">
+                DEPOSIT BREAKDOWN
+              </div>
+              <div className="card-body">
+                <div className="card-row">
+                  <span className="card-label">Cash Deposit</span>
+                  <span className="card-value">{settings?.currency || '₹'}{vaultBreakdown.cashDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="card-row">
+                  <span className="card-label">Bank Deposit</span>
+                  <span className="card-value">{settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+              <div className="card-total">
+                <span className="card-label">TOTAL DEPOSITED</span>
+                <span className="card-value">{settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Printable Transactions Table */}
+        <table className="print-table">
+          <thead>
+            <tr>
+              <th style={{ width: '6%' }} className="sr-cell">SR. NO.</th>
+              <th style={{ width: '12%' }} className="date-cell">DATE</th>
+              <th style={{ width: '12%' }} className="type-cell">TYPE</th>
+              <th style={{ width: '16%' }} className="user-cell">NAME / USER</th>
+              <th style={{ width: '18%' }} className="account-cell">DEPOSIT TO / ACC</th>
+              <th className="description-cell">DESCRIPTION / PURPOSE</th>
+              <th style={{ width: '16%' }} className="amount-cell text-right">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredTransactions.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center py-4 font-semibold text-xs">
+                  No deposit or allocation entries match the selected filter criteria.
+                </td>
+              </tr>
+            ) : (
+              <>
+                {filteredTransactions.map((t, index) => (
+                  <tr key={t.id || index}>
+                    <td className="sr-cell text-center">{index + 1}</td>
+                    <td className="date-cell">{formatDate(t.date)}</td>
+                    <td className="type-cell font-bold">{t.txnCategory === 'Add Money' ? 'DEPOSIT' : 'ALLOCATE'}</td>
+                    <td className="user-cell font-bold">{t.userName}</td>
+                    <td className="account-cell">{t.txnCategory === 'Add Money' ? (t.depositTo || 'Company Wallet') : 'User Hand'}</td>
+                    <td className="description-cell">{t.notes || '-'}</td>
+                    <td className="amount-cell text-right font-bold">
+                      {settings?.currency || '₹'}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+                {/* Table Total Footer Row */}
+                <tr className="print-total-row border-t-2 border-black font-bold">
+                  <td colSpan={6} className="text-right py-2 px-2 uppercase font-black">
+                    TOTAL FILTERED STATEMENT:
+                  </td>
+                  <td className="text-right py-2 px-2 font-black">
+                    {settings?.currency || '₹'}{(totalFilteredDeposits + totalFilteredAllocations).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

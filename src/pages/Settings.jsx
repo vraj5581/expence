@@ -59,6 +59,36 @@ const Settings = () => {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Dynamic Bank Accounts List State
+  const [bankList, setBankList] = useState(() => {
+    const raw = settings.banks || 'IOB Bank, BOB Bank';
+    return raw.split(',').map(b => b.trim()).filter(Boolean);
+  });
+  const [newBankInput, setNewBankInput] = useState('');
+
+  useEffect(() => {
+    if (settings.banks) {
+      const parsed = settings.banks.split(',').map(b => b.trim()).filter(Boolean);
+      setBankList(parsed);
+    }
+  }, [settings.banks]);
+
+  const handleAddBank = (e) => {
+    if (e) e.preventDefault();
+    const trimmed = newBankInput.trim();
+    if (!trimmed) return;
+    if (bankList.some(b => b.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error(`"${trimmed}" is already in the bank list`, { theme: 'light' });
+      return;
+    }
+    setBankList([...bankList, trimmed]);
+    setNewBankInput('');
+  };
+
+  const handleRemoveBank = (bankToRemove) => {
+    setBankList(bankList.filter(b => b !== bankToRemove));
+  };
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!pwdCurrent || !pwdNew || !pwdConfirm) {
@@ -88,7 +118,8 @@ const Settings = () => {
       currency: settings.currency || '₹',
       fiscalYearStart: settings.fiscalYearStart || 'April',
       lowBalanceThreshold: settings.lowBalanceThreshold || 10000,
-      requireApprovalOver: settings.requireApprovalOver || 5000
+      requireApprovalOver: settings.requireApprovalOver || 5000,
+      banks: settings.banks || 'IOB Bank, BOB Bank'
     }
   });
 
@@ -96,7 +127,8 @@ const Settings = () => {
     const res = await updateSettings({
       ...data,
       currency: '₹',
-      currencyCode: 'INR'
+      currencyCode: 'INR',
+      banks: bankList.join(', ')
     });
 
     if (res && res.success) {
@@ -404,6 +436,56 @@ const Settings = () => {
                   className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 focus:outline-none"
                 />
               </div>
+            </div>
+
+            <div className="space-y-3 pt-2 border-t border-slate-200/80">
+              <label className="block text-xs font-bold text-[#002B49]">Bank Accounts / Payment Options</label>
+              
+              {/* Add Bank Input Row with + Button */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newBankInput}
+                  onChange={(e) => setNewBankInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddBank(); } }}
+                  placeholder="Enter new bank name (e.g. SBI Bank, HDFC Bank)..."
+                  className="flex-1 px-4 py-2.5 rounded-xl glass-input text-slate-900 placeholder-slate-400 focus:outline-none font-semibold text-xs border border-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddBank}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <span className="text-sm font-black">+</span>
+                  <span>Add Bank</span>
+                </button>
+              </div>
+
+              {/* Displayed Bank Badges */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {bankList.map((bank) => (
+                  <div
+                    key={bank}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50/90 border border-blue-200 text-blue-900 font-bold text-xs shadow-2xs transition hover:bg-blue-100/90"
+                  >
+                    <span>🏦 {bank}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBank(bank)}
+                      className="text-slate-400 hover:text-rose-600 hover:bg-rose-100 rounded-full p-0.5 transition cursor-pointer"
+                      title={`Remove ${bank}`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {bankList.length === 0 && (
+                  <p className="text-xs text-slate-400 italic font-medium">No bank accounts added yet. Type a bank name above and click "+ Add Bank".</p>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">These bank options will be available under 'Deposit To' / 'Paid From' when adding or filtering transactions.</p>
             </div>
 
             <div className="pt-3">

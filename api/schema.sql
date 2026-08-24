@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS `debit_transactions` (
   `status` VARCHAR(20) DEFAULT 'Done',
   `notes` TEXT,
   `createdBy` VARCHAR(100) DEFAULT 'Admin',
+  `depositTo` VARCHAR(100) DEFAULT 'My Hand',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS `vault_deposits` (
   `id` VARCHAR(50) PRIMARY KEY,
   `date` DATE NOT NULL,
   `userName` VARCHAR(100) NOT NULL,
+  `depositTo` VARCHAR(100) DEFAULT 'Company Wallet',
   `amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `notes` TEXT,
   `txnId` VARCHAR(50) DEFAULT NULL,
@@ -83,11 +85,12 @@ CREATE TABLE IF NOT EXISTS `settings` (
   `companyName` VARCHAR(150) DEFAULT 'Shukan Packaging',
   `lowBalanceAlert` DECIMAL(15,2) DEFAULT 5000.00,
   `approvalThreshold` DECIMAL(15,2) DEFAULT 20000.00,
+  `banks` VARCHAR(255) DEFAULT 'IOB Bank, BOB Bank',
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `settings` (`id`, `currency`, `currencyCode`, `companyName`, `lowBalanceAlert`, `approvalThreshold`) VALUES
-(1, '₹', 'INR', 'Shukan Packaging', 5000.00, 20000.00)
+INSERT INTO `settings` (`id`, `currency`, `currencyCode`, `companyName`, `lowBalanceAlert`, `approvalThreshold`, `banks`) VALUES
+(1, '₹', 'INR', 'Shukan Packaging', 5000.00, 20000.00, 'IOB Bank, BOB Bank')
 ON DUPLICATE KEY UPDATE `currency` = VALUES(`currency`);
 
 -- 8. Tasks Table

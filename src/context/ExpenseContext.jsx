@@ -335,15 +335,23 @@ export const ExpenseProvider = ({ children }) => {
     return false;
   };
 
-  // Calculate Admin Vault Balance dynamically (excluding Due deposits)
+  // Calculate Admin Vault Balance dynamically: [ Total Done Cash Deposit - Total Allocated to Team - Total Company Direct Expenses ]
   const totalVaultDeposited = (effectiveVaultDeposits || []).reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
+  const totalDoneCashDeposit = (effectiveVaultDeposits || [])
+    .filter(d => (!d?.depositTo || d?.depositTo === 'Company Wallet' || d?.depositTo === 'My Hand') && d?.status !== 'Due')
+    .reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
+
+  const totalDoneDebit = (debitTransactions || [])
+    .filter(t => t && t.status !== 'Due')
+    .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
+
   const totalAllocatedToTeam = Object.values(userAllocations || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
-  
+
   const totalCompanyDirectExpenses = (transactions || [])
     .filter(t => t && (t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
     .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
 
-  const adminVaultBalance = totalVaultDeposited - totalAllocatedToTeam - totalCompanyDirectExpenses;
+  const adminVaultBalance = totalDoneCashDeposit - totalAllocatedToTeam - totalCompanyDirectExpenses;
 
   // 1. ADD VAULT DEPOSIT
   const addVaultDeposit = async (depositData) => {
@@ -895,6 +903,8 @@ export const ExpenseProvider = ({ children }) => {
       value={{
         adminVaultBalance,
         totalVaultDeposited,
+        totalDoneCashDeposit,
+        totalDoneDebit,
         vaultDeposits: effectiveVaultDeposits,
         isDepositDue,
         userAllocations,
