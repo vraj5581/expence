@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -10,12 +10,14 @@ const shukanPartners = ['Vraj', 'Raj', 'Teerth', 'Mayank'];
 
 const DepositAllocate = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     adminVaultBalance,
     totalVaultDeposited,
     vaultDeposits,
     isDepositDue,
     allocationsHistory,
+    transactions,
     users,
     settings,
     addVaultDeposit,
@@ -230,6 +232,54 @@ const DepositAllocate = () => {
 
     return { cashDeposited, bankDeposited };
   }, [activeVaultDepositsList]);
+
+  const getBankStats = (bankName) => {
+    const cleanBank = (bankName || '').toLowerCase().trim();
+
+    // 1. Total Credit (Vault deposits + Cash In/Credit transactions for this bank)
+    const vaultCredits = (vaultDeposits || [])
+      .filter(d => (isDepositDue ? !isDepositDue(d) : d.status !== 'Due'))
+      .filter(d => (d.depositTo || '').toLowerCase().trim() === cleanBank)
+      .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+
+    const directCredits = (transactions || [])
+      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && (t.status || 'Done') === 'Done')
+      .filter(t => (t.depositTo || t.account || '').toLowerCase().trim() === cleanBank)
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const totalCredit = vaultCredits + directCredits;
+
+    // 2. Total Debit (Cash Out/Debit transactions paid from or linked to this bank)
+    const totalDebit = (transactions || [])
+      .filter(t => (t.type !== 'Cash In' && t.type !== 'Credit') && (t.status || 'Done') === 'Done')
+      .filter(t => {
+        const dep = (t.depositTo || t.account || t.paymentMethod || t.bankName || '').toLowerCase().trim();
+        return dep === cleanBank || (dep.includes('bank') && cleanBank.includes(dep));
+      })
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    // 3. Available Reserve
+    const availableReserve = Math.max(0, totalCredit - totalDebit);
+
+    return { totalCredit, totalDebit, availableReserve };
+  };
+
+  const bankDepositsBreakdown = useMemo(() => {
+    const map = {};
+    availableBanks.forEach(b => {
+      map[b] = 0;
+    });
+
+    activeVaultDepositsList.forEach(d => {
+      const amt = parseFloat(d.amount) || 0;
+      const dep = d.depositTo || 'Company Wallet';
+      if (dep !== 'Company Wallet' && dep !== 'My Hand') {
+        map[dep] = (map[dep] || 0) + amt;
+      }
+    });
+
+    return map;
+  }, [activeVaultDepositsList, availableBanks]);
   const formattedVaultDeposits = activeVaultDepositsList.map((d) => ({
     id: d.id || `DEP-${Math.random()}`,
     date: d.date || new Date().toISOString().split('T')[0],
@@ -401,7 +451,7 @@ const DepositAllocate = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-5 print:hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 print:hidden">
         {/* CARD 1: COMPANY VAULT (Available Cash Reserve) */}
         <div className="glass-card p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white flex flex-col justify-between">
           <div>
@@ -447,6 +497,120 @@ const DepositAllocate = () => {
               <span className="text-[#9e6e34] font-black text-xs sm:text-sm">{settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* SEPARATE BANK CARDS SECTION (COMPACT TABLE-STYLE MATCHING CREDIT/DEBIT CARDS) */}
+      <div className="space-y-2.5 print:hidden">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1.5">
+            <div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold shrink-0">
+              <svg className="w-3.5 h-3.5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10zm3 0v11m4-11v11m4-11v11" />
+              </svg>
+            </div>
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#002B49]">
+              Bank Accounts ({availableBanks.length})
+            </h2>
+          </div>
+          <span className="text-[11px] font-extrabold text-slate-500">
+            Total Bank Reserve: {settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-4">
+          {availableBanks.map((bName) => {
+            const bStats = getBankStats(bName);
+            const isSelected = searchTerm.toLowerCase() === bName.toLowerCase();
+
+            return (
+              <div
+                key={bName}
+                className={`h-full bg-indigo-50/70 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-200/90 border-t-3 sm:border-t-4 border-t-indigo-600 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2 ${
+                  isSelected ? 'ring-2 ring-indigo-500 bg-indigo-100/90' : ''
+                }`}
+              >
+                {/* Card Header */}
+                <div className="flex items-center justify-between border-b border-indigo-200/60 pb-1 sm:pb-1.5">
+                  <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold shrink-0 print:hidden">
+                      <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10zm3 0v11m4-11v11m4-11v11" />
+                      </svg>
+                    </div>
+                    <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-indigo-900 truncate">{bName}</h3>
+                  </div>
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-100 text-indigo-800 uppercase shrink-0 print:hidden">Bank</span>
+                </div>
+
+                {/* Table-Style Content Rows */}
+                <div className="divide-y divide-indigo-200/50 text-[9.5px] sm:text-xs">
+                  {/* Row 1: Total Credit */}
+                  <div
+                    onClick={() => {
+                      navigate('/admin/credit-debit', {
+                        state: {
+                          selectedUser: 'All',
+                          typeFilter: 'Credit',
+                          depositToFilter: bName,
+                          statusFilter: 'Done'
+                        }
+                      });
+                    }}
+                    className="py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                    title={`Click to view Credit entries for ${bName}`}
+                  >
+                    <span className="text-indigo-900 font-semibold truncate mr-1">Total Credit</span>
+                    <span className="font-extrabold text-emerald-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">
+                      {settings?.currency || '₹'}{bStats.totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Row 2: Total Debit */}
+                  <div
+                    onClick={() => {
+                      navigate('/admin/credit-debit', {
+                        state: {
+                          selectedUser: 'All',
+                          typeFilter: 'Debit',
+                          depositToFilter: bName,
+                          statusFilter: 'Done'
+                        }
+                      });
+                    }}
+                    className="py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                    title={`Click to view Debit entries for ${bName}`}
+                  >
+                    <span className="text-indigo-900 font-semibold truncate mr-1">Total Debit</span>
+                    <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">
+                      {settings?.currency || '₹'}{bStats.totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Row 3: Available Reserve */}
+                  <div
+                    onClick={() => {
+                      navigate('/admin/credit-debit', {
+                        state: {
+                          selectedUser: 'All',
+                          typeFilter: 'Credit',
+                          depositToFilter: bName,
+                          statusFilter: 'All'
+                        }
+                      });
+                    }}
+                    className="pt-1 flex items-center justify-between font-black text-indigo-950 cursor-pointer hover:bg-indigo-100/70 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                    title={`Click to open all entries for ${bName}`}
+                  >
+                    <span className="truncate mr-1">Available</span>
+                    <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">
+                      {settings?.currency || '₹'}{bStats.availableReserve.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1186,7 +1350,7 @@ const DepositAllocate = () => {
 
         {/* 2. Print Summary Cards Grid */}
         <div className="credit-summary-print-wrapper mb-3">
-          <div className="grid grid-cols-2 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4mm' }}>
+          <div className="grid grid-cols-3 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4mm' }}>
             {/* CARD 1: COMPANY VAULT */}
             <div className="print-card">
               <div className="card-title">
@@ -1222,6 +1386,25 @@ const DepositAllocate = () => {
               <div className="card-total">
                 <span className="card-label">TOTAL DEPOSITED</span>
                 <span className="card-value">{settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            {/* CARD 3: BANK WISE BREAKDOWN */}
+            <div className="print-card">
+              <div className="card-title">
+                BANK WISE BREAKDOWN
+              </div>
+              <div className="card-body">
+                {Object.entries(bankDepositsBreakdown).map(([bName, bAmt]) => (
+                  <div key={bName} className="card-row">
+                    <span className="card-label">{bName}</span>
+                    <span className="card-value">{settings?.currency || '₹'}{bAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="card-total">
+                <span className="card-label">TOTAL BANK</span>
+                <span className="card-value">{settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>

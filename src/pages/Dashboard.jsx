@@ -41,6 +41,7 @@ const Dashboard = () => {
     userAllocations,
     allocationsHistory,
     transactions,
+    vaultDeposits,
     totalAllocatedToTeam,
     totalCashIn,
     totalCashOut,
@@ -308,8 +309,26 @@ const Dashboard = () => {
   }, [transactions]);
 
   const allCreditTxns = useMemo(() => {
-    return transactions.filter(t => t.type === 'Cash In' || t.type === 'Credit');
-  }, [transactions]);
+    const directCredits = transactions.filter(t => t.type === 'Cash In' || t.type === 'Credit');
+    const directCreditIds = new Set(directCredits.map(t => t.id));
+
+    const mappedVaultDeposits = (vaultDeposits || [])
+      .filter(d => !d.txnId || !directCreditIds.has(d.txnId))
+      .map(d => ({
+        id: d.id,
+        type: 'Credit',
+        depositTo: d.depositTo || 'Company Wallet',
+        userName: (d.userName && d.userName !== 'Shukan Admin') ? d.userName : 'Vraj',
+        amount: parseFloat(d.amount) || 0,
+        date: d.date,
+        description: d.notes ? d.notes.replace(/Admin Capital/g, 'Company Capital') : 'Vault Capital Deposit',
+        status: d.status || 'Done',
+        isVaultDeposit: true,
+        rawItem: d
+      }));
+
+    return [...mappedVaultDeposits, ...directCredits].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  }, [transactions, vaultDeposits]);
 
   const adminTotalDebit = useMemo(() => {
     return allDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
@@ -334,6 +353,38 @@ const Dashboard = () => {
   const adminDueCredit = useMemo(() => {
     return allCreditTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [allCreditTxns]);
+
+  const availableBanks = (settings?.banks || 'IOB Bank, BOB Bank')
+    .split(',')
+    .map(b => b.trim())
+    .filter(Boolean);
+
+  const getBankStats = (bankName) => {
+    const cleanBank = (bankName || '').toLowerCase().trim();
+
+    const vaultCredits = (vaultDeposits || [])
+      .filter(d => (d.depositTo || '').toLowerCase().trim() === cleanBank)
+      .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+
+    const directCredits = (transactions || [])
+      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && (t.status || 'Done') === 'Done')
+      .filter(t => (t.depositTo || t.account || '').toLowerCase().trim() === cleanBank)
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const totalCredit = vaultCredits + directCredits;
+
+    const totalDebit = (transactions || [])
+      .filter(t => (t.type !== 'Cash In' && t.type !== 'Credit') && (t.status || 'Done') === 'Done')
+      .filter(t => {
+        const dep = (t.depositTo || t.account || t.paymentMethod || t.bankName || '').toLowerCase().trim();
+        return dep === cleanBank || (dep.includes('bank') && cleanBank.includes(dep));
+      })
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const availableReserve = Math.max(0, totalCredit - totalDebit);
+
+    return { totalCredit, totalDebit, availableReserve };
+  };
 
   // Total Remaining Across All Team Members
   const totalTeamRemaining = users.reduce((sum, u) => {
@@ -730,8 +781,10 @@ const Dashboard = () => {
           <div className="h-full bg-rose-50/70 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
             <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
               <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
-                <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold text-[9px] sm:text-xs shrink-0 print:hidden">
-                  ⬆️
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold shrink-0 print:hidden">
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                  </svg>
                 </div>
                 <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Debit Summary</h3>
               </div>
@@ -772,8 +825,10 @@ const Dashboard = () => {
           <div className="h-full bg-emerald-50/70 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-emerald-200/90 border-t-3 sm:border-t-4 border-t-emerald-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
             <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1 sm:pb-1.5">
               <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
-                <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-[9px] sm:text-xs shrink-0 print:hidden">
-                  ⬇️
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold shrink-0 print:hidden">
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                  </svg>
                 </div>
                 <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-emerald-900 truncate">Credit Summary</h3>
               </div>
@@ -814,8 +869,10 @@ const Dashboard = () => {
           <div className="h-full bg-amber-50/60 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-200/90 border-t-3 sm:border-t-4 border-t-[#c69255] shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
             <div className="flex items-center justify-between border-b border-amber-200/60 pb-1 sm:pb-1.5">
               <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
-                <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-amber-100 flex items-center justify-center text-[#9e6e34] font-bold text-[9px] sm:text-xs shrink-0 print:hidden">
-                  🏦
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-amber-100 flex items-center justify-center text-[#9e6e34] font-bold shrink-0 print:hidden">
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#9e6e34]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10zm3 0v11m4-11v11m4-11v11" />
+                  </svg>
                 </div>
                 <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-[#9e6e34] truncate">Vault & Reserve</h3>
               </div>
@@ -851,6 +908,111 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+
+          {/* SEPARATE INDIVIDUAL BANK CARDS (COMPACT TABLE-STYLE MATCHING CREDIT/DEBIT CARDS) */}
+          <div className="col-span-full pt-1 print:hidden space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5">
+                <div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold shrink-0">
+                  <svg className="w-3.5 h-3.5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10zm3 0v11m4-11v11m4-11v11" />
+                  </svg>
+                </div>
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#002B49]">Bank Accounts ({availableBanks.length})</h3>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-4">
+              {availableBanks.map((bName) => {
+                const bStats = getBankStats(bName);
+                return (
+                  <div
+                    key={bName}
+                    className="h-full bg-indigo-50/70 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-200/90 border-t-3 sm:border-t-4 border-t-indigo-600 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2"
+                  >
+                    {/* Card Header */}
+                    <div className="flex items-center justify-between border-b border-indigo-200/60 pb-1 sm:pb-1.5">
+                      <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                        <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold shrink-0 print:hidden">
+                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10zm3 0v11m4-11v11m4-11v11" />
+                          </svg>
+                        </div>
+                        <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-indigo-900 truncate">{bName}</h3>
+                      </div>
+                      <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-100 text-indigo-800 uppercase shrink-0 print:hidden">Bank</span>
+                    </div>
+
+                    {/* Content Rows */}
+                    <div className="divide-y divide-indigo-200/50 text-[9.5px] sm:text-xs">
+                      {/* Row 1: Total Credit */}
+                      <div
+                        onClick={() => {
+                          navigate('/admin/credit-debit', {
+                            state: {
+                              selectedUser: 'All',
+                              typeFilter: 'Credit',
+                              depositToFilter: bName,
+                              statusFilter: 'Done'
+                            }
+                          });
+                        }}
+                        className="py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                        title={`Click to view Credit entries for ${bName}`}
+                      >
+                        <span className="text-indigo-900 font-semibold truncate mr-1">Total Credit</span>
+                        <span className="font-extrabold text-emerald-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">
+                          {settings?.currency || '₹'}{bStats.totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      {/* Row 2: Total Debit */}
+                      <div
+                        onClick={() => {
+                          navigate('/admin/credit-debit', {
+                            state: {
+                              selectedUser: 'All',
+                              typeFilter: 'Debit',
+                              depositToFilter: bName,
+                              statusFilter: 'Done'
+                            }
+                          });
+                        }}
+                        className="py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                        title={`Click to view Debit entries for ${bName}`}
+                      >
+                        <span className="text-indigo-900 font-semibold truncate mr-1">Total Debit</span>
+                        <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">
+                          {settings?.currency || '₹'}{bStats.totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      {/* Row 3: Available Reserve */}
+                      <div
+                        onClick={() => {
+                          navigate('/admin/credit-debit', {
+                            state: {
+                              selectedUser: 'All',
+                              typeFilter: 'Credit',
+                              depositToFilter: bName,
+                              statusFilter: 'All'
+                            }
+                          });
+                        }}
+                        className="pt-1 flex items-center justify-between font-black text-indigo-950 cursor-pointer hover:bg-indigo-100/70 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                        title={`Click to open all entries for ${bName}`}
+                      >
+                        <span className="truncate mr-1">Available</span>
+                        <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">
+                          {settings?.currency || '₹'}{bStats.availableReserve.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -862,7 +1024,11 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-[11px] font-black uppercase text-blue-900 tracking-wider">CASH IN HAND</span>
-              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center text-xs shrink-0 font-bold">💵</span>
+              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold">
+                <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </span>
             </div>
             <div className="my-1 text-center">
               <div className="text-lg sm:text-xl font-black text-blue-800 tracking-tight">
@@ -905,10 +1071,12 @@ const Dashboard = () => {
                   <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${companyOwesMe > 0 ? 'text-rose-900' : 'text-slate-600'}`}>
                     COMPANY OWES ME
                   </span>
-                  <span className={`w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0 font-bold ${
+                  <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 font-bold ${
                     companyOwesMe > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
                   }`}>
-                    ⚠️
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
                   </span>
                 </div>
                 <div className="my-1 text-center">
@@ -949,7 +1117,11 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-[11px] font-black uppercase text-amber-900 tracking-wider">TOTAL DEBIT</span>
-              <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center text-xs shrink-0 font-bold">🧾</span>
+              <span className="w-5 h-5 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center shrink-0 font-bold">
+                <svg className="w-3.5 h-3.5 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+              </span>
             </div>
             <div className="my-1 text-center">
               <div className="text-lg sm:text-xl font-black text-amber-900 tracking-tight">
@@ -985,7 +1157,11 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-[11px] font-black uppercase text-emerald-800 tracking-wider">TOTAL CREDIT</span>
-              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0 font-bold">💰</span>
+              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 font-bold">
+                <svg className="w-3.5 h-3.5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
             </div>
             <div className="my-1 text-center">
               <div className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">

@@ -1191,8 +1191,10 @@ const CreditDebit = ({ isMyView = false }) => {
             <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
               <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
                 <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold text-[9px] sm:text-xs shrink-0">
-                    ⬆️
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold shrink-0">
+                    <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                    </svg>
                   </div>
                   <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Debit Summary</h3>
                 </div>
@@ -1526,8 +1528,10 @@ const CreditDebit = ({ isMyView = false }) => {
             <div className="h-full bg-emerald-50/70 p-2.5 sm:p-4 rounded-2xl border border-emerald-200/90 border-t-4 border-t-emerald-500 shadow-xs flex flex-col justify-between space-y-2">
               <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1.5">
                 <div className="flex items-center space-x-1.5 min-w-0">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-[10px] sm:text-xs shrink-0">
-                    ⬇️
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold shrink-0">
+                    <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                    </svg>
                   </div>
                   <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-900 truncate">Credit Summary</h3>
                 </div>
@@ -1568,8 +1572,10 @@ const CreditDebit = ({ isMyView = false }) => {
             <div className="h-full bg-blue-50/70 p-2.5 sm:p-4 rounded-2xl border border-blue-200/90 border-t-4 border-t-blue-500 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
               <div className="flex items-center justify-between border-b border-blue-200/60 pb-1.5">
                 <div className="flex items-center space-x-1.5 min-w-0">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-[10px] sm:text-xs shrink-0">
-                    ✋
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
+                    <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5a1.5 1.5 0 013 0v4.5m0-4.5a1.5 1.5 0 013 0V11" />
+                    </svg>
                   </div>
                   <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-blue-900 truncate">My Hand</h3>
                 </div>
@@ -1610,8 +1616,11 @@ const CreditDebit = ({ isMyView = false }) => {
             <div className="h-full bg-purple-50/70 p-2.5 sm:p-4 rounded-2xl border border-purple-200/90 border-t-4 border-t-purple-500 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
               <div className="flex items-center justify-between border-b border-purple-200/60 pb-1.5">
                 <div className="flex items-center space-x-1.5 min-w-0">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-[10px] sm:text-xs shrink-0">
-                    🏢
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700 font-bold shrink-0">
+                    <svg className="w-3.5 h-3.5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h5m-5 0V6k" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h5m-5 0V6" />
+                    </svg>
                   </div>
                   <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-purple-900 truncate">Co. Wallet</h3>
                 </div>
@@ -1652,8 +1661,10 @@ const CreditDebit = ({ isMyView = false }) => {
             <div className="h-full bg-indigo-50/70 p-2.5 sm:p-4 rounded-2xl border border-indigo-200/90 border-t-4 border-t-indigo-600 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
               <div className="flex items-center justify-between border-b border-indigo-200/60 pb-1.5">
                 <div className="flex items-center space-x-1.5 min-w-0">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[10px] sm:text-xs shrink-0">
-                    🏦
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold shrink-0">
+                    <svg className="w-3.5 h-3.5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10zm3 0v11m4-11v11m4-11v11" />
+                    </svg>
                   </div>
                   <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-indigo-900 truncate">Banks</h3>
                 </div>
