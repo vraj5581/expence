@@ -29,14 +29,6 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
-    // Ensure depositTo column exists in debit_transactions table
-    try {
-        $pdo->exec("ALTER TABLE `debit_transactions` ADD COLUMN `depositTo` VARCHAR(100) DEFAULT 'My Hand'");
-    } catch (\Exception $ex) {}
-
-    try {
-        $pdo->exec("UPDATE `debit_transactions` SET `depositTo` = 'Company Wallet' WHERE (`userName` = 'Shukan Company' OR `userName` = 'Shukan Packaging (Company)' OR `userName` = 'Company Vault') AND (`depositTo` IS NULL OR `depositTo` = '' OR `depositTo` = 'My Hand')");
-    } catch (\Exception $ex) {}
 } catch (\PDOException $e) {
     http_response_code(500);
     echo json_encode([

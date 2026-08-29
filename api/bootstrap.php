@@ -31,8 +31,13 @@ try {
     }
 
     // 5. Users
-    $stmt5 = $pdo->query("SELECT id, name, username, role, status, avatar, created_at, created_at as createdAt FROM users ORDER BY created_at DESC");
-    $users = $stmt5->fetchAll();
+    $stmt5 = $pdo->query("SELECT id, name, username, password, role, status, avatar, created_at, created_at as createdAt FROM users ORDER BY created_at DESC");
+    $users = array_map(function($u) {
+        if (empty($u['password'])) {
+            $u['password'] = strtolower($u['id'] ?? 'user') . '123';
+        }
+        return $u;
+    }, $stmt5->fetchAll());
 
     // 6. Settings
     $stmt6 = $pdo->query("SELECT * FROM settings WHERE id = 1");

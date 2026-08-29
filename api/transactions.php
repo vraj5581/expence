@@ -6,17 +6,12 @@ $method = $_SERVER['REQUEST_METHOD'];
 $data = getJsonInput();
 
 if ($method === 'GET') {
-    // Fetch from both tables, add type column, merge and sort
-    $debits  = $pdo->query("SELECT *, 'Cash Out' as type FROM debit_transactions")->fetchAll();
-    $credits = $pdo->query("SELECT *, 'Cash In' as type FROM credit_transactions")->fetchAll();
-    $all = array_merge($debits, $credits);
-
-    // Sort by date DESC, then created_at DESC
-    usort($all, function($a, $b) {
-        $dateCmp = strcmp($b['date'], $a['date']);
-        if ($dateCmp !== 0) return $dateCmp;
-        return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
-    });
+    // Single optimized UNION ALL query sorted natively in MySQL
+    $sql = "SELECT id, date, userName, depositTo, amount, category, description, status, notes, createdBy, created_at, 'Cash Out' AS type FROM debit_transactions
+            UNION ALL
+            SELECT id, date, userName, depositTo, amount, category, description, status, notes, createdBy, created_at, 'Cash In' AS type FROM credit_transactions
+            ORDER BY date DESC, created_at DESC";
+    $all = $pdo->query($sql)->fetchAll();
 
     echo json_encode(['success' => true, 'transactions' => $all]);
     exit();

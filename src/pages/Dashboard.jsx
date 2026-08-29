@@ -415,8 +415,8 @@ const Dashboard = () => {
   const dueTotal = isAdmin ? teamDueTotal : myDueDebit;
   const moneyGiven = isAdmin ? totalAllocatedToTeam : myHandDoneCredit;
   const neededFromAdmin = isAdmin
-    ? Math.max(0, adminDoneDebit - totalAllocatedToTeam)
-    : Math.max(0, myDoneDebit - myHandDoneCredit);
+    ? adminDueDebit
+    : (Math.max(0, myDoneDebit - myHandDoneCredit) + myDueDebit);
 
   const overviewBarChartLabels = isAdmin
     ? [['Done', 'Credit'], ['Done', 'Debit'], ['Pending', 'Credit'], ['Pending', 'Debit'], ['Allocations'], ['Must Pay']]
@@ -1038,7 +1038,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
                 className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                 title="Click to view Hand Received Credits"
               >
@@ -1046,7 +1046,7 @@ const Dashboard = () => {
                 <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit' } }); }}
                 className="hover:text-slate-900 hover:underline transition cursor-pointer"
                 title="Click to view Spent Debits"
               >
@@ -1089,7 +1089,7 @@ const Dashboard = () => {
                 </div>
                 <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit' } }); }}
                     className="hover:text-rose-700 hover:underline transition cursor-pointer"
                     title="Click to view Total Spent"
                   >
@@ -1097,7 +1097,7 @@ const Dashboard = () => {
                     <span className="text-slate-800">{settings.currency}{myDoneDebit.toLocaleString('en-IN')}</span>
                   </div>
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
                     className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                     title="Click to view Money Received"
                   >
@@ -1171,7 +1171,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9px] sm:text-[10px] font-extrabold gap-1">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'My Hand' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
                 className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                 title="Click to view My Hand Credit entries"
               >
@@ -1179,7 +1179,7 @@ const Dashboard = () => {
                 <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Company Wallet' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
                 className="hover:text-purple-700 hover:underline transition cursor-pointer"
                 title="Click to view Company Wallet Credit entries"
               >
@@ -1187,7 +1187,7 @@ const Dashboard = () => {
                 <span className="text-purple-700">{settings.currency}{myWalletDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'Banks' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
                 className="hover:text-blue-700 hover:underline transition cursor-pointer"
                 title="Click to view Bank Credit entries"
               >
@@ -1508,7 +1508,7 @@ const Dashboard = () => {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 mt-4 pt-3 border-t border-slate-100 text-center">
             {/* 1. Total Done Credit (Light Green) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-col justify-center cursor-pointer hover:bg-emerald-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Done Credit"
             >
@@ -1520,7 +1520,7 @@ const Dashboard = () => {
 
             {/* 2. Total Done Debit (Light Red) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex flex-col justify-center cursor-pointer hover:bg-rose-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Done Debit"
             >
@@ -1532,7 +1532,7 @@ const Dashboard = () => {
 
             {/* 3. Total Pending Credit (Light Green) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Due' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-300 flex flex-col justify-center cursor-pointer hover:bg-emerald-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Pending Credit"
             >
@@ -1544,7 +1544,7 @@ const Dashboard = () => {
 
             {/* 4. Total Pending Debit (Light Red) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-rose-50/80 border border-rose-300 flex flex-col justify-center cursor-pointer hover:bg-rose-100 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Total Pending Debit"
             >
@@ -1568,7 +1568,7 @@ const Dashboard = () => {
 
             {/* 6. Company Must Pay (Light Red) */}
             <div
-              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } })}
+              onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit' } })}
               className="p-2 sm:p-2.5 rounded-xl bg-rose-100 border border-rose-300 flex flex-col justify-center cursor-pointer hover:bg-rose-200 hover:scale-102 transition-all shadow-2xs"
               title="Click to view Company Must Pay"
             >

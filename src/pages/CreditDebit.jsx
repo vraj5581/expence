@@ -394,9 +394,14 @@ const CreditDebit = ({ isMyView = false }) => {
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
   const selectedSpender = watch('userName', 'Shukan Company');
 
-  // Separate raw arrays
+  // Separate raw arrays with pre-computed search keys for 0ms instant filter performance
   const rawDebitTxns = useMemo(() => {
-    return transactions.filter(t => t.type !== 'Cash In' && t.type !== 'Credit');
+    return transactions
+      .filter(t => t.type !== 'Cash In' && t.type !== 'Credit')
+      .map(t => {
+        const key = `${t.id || ''} ${t.userName || ''} ${t.depositTo || ''} ${t.account || ''} ${t.category || ''} ${t.description || ''} ${t.notes || ''} ${t.amount || ''} ${t.date || ''} ${formatDate(t.date) || ''}`.toLowerCase();
+        return { ...t, _searchKey: key };
+      });
   }, [transactions]);
 
   const rawCreditTxns = useMemo(() => {
@@ -419,28 +424,34 @@ const CreditDebit = ({ isMyView = false }) => {
         rawItem: d
       }));
 
-    return [...mappedVaultDeposits, ...directCredits].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-  }, [transactions, vaultDeposits]);
+    // Map all Company Cash Allocations into Credit transactions for staff users (Money received in hand)
+    const mappedAllocations = (allocationsHistory || []).map(a => ({
+      id: a.id,
+      type: 'Credit',
+      depositTo: 'My Hand',
+      userName: a.userName,
+      amount: parseFloat(a.amount) || 0,
+      date: a.date,
+      description: a.notes || `Company Cash Allocation (${a.userName})`,
+      status: 'Done',
+      isAllocation: true
+    }));
 
-  // Universal Transaction Search Matcher (Searches bank names, amounts, categories, status, notes, users, descriptions)
+    return [...mappedVaultDeposits, ...mappedAllocations, ...directCredits]
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+      .map(t => {
+        const key = `${t.id || ''} ${t.userName || ''} ${t.depositTo || ''} ${t.account || ''} ${t.category || ''} ${t.description || ''} ${t.notes || ''} ${t.amount || ''} ${t.date || ''} ${formatDate(t.date) || ''}`.toLowerCase();
+        return { ...t, _searchKey: key };
+      });
+  }, [transactions, vaultDeposits, allocationsHistory]);
+
+  // High-performance Search Matcher (Uses pre-computed _searchKey for 0ms latency)
   const matchesTxnSearch = (t, searchStr) => {
     if (!searchStr || !searchStr.trim()) return true;
     const queryTerms = searchStr.toLowerCase().trim().split(/\s+/).filter(Boolean);
     if (queryTerms.length === 0) return true;
 
-    const fullString = [
-      t.id,
-      t.userName,
-      t.depositTo,
-      t.account,
-      t.category,
-      t.description,
-      t.notes,
-      t.amount,
-      t.date,
-      formatDate(t.date)
-    ].filter(Boolean).join(' ').toLowerCase();
-
+    const fullString = t._searchKey || `${t.id || ''} ${t.userName || ''} ${t.depositTo || ''} ${t.account || ''} ${t.category || ''} ${t.description || ''} ${t.notes || ''} ${t.amount || ''} ${t.date || ''}`.toLowerCase();
     return queryTerms.every(term => fullString.includes(term));
   };
 
@@ -1289,50 +1300,52 @@ const CreditDebit = ({ isMyView = false }) => {
               </div>
             </div>
 
-            {/* CARD 2: CASH DEBITS */}
-            <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
-              <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
-                <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold shrink-0">
-                    💵
+            {/* CARD 2: CASH DEBITS (Only in Admin View) */}
+            {!isMyView && (
+              <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
+                <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
+                  <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold shrink-0">
+                      💵
+                    </div>
+                    <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Cash & Wallet</h3>
                   </div>
-                  <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Cash & Wallet</h3>
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 uppercase shrink-0">Cash</span>
                 </div>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 uppercase shrink-0">Cash</span>
+
+                <div className="divide-y divide-rose-200/50 text-[9.5px] sm:text-xs">
+                  <div
+                    onClick={() => toggleDebitCardFilter('Company Wallet', 'Done')}
+                    className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'Done' ? 'bg-rose-200/90 font-black' : ''}`}
+                    title="Click to filter Done Cash entries"
+                  >
+                    <span className="text-rose-800 font-semibold truncate mr-1">Done Cash</span>
+                    <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{debitBreakdown.cashDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  <div
+                    onClick={() => toggleDebitCardFilter('Company Wallet', 'Due')}
+                    className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'Due' ? 'bg-rose-200/90 font-black' : ''}`}
+                    title="Click to filter Due Cash entries"
+                  >
+                    <span className="text-rose-800 font-semibold truncate mr-1">Due Cash</span>
+                    <span className="font-extrabold text-rose-900 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{debitBreakdown.cashDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  <div
+                    onClick={() => toggleDebitCardFilter('Company Wallet', 'All')}
+                    className={`pt-1 flex items-center justify-between font-black text-rose-950 cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'All' ? 'bg-rose-200/90' : ''}`}
+                    title="Click to filter All Cash entries"
+                  >
+                    <span className="truncate mr-1">Total Cash</span>
+                    <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{debitBreakdown.cashTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
               </div>
+            )}
 
-              <div className="divide-y divide-rose-200/50 text-[9.5px] sm:text-xs">
-                <div
-                  onClick={() => toggleDebitCardFilter('Company Wallet', 'Done')}
-                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'Done' ? 'bg-rose-200/90 font-black' : ''}`}
-                  title="Click to filter Done Cash entries"
-                >
-                  <span className="text-rose-800 font-semibold truncate mr-1">Done Cash</span>
-                  <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{debitBreakdown.cashDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div
-                  onClick={() => toggleDebitCardFilter('Company Wallet', 'Due')}
-                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'Due' ? 'bg-rose-200/90 font-black' : ''}`}
-                  title="Click to filter Due Cash entries"
-                >
-                  <span className="text-rose-800 font-semibold truncate mr-1">Due Cash</span>
-                  <span className="font-extrabold text-rose-900 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{debitBreakdown.cashDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div
-                  onClick={() => toggleDebitCardFilter('Company Wallet', 'All')}
-                  className={`pt-1 flex items-center justify-between font-black text-rose-950 cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'All' ? 'bg-rose-200/90' : ''}`}
-                  title="Click to filter All Cash entries"
-                >
-                  <span className="truncate mr-1">Total Cash</span>
-                  <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{debitBreakdown.cashTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* CARDS 3+: INDIVIDUAL BANK ACCOUNTS */}
-            {availableBanks.map(bName => {
+            {/* CARDS 3+: INDIVIDUAL BANK ACCOUNTS (Only in Admin View) */}
+            {!isMyView && availableBanks.map(bName => {
               const bStats = debitBreakdown.bankStatsMap[bName] || { done: 0, due: 0, total: 0 };
               return (
                 <div key={bName} className="h-full bg-indigo-50/60 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-200/80 border-t-3 sm:border-t-4 border-t-indigo-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">

@@ -5,8 +5,13 @@ $method = $_SERVER['REQUEST_METHOD'];
 $data = getJsonInput();
 
 if ($method === 'GET') {
-    $stmt = $pdo->query("SELECT id, name, username, role, status, avatar, created_at FROM users ORDER BY name ASC");
-    $users = $stmt->fetchAll();
+    $stmt = $pdo->query("SELECT id, name, username, password, role, status, avatar, created_at FROM users ORDER BY name ASC");
+    $users = array_map(function($u) {
+        if (empty($u['password'])) {
+            $u['password'] = strtolower($u['id'] ?? 'user') . '123';
+        }
+        return $u;
+    }, $stmt->fetchAll());
     echo json_encode(['success' => true, 'users' => $users]);
     exit();
 }

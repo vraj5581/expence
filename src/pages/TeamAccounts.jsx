@@ -143,8 +143,8 @@ const TeamAccounts = () => {
                 <div>
                   <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Password</span>
                   <div className="flex items-center space-x-1.5">
-                    <span className="font-mono text-xs text-slate-700 font-semibold">
-                      {showPasswordMap[u.id] ? u.password : '••••••••'}
+                    <span className="font-mono text-xs text-slate-700 font-bold">
+                      {showPasswordMap[u.id] ? (u.password || '(Not Set)') : '••••••••'}
                     </span>
                     <button
                       onClick={() => togglePasswordVisibility(u.id)}
@@ -231,8 +231,8 @@ const TeamAccounts = () => {
                   </td>
                   <td className="py-3.5 px-4">
                     <div className="flex items-center space-x-2">
-                      <span className="font-mono text-xs text-slate-600">
-                        {showPasswordMap[u.id] ? u.password : '••••••••'}
+                      <span className="font-mono text-xs text-slate-700 font-bold select-all bg-slate-100 px-1.5 py-0.5 rounded">
+                        {showPasswordMap[u.id] ? (u.password || '(Not Set)') : '••••••••'}
                       </span>
                       <button
                         onClick={() => togglePasswordVisibility(u.id)}
