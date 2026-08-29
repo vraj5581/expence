@@ -348,7 +348,14 @@ export const ExpenseProvider = ({ children }) => {
   const totalAllocatedToTeam = Object.values(userAllocations || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
 
   const totalCompanyDirectExpenses = (transactions || [])
-    .filter(t => t && (t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault') && t.type === 'Cash Out' && t.status !== 'Due')
+    .filter(t => {
+      if (!t || t.status === 'Due' || t.type === 'Cash In' || t.type === 'Credit') return false;
+      const isCompany = t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault';
+      if (!isCompany) return false;
+      const dep = (t.depositTo || 'Company Wallet').toLowerCase().trim();
+      // Exclude Bank Debits from Company Vault cash reserve calculation
+      return !dep.includes('bank');
+    })
     .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
 
   const adminVaultBalance = totalDoneCashDeposit - totalAllocatedToTeam - totalCompanyDirectExpenses;
@@ -530,11 +537,11 @@ export const ExpenseProvider = ({ children }) => {
   const getUserStats = (userName) => {
     if (userName === 'Shukan Company' || userName === 'Shukan Packaging (Company)' || userName === 'Company Vault') {
       return {
-        allocated: totalVaultDeposited,
+        allocated: totalDoneCashDeposit,
         spent: totalCompanyDirectExpenses,
         dueSpent: 0,
         cashInReceived: 0,
-        totalCashAvailable: totalVaultDeposited,
+        totalCashAvailable: totalDoneCashDeposit,
         remaining: adminVaultBalance,
         needFromCompany: 0
       };

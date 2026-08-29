@@ -339,6 +339,7 @@ const CreditDebit = ({ isMyView = false }) => {
 
   // Independent Debit Filter State
   const [debitSearch, setDebitSearch] = useState('');
+  const [debitDepositTo, setDebitDepositTo] = useState('All');
   const [debitStatus, setDebitStatus] = useState('All');
   const [debitStartDate, setDebitStartDate] = useState('');
   const [debitEndDate, setDebitEndDate] = useState('');
@@ -375,6 +376,7 @@ const CreditDebit = ({ isMyView = false }) => {
       if (typeFromState === 'Debit') {
         setActiveTab('debit');
         if (statusFromState) setDebitStatus(statusFromState);
+        if (depositToFromState) setDebitDepositTo(depositToFromState);
       } else if (typeFromState === 'Credit') {
         setActiveTab('credit');
         if (statusFromState) setCreditStatus(statusFromState);
@@ -420,30 +422,33 @@ const CreditDebit = ({ isMyView = false }) => {
     return [...mappedVaultDeposits, ...directCredits].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
   }, [transactions, vaultDeposits]);
 
-  // User-filtered raw arrays for accurate tab badge counts
-  const userFilteredDebitTxns = useMemo(() => {
-    if (selectedUser === 'All') return rawDebitTxns;
-    return rawDebitTxns.filter(t => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
-  }, [rawDebitTxns, selectedUser]);
+  // Universal Transaction Search Matcher (Searches bank names, amounts, categories, status, notes, users, descriptions)
+  const matchesTxnSearch = (t, searchStr) => {
+    if (!searchStr || !searchStr.trim()) return true;
+    const queryTerms = searchStr.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (queryTerms.length === 0) return true;
 
-  const userFilteredCreditTxns = useMemo(() => {
-    if (selectedUser === 'All') return rawCreditTxns;
-    return rawCreditTxns.filter(t => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
-  }, [rawCreditTxns, selectedUser]);
+    const fullString = [
+      t.id,
+      t.userName,
+      t.depositTo,
+      t.account,
+      t.category,
+      t.description,
+      t.notes,
+      t.amount,
+      t.date,
+      formatDate(t.date)
+    ].filter(Boolean).join(' ').toLowerCase();
 
-  // Filtered Debit Transactions
-  const filteredDebitTxns = useMemo(() => {
+    return queryTerms.every(term => fullString.includes(term));
+  };
+
+  // Base filtered debit transactions (filtered by User, Search, Date Range, Amount Range)
+  const baseFilteredDebitTxns = useMemo(() => {
     return rawDebitTxns.filter((t) => {
       if (selectedUser !== 'All' && (t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
-      if (debitSearch.trim()) {
-        const query = debitSearch.toLowerCase();
-        const matchId = (t.id || '').toLowerCase().includes(query);
-        const matchUser = (t.userName || '').toLowerCase().includes(query);
-        const matchDesc = (t.description || '').toLowerCase().includes(query);
-        const matchDate = (t.date || '').includes(query) || formatDate(t.date).toLowerCase().includes(query);
-        if (!matchId && !matchUser && !matchDesc && !matchDate) return false;
-      }
-      if (debitStatus !== 'All' && (t.status || 'Done') !== debitStatus) return false;
+      if (debitSearch.trim() && !matchesTxnSearch(t, debitSearch)) return false;
       if (debitStartDate && t.date < debitStartDate) return false;
       if (debitEndDate && t.date > debitEndDate) return false;
 
@@ -453,29 +458,13 @@ const CreditDebit = ({ isMyView = false }) => {
 
       return true;
     });
-  }, [rawDebitTxns, selectedUser, debitSearch, debitStatus, debitStartDate, debitEndDate, debitMinAmt, debitMaxAmt]);
+  }, [rawDebitTxns, selectedUser, debitSearch, debitStartDate, debitEndDate, debitMinAmt, debitMaxAmt]);
 
-  // Filtered Credit Transactions
-  const filteredCreditTxns = useMemo(() => {
+  // Base filtered credit transactions (filtered by User, Search, Date Range, Amount Range)
+  const baseFilteredCreditTxns = useMemo(() => {
     return rawCreditTxns.filter((t) => {
       if (selectedUser !== 'All' && (t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
-      if (creditSearch.trim()) {
-        const query = creditSearch.toLowerCase();
-        const matchId = (t.id || '').toLowerCase().includes(query);
-        const matchUser = (t.userName || '').toLowerCase().includes(query);
-        const matchDesc = (t.description || '').toLowerCase().includes(query);
-        const matchDate = (t.date || '').includes(query) || formatDate(t.date).toLowerCase().includes(query);
-        if (!matchId && !matchUser && !matchDesc && !matchDate) return false;
-      }
-      if (creditDepositTo !== 'All') {
-        const target = t.depositTo || 'My Hand';
-        if (creditDepositTo === 'Banks') {
-          if (target === 'My Hand' || target === 'Company Wallet') return false;
-        } else {
-          if (target !== creditDepositTo) return false;
-        }
-      }
-      if (creditStatus !== 'All' && (t.status || 'Done') !== creditStatus) return false;
+      if (creditSearch.trim() && !matchesTxnSearch(t, creditSearch)) return false;
       if (creditStartDate && t.date < creditStartDate) return false;
       if (creditEndDate && t.date > creditEndDate) return false;
 
@@ -485,38 +474,88 @@ const CreditDebit = ({ isMyView = false }) => {
 
       return true;
     });
-  }, [rawCreditTxns, selectedUser, creditSearch, creditDepositTo, creditStatus, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
+  }, [rawCreditTxns, selectedUser, creditSearch, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
 
-  // Base Debit Transactions filtered by Selected User
-  const userDebitTxns = useMemo(() => {
-    if (selectedUser === 'All') return rawDebitTxns;
-    return rawDebitTxns.filter((t) => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
-  }, [rawDebitTxns, selectedUser]);
+  // Aliases for tab badges
+  const userFilteredDebitTxns = baseFilteredDebitTxns;
+  const userFilteredCreditTxns = baseFilteredCreditTxns;
 
-  // Base Credit Transactions filtered by Selected User
-  const userCreditTxns = useMemo(() => {
-    if (selectedUser === 'All') return rawCreditTxns;
-    return rawCreditTxns.filter((t) => (t.userName || '').toLowerCase() === selectedUser.toLowerCase());
-  }, [rawCreditTxns, selectedUser]);
+  // Debit breakdown stats dynamically updated by active filters
+  const debitBreakdown = useMemo(() => {
+    let cashDone = 0;
+    let cashDue = 0;
+    let bankDone = 0;
+    let bankDue = 0;
+    const bankStatsMap = {};
+    availableBanks.forEach(b => { bankStatsMap[b] = { done: 0, due: 0, total: 0 }; });
 
-  // Debit Summary Stats (User-wise when user selected, or global when All users selected)
-  const debitSummary = useMemo(() => {
-    let total = 0;
-    let doneTotal = 0;
-    let dueTotal = 0;
-
-    userDebitTxns.forEach(t => {
+    (baseFilteredDebitTxns || []).forEach(t => {
       const amt = parseFloat(t.amount) || 0;
-      const isDone = (t.status || 'Done') === 'Done';
-      total += amt;
-      if (isDone) doneTotal += amt;
-      else dueTotal += amt;
+      const status = t.status || 'Done';
+      const dep = (t.depositTo || 'My Hand').trim();
+      const isBank = dep.toLowerCase().includes('bank');
+
+      if (isBank) {
+        if (status === 'Done') bankDone += amt;
+        else bankDue += amt;
+
+        availableBanks.forEach(b => {
+          if (dep.toLowerCase().includes(b.toLowerCase())) {
+            if (status === 'Done') bankStatsMap[b].done += amt;
+            else bankStatsMap[b].due += amt;
+            bankStatsMap[b].total += amt;
+          }
+        });
+      } else {
+        if (status === 'Done') cashDone += amt;
+        else cashDue += amt;
+      }
     });
 
-    return { total, doneTotal, dueTotal };
-  }, [userDebitTxns]);
+    return {
+      cashDone,
+      cashDue,
+      cashTotal: cashDone + cashDue,
+      bankDone,
+      bankDue,
+      bankTotal: bankDone + bankDue,
+      bankStatsMap
+    };
+  }, [baseFilteredDebitTxns, availableBanks]);
 
-  // Credit Summary Stats (User-wise when user selected, or global when All users selected)
+  // Filtered Debit Transactions for Table Display
+  const filteredDebitTxns = useMemo(() => {
+    return baseFilteredDebitTxns.filter((t) => {
+      if (debitDepositTo !== 'All') {
+        const target = t.depositTo || 'My Hand';
+        if (debitDepositTo === 'Banks') {
+          if (target === 'My Hand' || target === 'Company Wallet') return false;
+        } else {
+          if (target !== debitDepositTo) return false;
+        }
+      }
+      if (debitStatus !== 'All' && (t.status || 'Done') !== debitStatus) return false;
+      return true;
+    });
+  }, [baseFilteredDebitTxns, debitDepositTo, debitStatus]);
+
+  // Filtered Credit Transactions for Table Display
+  const filteredCreditTxns = useMemo(() => {
+    return baseFilteredCreditTxns.filter((t) => {
+      if (creditDepositTo !== 'All') {
+        const target = t.depositTo || 'My Hand';
+        if (creditDepositTo === 'Banks') {
+          if (target === 'My Hand' || target === 'Company Wallet') return false;
+        } else {
+          if (target !== creditDepositTo) return false;
+        }
+      }
+      if (creditStatus !== 'All' && (t.status || 'Done') !== creditStatus) return false;
+      return true;
+    });
+  }, [baseFilteredCreditTxns, creditDepositTo, creditStatus]);
+
+  // Credit Summary Stats dynamically updated by active filters
   const creditSummary = useMemo(() => {
     let total = 0;
     let doneTotal = 0;
@@ -533,7 +572,7 @@ const CreditDebit = ({ isMyView = false }) => {
     let bankDone = 0;
     let bankDue = 0;
 
-    userCreditTxns.forEach(t => {
+    (baseFilteredCreditTxns || []).forEach(t => {
       const amt = parseFloat(t.amount) || 0;
       const isDone = (t.status || 'Done') === 'Done';
       total += amt;
@@ -558,7 +597,7 @@ const CreditDebit = ({ isMyView = false }) => {
     });
 
     return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue, bankTotal, bankDone, bankDue };
-  }, [userCreditTxns]);
+  }, [baseFilteredCreditTxns]);
 
   // Filtered Debit Total for Table Footer (exact sum of displayed filtered rows)
   const filteredDebitTotal = useMemo(() => {
@@ -570,19 +609,30 @@ const CreditDebit = ({ isMyView = false }) => {
     return filteredCreditTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [filteredCreditTxns]);
 
+  const toggleDebitCardFilter = (targetDep, targetStat) => {
+    if (debitDepositTo === targetDep && debitStatus === targetStat) {
+      setDebitDepositTo('All');
+      setDebitStatus('All');
+    } else {
+      setDebitDepositTo(targetDep);
+      setDebitStatus(targetStat);
+    }
+  };
+
   // Active filter checks
   const isUserFilterActive = !isMyView && selectedUser !== 'All';
-  const hasActiveDebitFilters = Boolean(debitSearch || debitStatus !== 'All' || isUserFilterActive || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
+  const hasActiveDebitFilters = Boolean(debitSearch || debitDepositTo !== 'All' || debitStatus !== 'All' || isUserFilterActive || debitStartDate || debitEndDate || debitMinAmt || debitMaxAmt);
   const hasActiveCreditFilters = Boolean(creditSearch || creditDepositTo !== 'All' || creditStatus !== 'All' || isUserFilterActive || creditStartDate || creditEndDate || creditMinAmt || creditMaxAmt);
   const hasAnyActiveFilters = Boolean(hasActiveDebitFilters || hasActiveCreditFilters);
 
   const debitTableFooterLabel = useMemo(() => {
+    if (debitDepositTo !== 'All') return `TOTAL ${debitDepositTo.toUpperCase()} DEBIT:`;
     if (debitStatus === 'Due') return 'TOTAL DUE DEBIT:';
     if (debitStatus === 'Done') return 'TOTAL DONE DEBIT:';
     if (!isMyView && selectedUser !== 'All') return `TOTAL ${selectedUser.toUpperCase()} DEBIT:`;
     if (hasActiveDebitFilters) return 'TOTAL FILTERED DEBIT:';
     return 'TOTAL DEBIT:';
-  }, [debitStatus, selectedUser, isMyView, hasActiveDebitFilters]);
+  }, [debitStatus, debitDepositTo, selectedUser, isMyView, hasActiveDebitFilters]);
 
   const creditTableFooterLabel = useMemo(() => {
     if (creditStatus === 'Due') return 'TOTAL DUE CREDIT:';
@@ -601,16 +651,16 @@ const CreditDebit = ({ isMyView = false }) => {
   }, [debitStatus, hasActiveDebitFilters]);
 
   const displayDebitTotal = useMemo(() => {
-    return hasActiveDebitFilters ? filteredDebitTotal : debitSummary.total;
-  }, [hasActiveDebitFilters, filteredDebitTotal, debitSummary.total]);
+    return baseFilteredDebitTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [baseFilteredDebitTxns]);
 
   const displayDebitDone = useMemo(() => {
-    return filteredDebitTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-  }, [filteredDebitTxns]);
+    return baseFilteredDebitTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [baseFilteredDebitTxns]);
 
   const displayDebitDue = useMemo(() => {
-    return filteredDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-  }, [filteredDebitTxns]);
+    return baseFilteredDebitTxns.filter(t => (t.status || 'Done') === 'Due').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [baseFilteredDebitTxns]);
 
   // Dynamic Credit Display Metrics (reflects filters if active)
   const displayCreditTotalTitle = useMemo(() => {
@@ -639,6 +689,11 @@ const CreditDebit = ({ isMyView = false }) => {
       parts.push(`USER: ${selectedUser.toUpperCase()}`);
     }
 
+    if (debitDepositTo !== 'All') {
+      const acc = debitDepositTo === 'Company Wallet' ? 'CO. WALLET' : (debitDepositTo === 'My Hand' ? 'MY HAND' : debitDepositTo.toUpperCase());
+      parts.push(`ACCOUNT: ${acc}`);
+    }
+
     if (debitStatus !== 'All') {
       parts.push(`STATUS: ${debitStatus.toUpperCase()}`);
     }
@@ -659,7 +714,7 @@ const CreditDebit = ({ isMyView = false }) => {
 
     if (parts.length === 0) return 'ALL';
     return parts.join(' | ');
-  }, [selectedUser, debitStatus, debitStartDate, debitEndDate, debitSearch]);
+  }, [selectedUser, debitDepositTo, debitStatus, debitStartDate, debitEndDate, debitSearch]);
 
   const creditFilterSummaryText = useMemo(() => {
     const parts = [];
@@ -697,6 +752,7 @@ const CreditDebit = ({ isMyView = false }) => {
 
   const resetDebitFilters = () => {
     setDebitSearch('');
+    setDebitDepositTo('All');
     setDebitStatus('All');
     setSelectedUser('All');
     setDebitStartDate('');
@@ -720,14 +776,15 @@ const CreditDebit = ({ isMyView = false }) => {
   const handleOpenAddModal = (defaultType = 'Cash Out') => {
     setEditingTxn(null);
     setModalTxnType(defaultType);
-    let initialUser = isMyView ? (user?.name || '') : (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company'));
+    let initialUser = isMyView ? (user?.name || '') : (selectedUser !== 'All' ? selectedUser : 'Shukan Company');
     if (!isMyView && defaultType === 'Cash In' && (initialUser === 'Shukan Company' || initialUser === 'Shukan Packaging (Company)' || initialUser === 'Company Vault')) {
       initialUser = users.find(u => u.name !== 'Shukan Company')?.name || user?.name || '';
     }
+    const defaultDep = defaultType === 'Cash In' ? 'My Hand' : (initialUser === 'Shukan Company' ? 'Company Wallet' : 'My Hand');
     reset({
       type: defaultType,
       amount: '',
-      depositTo: defaultType === 'Cash In' ? 'My Hand' : (initialUser === 'Shukan Company' ? 'Company Wallet' : 'My Hand'),
+      depositTo: defaultDep,
       userName: initialUser,
       date: new Date().toISOString().split('T')[0],
       status: 'Done',
@@ -737,25 +794,19 @@ const CreditDebit = ({ isMyView = false }) => {
   };
 
   useEffect(() => {
-    if (isModalOpen) {
+    if (isModalOpen && !editingTxn) {
       const currentType = watch('type');
       const currentUser = watch('userName');
       const currentDeposit = watch('depositTo');
-      if (currentType === 'Cash In') {
-        if (!currentDeposit) {
+      if (!currentDeposit) {
+        if (currentType === 'Cash In') {
           setValue('depositTo', 'My Hand');
-        }
-      } else {
-        if (currentUser === 'Shukan Company') {
-          if (!currentDeposit || currentDeposit === 'My Hand') {
-            setValue('depositTo', 'Company Wallet');
-          }
-        } else if (currentUser) {
-          setValue('depositTo', 'My Hand');
+        } else {
+          setValue('depositTo', currentUser === 'Shukan Company' ? 'Company Wallet' : 'My Hand');
         }
       }
     }
-  }, [watch('type'), watch('userName'), isModalOpen]);
+  }, [watch('type'), isModalOpen, editingTxn]);
 
   const handleOpenEditModal = (txn) => {
     setEditingTxn(txn);
@@ -763,7 +814,7 @@ const CreditDebit = ({ isMyView = false }) => {
     reset({
       type: txn.type || 'Cash Out',
       amount: txn.amount,
-      depositTo: txn.depositTo || 'My Hand',
+      depositTo: txn.depositTo || (txn.userName === 'Shukan Company' ? 'Company Wallet' : 'My Hand'),
       userName: isMyView ? (user?.name || txn.userName) : txn.userName,
       date: txn.date,
       status: txn.status || 'Done',
@@ -845,10 +896,13 @@ const CreditDebit = ({ isMyView = false }) => {
         }
       } else {
         const finalType = data.type || modalTxnType || 'Cash Out';
-        let finalUserName = isMyView ? (user?.name || '') : (data.userName || (selectedUser !== 'All' ? selectedUser : (user?.name || 'Shukan Company')));
+        let finalUserName = isMyView ? (user?.name || '') : (data.userName || (selectedUser !== 'All' ? selectedUser : 'Shukan Company'));
         let finalDepositTo = data.depositTo || 'My Hand';
-        if (finalType === 'Cash Out' && finalUserName !== 'Shukan Company') {
-          finalDepositTo = 'My Hand';
+
+        if (finalType === 'Cash Out') {
+          if (finalUserName !== 'Shukan Company' && finalUserName !== 'Shukan Packaging (Company)' && finalUserName !== 'Company Vault') {
+            finalDepositTo = 'My Hand';
+          }
         }
 
         const newTxn = {
@@ -1129,7 +1183,7 @@ const CreditDebit = ({ isMyView = false }) => {
                 type="text"
                 value={debitSearch}
                 onChange={(e) => setDebitSearch(e.target.value)}
-                placeholder="Search debit entries (user, description, date, amount)..."
+                placeholder="Search anything (bank name like BOB/IOB, user, amount, category, status, date, notes, description)..."
                 className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input bg-white/90 text-slate-800 placeholder-slate-400 focus:outline-none border border-rose-200/80"
               />
             </div>
@@ -1154,6 +1208,11 @@ const CreditDebit = ({ isMyView = false }) => {
                 {!isMyView && selectedUser !== 'All' && (
                   <span className="px-2.5 py-1 rounded-lg bg-[#002B49] text-white font-extrabold text-[11px] shadow-2xs flex items-center">
                     User: {selectedUser}
+                  </span>
+                )}
+                {debitDepositTo !== 'All' && (
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-800 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
+                    Paid From: {debitDepositTo}
                   </span>
                 )}
                 {debitStatus !== 'All' && (
@@ -1186,25 +1245,24 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
           )}
 
-          {/* Debit Summary Card (Table Style matching Dashboard) */}
-          <div className="pt-0.5 grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-4 print:hidden">
-            <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
+          {/* Debit Summary Cards Grid (Cash Debits, All Bank Debits & Individual Bank Cards) */}
+          <div className="pt-0.5 grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-4 print:hidden">
+            {/* CARD 1: ALL DEBITS */}
+            <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-600 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
               <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
                 <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
                   <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold shrink-0">
-                    <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                    </svg>
+                    🧾
                   </div>
-                  <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Debit Summary</h3>
+                  <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">All Debits</h3>
                 </div>
                 <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 uppercase shrink-0">Outflow</span>
               </div>
 
               <div className="divide-y divide-rose-200/50 text-[9.5px] sm:text-xs">
                 <div
-                  onClick={() => setDebitStatus('Done')}
-                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0 ${debitStatus === 'Done' ? 'bg-rose-100/80 font-bold' : ''}`}
+                  onClick={() => toggleDebitCardFilter('All', 'Done')}
+                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === 'All' && debitStatus === 'Done' ? 'bg-rose-200/90 font-black' : ''}`}
                   title="Click to filter Paid Done Debit entries"
                 >
                   <span className="text-rose-800 font-semibold truncate mr-1">Done Debit</span>
@@ -1212,8 +1270,8 @@ const CreditDebit = ({ isMyView = false }) => {
                 </div>
 
                 <div
-                  onClick={() => setDebitStatus('Due')}
-                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0 ${debitStatus === 'Due' ? 'bg-rose-100/80 font-bold' : ''}`}
+                  onClick={() => toggleDebitCardFilter('All', 'Due')}
+                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === 'All' && debitStatus === 'Due' ? 'bg-rose-200/90 font-black' : ''}`}
                   title="Click to filter Unpaid Due Debit entries"
                 >
                   <span className="text-rose-800 font-semibold truncate mr-1">Due Debit</span>
@@ -1221,15 +1279,104 @@ const CreditDebit = ({ isMyView = false }) => {
                 </div>
 
                 <div
-                  onClick={() => setDebitStatus('All')}
-                  className={`pt-1 flex items-center justify-between font-black text-rose-950 cursor-pointer hover:bg-rose-100/70 px-0.5 sm:px-1 rounded-md transition min-w-0 ${debitStatus === 'All' ? 'bg-rose-100/80' : ''}`}
-                  title="Click to filter All Debit entries"
+                  onClick={() => toggleDebitCardFilter('All', 'All')}
+                  className={`pt-1 flex items-center justify-between font-black text-rose-950 cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === 'All' && debitStatus === 'All' ? 'bg-rose-200/90' : ''}`}
+                  title="Click to view All Debit entries"
                 >
                   <span className="truncate mr-1">Total Debit</span>
                   <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{displayDebitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
+
+            {/* CARD 2: CASH DEBITS */}
+            <div className="h-full bg-rose-50/80 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
+              <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
+                <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 font-bold shrink-0">
+                    💵
+                  </div>
+                  <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-rose-900 truncate">Cash & Wallet</h3>
+                </div>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-800 uppercase shrink-0">Cash</span>
+              </div>
+
+              <div className="divide-y divide-rose-200/50 text-[9.5px] sm:text-xs">
+                <div
+                  onClick={() => toggleDebitCardFilter('Company Wallet', 'Done')}
+                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'Done' ? 'bg-rose-200/90 font-black' : ''}`}
+                  title="Click to filter Done Cash entries"
+                >
+                  <span className="text-rose-800 font-semibold truncate mr-1">Done Cash</span>
+                  <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{debitBreakdown.cashDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div
+                  onClick={() => toggleDebitCardFilter('Company Wallet', 'Due')}
+                  className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'Due' ? 'bg-rose-200/90 font-black' : ''}`}
+                  title="Click to filter Due Cash entries"
+                >
+                  <span className="text-rose-800 font-semibold truncate mr-1">Due Cash</span>
+                  <span className="font-extrabold text-rose-900 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{debitBreakdown.cashDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div
+                  onClick={() => toggleDebitCardFilter('Company Wallet', 'All')}
+                  className={`pt-1 flex items-center justify-between font-black text-rose-950 cursor-pointer hover:bg-rose-100/70 px-1 rounded-md transition min-w-0 ${(debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand') && debitStatus === 'All' ? 'bg-rose-200/90' : ''}`}
+                  title="Click to filter All Cash entries"
+                >
+                  <span className="truncate mr-1">Total Cash</span>
+                  <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{debitBreakdown.cashTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* CARDS 3+: INDIVIDUAL BANK ACCOUNTS */}
+            {availableBanks.map(bName => {
+              const bStats = debitBreakdown.bankStatsMap[bName] || { done: 0, due: 0, total: 0 };
+              return (
+                <div key={bName} className="h-full bg-indigo-50/60 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-200/80 border-t-3 sm:border-t-4 border-t-indigo-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
+                  <div className="flex items-center justify-between border-b border-indigo-200/60 pb-1 sm:pb-1.5">
+                    <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold shrink-0">
+                        🏦
+                      </div>
+                      <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-indigo-900 truncate">{bName}</h3>
+                    </div>
+                    <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[8.5px] font-extrabold bg-indigo-100 text-indigo-800 uppercase shrink-0">Bank</span>
+                  </div>
+
+                  <div className="divide-y divide-indigo-200/50 text-[9.5px] sm:text-xs">
+                    <div
+                      onClick={() => toggleDebitCardFilter(bName, 'Done')}
+                      className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === bName && debitStatus === 'Done' ? 'bg-indigo-200/90 font-black' : ''}`}
+                      title={`Click to filter Done entries for ${bName}`}
+                    >
+                      <span className="text-indigo-900 font-semibold truncate mr-1">Done</span>
+                      <span className="font-extrabold text-indigo-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{bStats.done.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+
+                    <div
+                      onClick={() => toggleDebitCardFilter(bName, 'Due')}
+                      className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === bName && debitStatus === 'Due' ? 'bg-indigo-200/90 font-black' : ''}`}
+                      title={`Click to filter Due entries for ${bName}`}
+                    >
+                      <span className="text-indigo-900 font-semibold truncate mr-1">Due</span>
+                      <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{bStats.due.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+
+                    <div
+                      onClick={() => toggleDebitCardFilter(bName, 'All')}
+                      className={`pt-1 flex items-center justify-between font-black text-indigo-950 cursor-pointer hover:bg-indigo-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === bName && debitStatus === 'All' ? 'bg-indigo-200/90' : ''}`}
+                      title={`Click to filter All entries for ${bName}`}
+                    >
+                      <span className="truncate mr-1">Total</span>
+                      <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{bStats.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Debit Table Content */}
@@ -1247,7 +1394,7 @@ const CreditDebit = ({ isMyView = false }) => {
                       <thead className="text-[10px] uppercase bg-rose-100/90 text-rose-950 sticky top-0 z-10 border-b border-rose-200 shadow-2xs">
                         <tr>
                           <th className="py-2 px-1 font-black w-6 text-center">#</th>
-                          <th className="py-2 px-1 font-black">User, Date & Notes</th>
+                          <th className="py-2 px-1 font-black">User, Account & Notes</th>
                           <th className="py-2 px-1 font-black text-right w-20">Amount</th>
                           <th className="py-2 px-1 font-black text-center w-20">Status</th>
                         </tr>
@@ -1255,6 +1402,7 @@ const CreditDebit = ({ isMyView = false }) => {
                       <tbody className="divide-y divide-slate-100 text-[11px]">
                         {filteredDebitTxns.map((t, index) => {
                           const isDone = (t.status || 'Done') === 'Done';
+                          const accountLabel = t.depositTo === 'Company Wallet' ? '🏢 Wallet' : (t.depositTo && t.depositTo !== 'My Hand' ? `🏦 ${t.depositTo}` : '✋ Hand');
                           return (
                             <tr
                               key={t.id || index}
@@ -1267,6 +1415,11 @@ const CreditDebit = ({ isMyView = false }) => {
                                 <div className="flex flex-col min-w-0">
                                   <div className="flex items-center space-x-1 min-w-0">
                                     <span className="text-[11px] font-extrabold text-rose-950 truncate">{t.userName}</span>
+                                    <span className={`px-1 py-0.2 rounded text-[8.5px] font-extrabold truncate shrink-0 ${
+                                      t.depositTo === 'Company Wallet' ? 'bg-purple-100 text-purple-800' : (t.depositTo && t.depositTo !== 'My Hand' ? 'bg-indigo-100 text-indigo-800' : 'bg-blue-50 text-blue-800')
+                                    }`}>
+                                      {accountLabel}
+                                    </span>
                                     <span className="text-[9.5px] font-bold text-slate-400 shrink-0">• {formatDate(t.date)}</span>
                                   </div>
                                   <span className="text-[10.5px] font-semibold text-slate-700 truncate leading-tight">{t.description || '-'}</span>
@@ -1314,18 +1467,19 @@ const CreditDebit = ({ isMyView = false }) => {
                   <tr>
                     <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[6%]">Sr. No.</th>
                     <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[12%]">Date</th>
-                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[9%]">Type</th>
-                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[16%]">User Name</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold text-center print:w-[8%]">Type</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[14%]">User Name</th>
+                    <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[15%]">Paid From / Bank Account</th>
                     <th className="py-3 px-4 font-bold print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-auto">Description / Notes</th>
-                    <th className="py-3 px-4 font-bold text-right print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[16%]">Amount</th>
-                    <th className="py-3 px-4 font-bold text-center print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[10%]">Status</th>
+                    <th className="py-3 px-4 font-bold text-right print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[15%]">Amount</th>
+                    <th className="py-3 px-4 font-bold text-center print:py-1.5 print:px-2 print:border print:border-black print:font-extrabold print:w-[9%]">Status</th>
                     <th className="py-3 px-4 font-bold text-center print:hidden">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 print:divide-y-0">
                   {filteredDebitTxns.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-black">
+                      <td colSpan="9" className="py-8 text-center text-slate-500 text-xs font-medium print:text-black print:border print:border-black">
                         No debit transactions match the criteria.
                       </td>
                     </tr>
@@ -1333,6 +1487,7 @@ const CreditDebit = ({ isMyView = false }) => {
                     <>
                       {filteredDebitTxns.map((t, index) => {
                         const isDone = (t.status || 'Done') === 'Done';
+                        const accountLabel = t.depositTo || 'My Hand';
                         return (
                           <tr key={t.id || index} className="hover:bg-rose-50/40 transition print:bg-white">
                             <td className="py-3.5 px-4 font-bold text-slate-600 text-xs print:py-1.5 print:px-2 print:border print:border-black print:text-black text-center">{index + 1}</td>
@@ -1343,6 +1498,17 @@ const CreditDebit = ({ isMyView = false }) => {
                               </span>
                             </td>
                             <td className="py-3.5 px-4 font-bold text-rose-950 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black">{t.userName}</td>
+                            <td className="py-3.5 px-4 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black">
+                              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold print:bg-transparent print:border-none print:p-0 print:text-black print:font-bold print:text-xs ${
+                                t.depositTo === 'Company Wallet'
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                  : (t.depositTo && t.depositTo !== 'My Hand'
+                                    ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                    : 'bg-blue-50 text-blue-800 border border-blue-200')
+                              }`}>
+                                {accountLabel}
+                              </span>
+                            </td>
                             <td className="py-3.5 px-4 text-slate-600 text-xs font-medium max-w-xs truncate print:py-1.5 print:px-2 print:border print:border-black print:text-black print:max-w-none print:whitespace-normal print:break-words">{t.description || '-'}</td>
                             <td className="py-3.5 px-4 font-black text-right text-rose-950 whitespace-nowrap print:py-1.5 print:px-2 print:border print:border-black print:text-black print:font-bold">
                               {settings.currency}{(parseFloat(t.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -1380,7 +1546,7 @@ const CreditDebit = ({ isMyView = false }) => {
 
                       {/* TOTAL DEBIT ROW — PLACED IN TBODY SO IT RENDERS ONLY ONCE DIRECTLY AFTER THE LAST ENTRY */}
                       <tr className="bg-rose-100/90 font-black text-rose-950 border-t-2 border-b-2 border-rose-300 print-total-row">
-                        <td colSpan="5" className="py-3 px-4 text-right uppercase tracking-wider font-black text-xs print:py-1.5 print:px-2 print:border print:border-black print:font-black print:text-xs">
+                        <td colSpan="6" className="py-3 px-4 text-right uppercase tracking-wider font-black text-xs print:py-1.5 print:px-2 print:border print:border-black print:font-black print:text-xs">
                           {debitTableFooterLabel}
                         </td>
                         <td className="py-3 px-4 text-right font-black text-rose-950 text-sm print:py-1.5 print:px-2 print:border print:border-black print:text-black print:font-black print:text-xs whitespace-nowrap">
@@ -1460,7 +1626,7 @@ const CreditDebit = ({ isMyView = false }) => {
                 type="text"
                 value={creditSearch}
                 onChange={(e) => setCreditSearch(e.target.value)}
-                placeholder="Search credit entries (user, description, date, amount)..."
+                placeholder="Search anything (bank name like BOB/IOB, user, amount, category, status, date, notes, description)..."
                 className="w-full pl-9 pr-4 py-2 text-xs rounded-xl glass-input bg-white/90 text-slate-800 placeholder-slate-400 focus:outline-none border border-emerald-200/80"
               />
             </div>
@@ -1618,7 +1784,6 @@ const CreditDebit = ({ isMyView = false }) => {
                 <div className="flex items-center space-x-1.5 min-w-0">
                   <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700 font-bold shrink-0">
                     <svg className="w-3.5 h-3.5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h5m-5 0V6k" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h5m-5 0V6" />
                     </svg>
                   </div>
@@ -2153,6 +2318,23 @@ const CreditDebit = ({ isMyView = false }) => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Paid From / Bank Account</label>
+                <select
+                  value={debitDepositTo}
+                  onChange={(e) => setDebitDepositTo(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl glass-input text-slate-800 bg-white focus:outline-none border border-slate-200 font-semibold"
+                >
+                  <option value="All">All Accounts</option>
+                  <option value="My Hand">✋ My Hand</option>
+                  <option value="Company Wallet">🏢 Company Wallet</option>
+                  <option value="Banks">🏦 All Bank Accounts</option>
+                  {availableBanks.map(b => (
+                    <option key={b} value={b}>🏦 {b}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#002B49] uppercase tracking-wider mb-1.5">Start Date</label>
@@ -2408,12 +2590,11 @@ const CreditDebit = ({ isMyView = false }) => {
                       setValue('userName', val);
                       if (watch('type') === 'Cash Out') {
                         if (val === 'Shukan Company') {
-                          setValue('depositTo', 'Company Wallet');
+                          const currentDep = watch('depositTo');
+                          if (!currentDep || currentDep === 'My Hand') {
+                            setValue('depositTo', 'Company Wallet');
+                          }
                         } else {
-                          setValue('depositTo', 'My Hand');
-                        }
-                      } else {
-                        if (!watch('depositTo')) {
                           setValue('depositTo', 'My Hand');
                         }
                       }
@@ -2456,13 +2637,12 @@ const CreditDebit = ({ isMyView = false }) => {
                   </label>
                   <select
                     {...register('depositTo')}
-                    defaultValue={watch('type') === 'Cash In' ? 'My Hand' : 'Company Wallet'}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 bg-white focus:outline-none font-semibold"
                   >
-                    <option value="My Hand">My Hand</option>
-                    <option value="Company Wallet">Company Wallet</option>
+                    <option value="Company Wallet">🏢 Company Wallet</option>
+                    {watch('userName') !== 'Shukan Company' && <option value="My Hand">✋ My Hand</option>}
                     {availableBanks.map(b => (
-                      <option key={b} value={b}>{b}</option>
+                      <option key={b} value={b}>🏦 {b}</option>
                     ))}
                   </select>
                 </div>
@@ -2684,9 +2864,11 @@ const CreditDebit = ({ isMyView = false }) => {
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-200/70">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Account / Deposit To</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    {selectedTxnForAction.type === 'Cash In' || selectedTxnForAction.type === 'Credit' ? 'Deposit To Account' : 'Paid From / Bank Account'}
+                  </span>
                   <span className="text-xs font-bold text-slate-800">
-                    {selectedTxnForAction.depositTo || (selectedTxnForAction.isAllocation ? 'My Hand' : 'My Hand')}
+                    {selectedTxnForAction.depositTo || 'My Hand'}
                   </span>
                 </div>
                 <div className="text-right">

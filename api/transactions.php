@@ -46,9 +46,7 @@ if ($method === 'PUT') {
     $isDebit = $debitStmt->fetch();
 
     $table = $isDebit ? 'debit_transactions' : 'credit_transactions';
-    $allowed = $isDebit
-        ? ['date', 'userName', 'amount', 'category', 'description', 'status', 'notes', 'createdBy']
-        : ['date', 'userName', 'depositTo', 'amount', 'category', 'description', 'status', 'notes', 'createdBy'];
+    $allowed = ['date', 'userName', 'depositTo', 'amount', 'category', 'description', 'status', 'notes', 'createdBy'];
 
     $fields = [];
     $params = ['id' => $id];

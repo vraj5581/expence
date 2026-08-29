@@ -1225,7 +1225,7 @@ const Dashboard = () => {
             {allAccounts.map((u) => {
               const isComp = u.isCompany;
               const stats = isComp ? companyStats : getUserStats(u.name);
-              const allocatedVal = isComp ? totalVaultDeposited : (stats.totalCashAvailable || (stats.allocated + stats.cashInReceived));
+              const allocatedVal = isComp ? stats.allocated : (stats.totalCashAvailable || (stats.allocated + stats.cashInReceived));
               const rawPercent = allocatedVal > 0 ? Math.round((stats.spent / allocatedVal) * 100) : (stats.spent > 0 ? 100 : 0);
               const isOverSpent = allocatedVal > 0 ? stats.spent > allocatedVal : stats.spent > 0;
               const displayPercent = Math.min(100, rawPercent);
@@ -1265,7 +1265,7 @@ const Dashboard = () => {
                       className="cursor-pointer p-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
                       title={`Click to view Total Done Credit for ${u.name}`}
                     >
-                      <span className="text-[10px] font-bold uppercase text-emerald-800 block mb-0.5">{isComp ? 'Total Capital Deposited' : 'Total Done Credit'}</span>
+                      <span className="text-[10px] font-bold uppercase text-emerald-800 block mb-0.5">{isComp ? 'Total Cash Deposited' : 'Total Done Credit'}</span>
                       <span className="font-extrabold text-emerald-700">
                         {settings.currency}{allocatedVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </span>
@@ -1278,7 +1278,7 @@ const Dashboard = () => {
                       className="cursor-pointer p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
                       title={`Click to view TOTAL DONE DEBIT for ${u.name}`}
                     >
-                      <span className="text-[10px] font-bold uppercase text-rose-800 block mb-0.5">{isComp ? 'Company Direct Expenses' : 'TOTAL DONE DEBIT'}</span>
+                      <span className="text-[10px] font-bold uppercase text-rose-800 block mb-0.5">{isComp ? 'Company Cash Expenses' : 'TOTAL DONE DEBIT'}</span>
                       <span className="font-extrabold text-rose-700">
                         {settings.currency}{stats.spent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </span>
@@ -1368,7 +1368,7 @@ const Dashboard = () => {
                 {allAccounts.map((u) => {
                   const isComp = u.isCompany;
                   const stats = isComp ? companyStats : getUserStats(u.name);
-                  const allocatedVal = isComp ? totalVaultDeposited : (stats.totalCashAvailable || (stats.allocated + stats.cashInReceived));
+                  const allocatedVal = isComp ? stats.allocated : (stats.totalCashAvailable || (stats.allocated + stats.cashInReceived));
                   const rawPercent = allocatedVal > 0 ? Math.round((stats.spent / allocatedVal) * 100) : (stats.spent > 0 ? 100 : 0);
                   const isOverSpent = allocatedVal > 0 ? stats.spent > allocatedVal : stats.spent > 0;
                   const displayPercent = Math.min(100, rawPercent);

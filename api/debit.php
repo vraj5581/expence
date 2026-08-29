@@ -21,7 +21,7 @@ if ($method === 'POST') {
     $status      = $data['status'] ?? 'Done';
     $notes       = $data['notes'] ?? '';
     $createdBy   = $data['createdBy'] ?? 'Admin';
-    $depositTo   = $data['depositTo'] ?? 'My Hand';
+    $depositTo   = !empty($data['depositTo']) ? $data['depositTo'] : ($userName === 'Shukan Company' ? 'Company Wallet' : 'My Hand');
 
     $stmt = $pdo->prepare("INSERT INTO debit_transactions (id, date, userName, amount, category, description, status, notes, createdBy, depositTo)
         VALUES (:id, :date, :userName, :amount, :category, :description, :status, :notes, :createdBy, :depositTo)");
