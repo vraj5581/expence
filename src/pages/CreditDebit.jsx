@@ -457,8 +457,15 @@ const CreditDebit = ({ isMyView = false }) => {
 
   // Base filtered debit transactions (filtered by User, Search, Date Range, Amount Range)
   const baseFilteredDebitTxns = useMemo(() => {
+    const activeTargetUser = isMyView ? (user?.name || '') : selectedUser;
     return rawDebitTxns.filter((t) => {
-      if (selectedUser !== 'All' && (t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
+      if (isMyView) {
+        if (!activeTargetUser) return false;
+        if ((t.userName || '').toLowerCase() !== activeTargetUser.toLowerCase()) return false;
+      } else if (selectedUser !== 'All') {
+        if ((t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
+      }
+
       if (debitSearch.trim() && !matchesTxnSearch(t, debitSearch)) return false;
       if (debitStartDate && t.date < debitStartDate) return false;
       if (debitEndDate && t.date > debitEndDate) return false;
@@ -469,12 +476,19 @@ const CreditDebit = ({ isMyView = false }) => {
 
       return true;
     });
-  }, [rawDebitTxns, selectedUser, debitSearch, debitStartDate, debitEndDate, debitMinAmt, debitMaxAmt]);
+  }, [rawDebitTxns, isMyView, user?.name, selectedUser, debitSearch, debitStartDate, debitEndDate, debitMinAmt, debitMaxAmt]);
 
   // Base filtered credit transactions (filtered by User, Search, Date Range, Amount Range)
   const baseFilteredCreditTxns = useMemo(() => {
+    const activeTargetUser = isMyView ? (user?.name || '') : selectedUser;
     return rawCreditTxns.filter((t) => {
-      if (selectedUser !== 'All' && (t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
+      if (isMyView) {
+        if (!activeTargetUser) return false;
+        if ((t.userName || '').toLowerCase() !== activeTargetUser.toLowerCase()) return false;
+      } else if (selectedUser !== 'All') {
+        if ((t.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
+      }
+
       if (creditSearch.trim() && !matchesTxnSearch(t, creditSearch)) return false;
       if (creditStartDate && t.date < creditStartDate) return false;
       if (creditEndDate && t.date > creditEndDate) return false;
@@ -485,7 +499,7 @@ const CreditDebit = ({ isMyView = false }) => {
 
       return true;
     });
-  }, [rawCreditTxns, selectedUser, creditSearch, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
+  }, [rawCreditTxns, isMyView, user?.name, selectedUser, creditSearch, creditStartDate, creditEndDate, creditMinAmt, creditMaxAmt]);
 
   // Aliases for tab badges
   const userFilteredDebitTxns = baseFilteredDebitTxns;

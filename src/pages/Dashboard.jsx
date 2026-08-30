@@ -807,7 +807,7 @@ const Dashboard = () => {
                 title="Click to view Paid Done Debit entries"
               >
                 <span className="text-rose-800 font-semibold truncate mr-1">Done Debit</span>
-                <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{adminDoneDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings?.currency || '₹'}{(adminDoneDebit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
 
               <div
@@ -816,7 +816,7 @@ const Dashboard = () => {
                 title="Click to view Unpaid Due Debit entries"
               >
                 <span className="text-rose-800 font-semibold truncate mr-1">Due Debit</span>
-                <span className="font-extrabold text-rose-900 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{adminDueDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="font-extrabold text-rose-900 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings?.currency || '₹'}{(adminDueDebit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
 
               <div
@@ -825,7 +825,7 @@ const Dashboard = () => {
                 title="Click to view All Debit entries"
               >
                 <span className="truncate mr-1">Total Debit</span>
-                <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{adminTotalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings?.currency || '₹'}{(adminTotalDebit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
@@ -851,7 +851,7 @@ const Dashboard = () => {
                 title="Click to view Completed Done Credit entries"
               >
                 <span className="text-emerald-800 font-semibold truncate mr-1">Done Credit</span>
-                <span className="font-extrabold text-emerald-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{adminDoneCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="font-extrabold text-emerald-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings?.currency || '₹'}{(adminDoneCredit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
 
               <div
@@ -860,7 +860,7 @@ const Dashboard = () => {
                 title="Click to view Uncollected Due Credit entries"
               >
                 <span className="text-emerald-800 font-semibold truncate mr-1">Due Credit</span>
-                <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{adminDueCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings?.currency || '₹'}{(adminDueCredit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
 
               <div
@@ -869,7 +869,7 @@ const Dashboard = () => {
                 title="Click to view All Credit entries"
               >
                 <span className="truncate mr-1">Total Credit</span>
-                <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{adminTotalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings?.currency || '₹'}{(adminTotalCredit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>

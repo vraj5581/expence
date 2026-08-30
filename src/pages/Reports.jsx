@@ -536,7 +536,7 @@ const Reports = () => {
         >
           <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Admin Vault Reserve</p>
           <p className="text-2xl font-extrabold text-[#002B49] mt-2">
-            {settings.currency}{adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-slate-500 mt-1 font-medium">Available in Master Vault</p>
         </div>
@@ -548,7 +548,7 @@ const Reports = () => {
         >
           <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Filtered Money Transferred</p>
           <p className="text-2xl font-extrabold text-[#9e6e34] mt-2">
-            {settings.currency}{totalFilteredTransfers.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {settings?.currency || '₹'}{(totalFilteredTransfers || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-slate-500 mt-1 font-medium">{filteredAllocations.length} Transfer Logs</p>
         </div>
@@ -560,7 +560,7 @@ const Reports = () => {
         >
           <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Filtered Expenses Spent</p>
           <p className="text-2xl font-extrabold text-slate-800 mt-2">
-            {settings.currency}{totalFilteredExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {settings?.currency || '₹'}{(totalFilteredExpenses || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-slate-500 mt-1 font-medium">{filteredTransactions.length} Expense Receipt Logs</p>
         </div>

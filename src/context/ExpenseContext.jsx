@@ -360,7 +360,7 @@ export const ExpenseProvider = ({ children }) => {
 
   const adminVaultBalance = totalDoneCashDeposit - totalAllocatedToTeam - totalCompanyDirectExpenses;
 
-  // 1. ADD VAULT DEPOSIT
+  // 1. ADD VAULT DEPOSIT (INSTANT OPTIMISTIC UPDATE)
   const addVaultDeposit = async (depositData) => {
     const numAmount = parseFloat(depositData.amount);
     if (isNaN(numAmount) || numAmount <= 0) {
@@ -375,45 +375,68 @@ export const ExpenseProvider = ({ children }) => {
       notes: depositData.notes || ''
     };
 
-    const res = await apiService.addVaultDeposit(newDeposit);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save deposit to PHP database' };
-    }
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
+    setVaultDeposits(prev => [newDeposit, ...prev]);
 
-    const savedDeposit = res.deposit || newDeposit;
-    setVaultDeposits(prev => [savedDeposit, ...prev]);
-    return { success: true, deposit: savedDeposit };
+    // Background HTTP Persistence
+    (async () => {
+      const res = await apiService.addVaultDeposit(newDeposit);
+      if (!res || res.success === false) {
+        setVaultDeposits(prev => prev.filter(d => d.id !== newDeposit.id));
+        console.error("Failed to save deposit to database:", res?.error || res?.message);
+      } else if (res.deposit && res.deposit.id && res.deposit.id !== newDeposit.id) {
+        setVaultDeposits(prev => prev.map(d => d.id === newDeposit.id ? res.deposit : d));
+      }
+    })();
+
+    return { success: true, deposit: newDeposit };
   };
 
-  // 2. UPDATE VAULT DEPOSIT
+  // 2. UPDATE VAULT DEPOSIT (INSTANT OPTIMISTIC UPDATE)
   const updateVaultDeposit = async (id, updatedData) => {
+    const oldDep = vaultDeposits.find(d => d.id === id);
     const numAmount = parseFloat(updatedData.amount);
-    const res = await apiService.updateVaultDeposit(id, updatedData);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update deposit in PHP database' };
-    }
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setVaultDeposits(prev => prev.map(d => (d.id === id ? {
       ...d,
       ...updatedData,
       amount: !isNaN(numAmount) ? numAmount : d.amount
     } : d)));
+
+    // Background HTTP Persistence
+    (async () => {
+      const res = await apiService.updateVaultDeposit(id, updatedData);
+      if (!res || res.success === false) {
+        if (oldDep) setVaultDeposits(prev => prev.map(d => d.id === id ? oldDep : d));
+        console.error("Failed to update deposit in database:", res?.error || res?.message);
+      }
+    })();
+
     return { success: true };
   };
 
-  // 3. DELETE VAULT DEPOSIT
+  // 3. DELETE VAULT DEPOSIT (INSTANT OPTIMISTIC UPDATE)
   const deleteVaultDeposit = async (id) => {
-    const res = await apiService.deleteVaultDeposit(id);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete deposit from PHP database' };
-    }
+    const oldDep = vaultDeposits.find(d => d.id === id);
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setVaultDeposits(prev => prev.filter(d => d.id !== id));
     setEditLogs(prev => prev.filter(log => log.txnId !== id));
+
+    // Background HTTP Persistence
+    (async () => {
+      const res = await apiService.deleteVaultDeposit(id);
+      if (!res || res.success === false) {
+        if (oldDep) setVaultDeposits(prev => [oldDep, ...prev]);
+        console.error("Failed to delete deposit from database:", res?.error || res?.message);
+      }
+    })();
+
     return { success: true };
   };
 
-  // Give Money / Allocate Cash to User (Deducts from Admin Vault)
+  // Give Money / Allocate Cash to User (INSTANT OPTIMISTIC UPDATE)
   const allocateMoneyToUser = async (userName, amount, notes = '') => {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
@@ -422,7 +445,7 @@ export const ExpenseProvider = ({ children }) => {
     if (adminVaultBalance < numAmount) {
       return {
         success: false,
-        message: `Cannot give ${settings.currency}${numAmount}. Admin Vault has only ${settings.currency}${adminVaultBalance.toLocaleString()} available. Please click "Deposit" to add vault funds first!`
+        message: `Cannot give ${settings?.currency || '₹'}${numAmount}. Admin Vault has only ${settings?.currency || '₹'}${adminVaultBalance.toLocaleString()} available. Please click "Deposit" to add vault funds first!`
       };
     }
 
@@ -435,20 +458,30 @@ export const ExpenseProvider = ({ children }) => {
       notes: notes || ''
     };
 
-    const res = await apiService.allocateMoney(allocationLog);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save allocation in PHP database' };
-    }
-
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setUserAllocations(prev => ({
       ...prev,
       [userName]: (prev[userName] || 0) + numAmount
     }));
     setAllocationsHistory(prev => [allocationLog, ...prev]);
 
+    // Background HTTP Persistence
+    (async () => {
+      const res = await apiService.allocateMoney(allocationLog);
+      if (!res || res.success === false) {
+        setUserAllocations(prev => ({
+          ...prev,
+          [userName]: Math.max(0, (prev[userName] || 0) - numAmount)
+        }));
+        setAllocationsHistory(prev => prev.filter(a => a.id !== allocationLog.id));
+        console.error("Failed to save allocation to database:", res?.error || res?.message);
+      }
+    })();
+
     return { success: true, allocationLog };
   };
 
+  // UPDATE ALLOCATION (INSTANT OPTIMISTIC UPDATE)
   const updateAllocation = async (id, updatedData, editorName = null) => {
     const oldAlloc = allocationsHistory.find(a => a.id === id);
     if (!oldAlloc) return { success: false, message: 'Allocation record not found' };
@@ -464,15 +497,11 @@ export const ExpenseProvider = ({ children }) => {
     if (diff > 0 && adminVaultBalance < diff) {
       return {
         success: false,
-        message: `Cannot increase allocation by ${settings.currency}${diff}. Admin Vault has only ${settings.currency}${adminVaultBalance.toLocaleString()} available.`
+        message: `Cannot increase allocation by ${settings?.currency || '₹'}${diff}. Admin Vault has only ${settings?.currency || '₹'}${adminVaultBalance.toLocaleString()} available.`
       };
     }
 
-    const res = await apiService.updateAllocation(id, updatedData);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update allocation in PHP database' };
-    }
-
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setUserAllocations(prev => {
       const next = { ...prev };
       const oldUser = oldAlloc.userName;
@@ -502,33 +531,53 @@ export const ExpenseProvider = ({ children }) => {
       date: oldAlloc.date
     };
 
-    await recordEditLog(
+    // Non-blocking edit log persistence
+    recordEditLog(
       finalEditor,
       id,
       'Money Transfer',
-      `Transfer to ${updatedData.userName || oldAlloc.userName}: ${updatedData.notes || oldAlloc.notes || 'Petty Cash'} (${settings.currency}${newAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
-      `Updated transfer amount: ${settings.currency}${oldAmount} ➔ ${settings.currency}${newAmount}`,
+      `Transfer to ${updatedData.userName || oldAlloc.userName}: ${updatedData.notes || oldAlloc.notes || 'Petty Cash'} (${settings?.currency || '₹'}${newAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
+      `Updated transfer amount: ${settings?.currency || '₹'}${oldAmount} ➔ ${settings?.currency || '₹'}${newAmount}`,
       oldAllocSnapshot
     );
+
+    // Background HTTP Persistence
+    (async () => {
+      const res = await apiService.updateAllocation(id, updatedData);
+      if (!res || res.success === false) {
+        setAllocationsHistory(prev => prev.map(a => a.id === id ? oldAlloc : a));
+        console.error("Failed to update allocation in database:", res?.error || res?.message);
+      }
+    })();
 
     return { success: true };
   };
 
+  // DELETE ALLOCATION (INSTANT OPTIMISTIC UPDATE)
   const deleteAllocation = async (id) => {
     const targetAlloc = allocationsHistory.find(a => a.id === id);
     if (!targetAlloc) return { success: false, message: 'Allocation record not found' };
 
-    const res = await apiService.deleteAllocation(id);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete allocation from PHP database' };
-    }
-
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setUserAllocations(prev => ({
       ...prev,
       [targetAlloc.userName]: Math.max(0, (prev[targetAlloc.userName] || 0) - targetAlloc.amount)
     }));
     setAllocationsHistory(prev => prev.filter(a => a.id !== id));
     setEditLogs(prev => prev.filter(log => log.txnId !== id));
+
+    // Background HTTP Persistence
+    (async () => {
+      const res = await apiService.deleteAllocation(id);
+      if (!res || res.success === false) {
+        setUserAllocations(prev => ({
+          ...prev,
+          [targetAlloc.userName]: (prev[targetAlloc.userName] || 0) + targetAlloc.amount
+        }));
+        setAllocationsHistory(prev => [targetAlloc, ...prev]);
+        console.error("Failed to delete allocation from database:", res?.error || res?.message);
+      }
+    })();
 
     return { success: true };
   };
@@ -584,7 +633,7 @@ export const ExpenseProvider = ({ children }) => {
     };
   };
 
-  // Transaction CRUD — routes to debit or credit table based on type
+  // Transaction CRUD — routes to debit or credit table based on type (INSTANT OPTIMISTIC UPDATE)
   const addTransaction = async (txnData) => {
     const numAmount = parseFloat(txnData.amount);
     if (isNaN(numAmount) || numAmount <= 0) {
@@ -601,13 +650,13 @@ export const ExpenseProvider = ({ children }) => {
       if (adminVaultBalance <= 0) {
         return {
           success: false,
-          message: `Cannot record company expense. Company Vault balance is ${settings.currency}0.00. Please click "Deposit Vault" to add funds first!`
+          message: `Cannot record company expense. Company Vault balance is ${settings?.currency || '₹'}0.00. Please click "Deposit Vault" to add funds first!`
         };
       }
       if (adminVaultBalance < numAmount) {
         return {
           success: false,
-          message: `Cannot record expense of ${settings.currency}${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}. Company Vault has only ${settings.currency}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available. Please deposit vault funds first!`
+          message: `Cannot record expense of ${settings?.currency || '₹'}${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}. Company Vault has only ${settings?.currency || '₹'}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available. Please deposit vault funds first!`
         };
       }
     }
@@ -620,23 +669,43 @@ export const ExpenseProvider = ({ children }) => {
     };
 
     const isCredit = newTxn.type === 'Cash In' || newTxn.type === 'Credit';
-    const res = isCredit
-      ? await apiService.addCredit(newTxn)
-      : await apiService.addDebit(newTxn);
 
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save transaction in PHP database' };
-    }
-
-    const savedTxn = res.credit || res.debit || newTxn;
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     if (isCredit) {
-      setCreditTransactions(prev => [savedTxn, ...prev]);
+      setCreditTransactions(prev => [newTxn, ...prev]);
     } else {
-      setDebitTransactions(prev => [savedTxn, ...prev]);
+      setDebitTransactions(prev => [newTxn, ...prev]);
     }
-    return { success: true, txn: savedTxn };
+
+    // Background HTTP Persistence
+    (async () => {
+      const res = isCredit
+        ? await apiService.addCredit(newTxn)
+        : await apiService.addDebit(newTxn);
+
+      if (!res || res.success === false) {
+        if (isCredit) {
+          setCreditTransactions(prev => prev.filter(t => t.id !== newTxn.id));
+        } else {
+          setDebitTransactions(prev => prev.filter(t => t.id !== newTxn.id));
+        }
+        console.error("Failed to save transaction to database:", res?.error || res?.message);
+      } else if (res.credit || res.debit) {
+        const savedTxn = res.credit || res.debit;
+        if (savedTxn.id && savedTxn.id !== newTxn.id) {
+          if (isCredit) {
+            setCreditTransactions(prev => prev.map(t => t.id === newTxn.id ? savedTxn : t));
+          } else {
+            setDebitTransactions(prev => prev.map(t => t.id === newTxn.id ? savedTxn : t));
+          }
+        }
+      }
+    })();
+
+    return { success: true, txn: newTxn };
   };
 
+  // UPDATE TRANSACTION (INSTANT OPTIMISTIC UPDATE)
   const updateTransaction = async (id, updatedData, editorName = null) => {
     const oldTxn = transactions.find(t => t.id === id);
     if (!oldTxn) return { success: false, message: 'Transaction record not found' };
@@ -656,29 +725,24 @@ export const ExpenseProvider = ({ children }) => {
       if (diff > 0 && adminVaultBalance < diff) {
         return {
           success: false,
-          message: `Cannot update expense. Insufficient Company Vault balance (${settings.currency}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available).`
+          message: `Cannot update expense. Insufficient Company Vault balance (${settings?.currency || '₹'}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available).`
         };
       }
     }
 
     const isCredit = (updatedData.type || oldTxn.type) === 'Cash In' || (updatedData.type || oldTxn.type) === 'Credit';
-    const res = isCredit
-      ? await apiService.updateCredit(id, { ...updatedData, amount: newAmount, status: newStatus })
-      : await apiService.updateDebit(id, { ...updatedData, amount: newAmount, status: newStatus });
+    const nextTxn = { ...oldTxn, ...updatedData, amount: newAmount, status: newStatus };
 
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update transaction in PHP database' };
-    }
-
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     if (isCredit) {
-      setCreditTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t));
+      setCreditTransactions(prev => prev.map(t => t.id === id ? nextTxn : t));
     } else {
-      setDebitTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedData, amount: newAmount, status: newStatus } : t));
+      setDebitTransactions(prev => prev.map(t => t.id === id ? nextTxn : t));
     }
 
-    // Record Edit Audit Log
+    // Record Edit Audit Log (non-blocking)
     const changes = [];
-    if (parseFloat(oldTxn.amount) !== parseFloat(newAmount)) changes.push(`Amount: ${settings.currency}${oldTxn.amount} ➔ ${settings.currency}${newAmount}`);
+    if (parseFloat(oldTxn.amount) !== parseFloat(newAmount)) changes.push(`Amount: ${settings?.currency || '₹'}${oldTxn.amount} ➔ ${settings?.currency || '₹'}${newAmount}`);
     if ((oldTxn.status || 'Done') !== newStatus) changes.push(`Status: ${oldTxn.status || 'Done'} ➔ ${newStatus}`);
     if ((oldTxn.description || '') !== newDescription) changes.push(`Notes: "${oldTxn.description || '-'}" ➔ "${newDescription || '-'}"`);
     if (oldTxn.userName !== newUserName) changes.push(`User: ${oldTxn.userName} ➔ ${newUserName}`);
@@ -693,11 +757,11 @@ export const ExpenseProvider = ({ children }) => {
       date: oldTxn.date
     };
 
-    await recordEditLog(
+    recordEditLog(
       activeUser,
       id,
       isCredit ? 'Credit' : 'Debit',
-      `${newUserName}: ${newDescription || oldTxn.description || 'Entry'} (${settings.currency}${(parseFloat(newAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
+      `${newUserName}: ${newDescription || oldTxn.description || 'Entry'} (${settings?.currency || '₹'}${(parseFloat(newAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })})`,
       changes.length > 0 ? changes.join(' | ') : 'Updated entry details',
       oldTxnSnapshot
     );
@@ -734,20 +798,33 @@ export const ExpenseProvider = ({ children }) => {
       });
     }
 
+    // Background HTTP Persistence
+    (async () => {
+      const res = isCredit
+        ? await apiService.updateCredit(id, { ...updatedData, amount: newAmount, status: newStatus })
+        : await apiService.updateDebit(id, { ...updatedData, amount: newAmount, status: newStatus });
+
+      if (!res || res.success === false) {
+        if (isCredit) {
+          setCreditTransactions(prev => prev.map(t => t.id === id ? oldTxn : t));
+        } else {
+          setDebitTransactions(prev => prev.map(t => t.id === id ? oldTxn : t));
+        }
+        console.error("Failed to update transaction in database:", res?.error || res?.message);
+      }
+    })();
+
     return { success: true };
   };
 
+  // DELETE TRANSACTION (INSTANT OPTIMISTIC UPDATE)
   const deleteTransaction = async (id) => {
     const oldTxn = transactions.find(t => t.id === id);
+    if (!oldTxn) return { success: false, message: 'Transaction record not found' };
+
     const isCredit = oldTxn && (oldTxn.type === 'Cash In' || oldTxn.type === 'Credit');
-    const res = isCredit
-      ? await apiService.deleteCredit(id)
-      : await apiService.deleteDebit(id);
 
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete transaction from PHP database' };
-    }
-
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     if (isCredit && oldTxn.depositTo === 'Company Wallet') {
       setVaultDeposits(prev => prev.filter(d => d.txnId !== id && !(d.userName === oldTxn.userName && parseFloat(d.amount) === parseFloat(oldTxn.amount))));
     }
@@ -757,10 +834,27 @@ export const ExpenseProvider = ({ children }) => {
       setDebitTransactions(prev => prev.filter(t => t.id !== id));
     }
     setEditLogs(prev => prev.filter(log => log.txnId !== id));
+
+    // Background HTTP Persistence
+    (async () => {
+      const res = isCredit
+        ? await apiService.deleteCredit(id)
+        : await apiService.deleteDebit(id);
+
+      if (!res || res.success === false) {
+        if (isCredit) {
+          setCreditTransactions(prev => [oldTxn, ...prev]);
+        } else {
+          setDebitTransactions(prev => [oldTxn, ...prev]);
+        }
+        console.error("Failed to delete transaction from database:", res?.error || res?.message);
+      }
+    })();
+
     return { success: true };
   };
 
-  // User CRUD
+  // User CRUD (INSTANT OPTIMISTIC UPDATE)
   const addUser = async (userData) => {
     const newUser = {
       id: userData.id || `USR-${Math.floor(100 + Math.random() * 900)}`,
@@ -772,23 +866,36 @@ export const ExpenseProvider = ({ children }) => {
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    const res = await apiService.addUser(newUser);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to add user to PHP database' };
-    }
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
+    setUsers(prev => [newUser, ...prev]);
 
-    const createdUser = res.user || newUser;
-    setUsers(prev => [createdUser, ...prev]);
-    return { success: true, user: createdUser };
+    (async () => {
+      const res = await apiService.addUser(newUser);
+      if (!res || res.success === false) {
+        setUsers(prev => prev.filter(u => u.id !== newUser.id));
+        console.error("Failed to add user to database:", res?.error || res?.message);
+      } else if (res.user && res.user.id && res.user.id !== newUser.id) {
+        setUsers(prev => prev.map(u => u.id === newUser.id ? res.user : u));
+      }
+    })();
+
+    return { success: true, user: newUser };
   };
 
   const updateUser = async (originalId, updatedData) => {
-    const res = await apiService.updateUser(originalId, updatedData);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update user in PHP database' };
-    }
+    const oldUser = users.find(u => u.id === originalId);
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setUsers(prev => prev.map(u => (u.id === originalId ? { ...u, ...updatedData } : u)));
+
+    (async () => {
+      const res = await apiService.updateUser(originalId, updatedData);
+      if (!res || res.success === false) {
+        if (oldUser) setUsers(prev => prev.map(u => u.id === originalId ? oldUser : u));
+        console.error("Failed to update user in database:", res?.error || res?.message);
+      }
+    })();
+
     return { success: true };
   };
 
@@ -801,19 +908,18 @@ export const ExpenseProvider = ({ children }) => {
     const hasTransactions = transactions.some(t => t.userName === userName);
 
     if (hasAllocations || hasTransactions) {
-      // Soft-delete / archive to preserve historical accounting & audit trail
-      const res = await apiService.updateUser(id, { status: 'Inactive' });
-      if (!res || res.success === false) {
-        return { success: false, message: res?.error || res?.message || 'Database error: Failed to deactivate user in PHP database' };
-      }
       setUsers(prev => prev.map(u => (u.id === id ? { ...u, status: 'Inactive', isDeleted: true } : u)));
+      (async () => {
+        await apiService.updateUser(id, { status: 'Inactive' });
+      })();
     } else {
-      // Permanently remove if user has no financial activity
-      const res = await apiService.deleteUser(id);
-      if (!res || res.success === false) {
-        return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete user from PHP database' };
-      }
       setUsers(prev => prev.filter(u => u.id !== id));
+      (async () => {
+        const res = await apiService.deleteUser(id);
+        if (!res || res.success === false) {
+          setUsers(prev => [targetUser, ...prev]);
+        }
+      })();
     }
     return { success: true };
   };
@@ -823,27 +929,37 @@ export const ExpenseProvider = ({ children }) => {
     if (!targetUser) return { success: false, message: 'User not found' };
     const nextStatus = targetUser.status === 'Active' ? 'Suspended' : 'Active';
 
-    const res = await apiService.updateUser(id, { status: nextStatus });
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update user status in PHP database' };
-    }
-
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setUsers(prev => prev.map(u => (u.id === id ? { ...u, status: nextStatus } : u)));
+
+    (async () => {
+      const res = await apiService.updateUser(id, { status: nextStatus });
+      if (!res || res.success === false) {
+        setUsers(prev => prev.map(u => u.id === id ? targetUser : u));
+      }
+    })();
+
     return { success: true };
   };
 
-  // Settings
+  // Settings (INSTANT OPTIMISTIC UPDATE)
   const updateSettings = async (newSettings) => {
-    const res = await apiService.updateSettings(newSettings);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update settings in PHP database' };
-    }
+    const oldSettings = settings;
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setSettings(prev => ({ ...prev, ...newSettings }));
+
+    (async () => {
+      const res = await apiService.updateSettings(newSettings);
+      if (!res || res.success === false) {
+        setSettings(oldSettings);
+      }
+    })();
+
     return { success: true };
   };
 
-  // Task Management CRUD
+  // Task Management CRUD (INSTANT OPTIMISTIC UPDATE)
   const addTask = async (taskData) => {
     const newTask = {
       id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -855,43 +971,66 @@ export const ExpenseProvider = ({ children }) => {
       ...taskData
     };
 
-    const res = await apiService.addTask(newTask);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to save task to PHP database' };
-    }
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
+    setTasks(prev => [newTask, ...prev]);
 
-    const createdTask = res.task || newTask;
-    setTasks(prev => [createdTask, ...prev]);
-    return { success: true, task: createdTask };
+    (async () => {
+      const res = await apiService.addTask(newTask);
+      if (!res || res.success === false) {
+        setTasks(prev => prev.filter(t => t.id !== newTask.id));
+      } else if (res.task && res.task.id && res.task.id !== newTask.id) {
+        setTasks(prev => prev.map(t => t.id === newTask.id ? res.task : t));
+      }
+    })();
+
+    return { success: true, task: newTask };
   };
 
   const updateTask = async (id, updatedData) => {
-    const res = await apiService.updateTask(id, updatedData);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update task in PHP database' };
-    }
+    const oldTask = tasks.find(t => t.id === id);
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData } : t)));
+
+    (async () => {
+      const res = await apiService.updateTask(id, updatedData);
+      if (!res || res.success === false) {
+        if (oldTask) setTasks(prev => prev.map(t => t.id === id ? oldTask : t));
+      }
+    })();
+
     return { success: true };
   };
 
   const updateTaskStatus = async (id, newStatus) => {
-    const res = await apiService.updateTask(id, { status: newStatus });
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to update task status in PHP database' };
-    }
+    const oldTask = tasks.find(t => t.id === id);
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, status: newStatus } : t)));
+
+    (async () => {
+      const res = await apiService.updateTask(id, { status: newStatus });
+      if (!res || res.success === false) {
+        if (oldTask) setTasks(prev => prev.map(t => t.id === id ? oldTask : t));
+      }
+    })();
+
     return { success: true };
   };
 
   const deleteTask = async (id) => {
-    const res = await apiService.deleteTask(id);
-    if (!res || res.success === false) {
-      return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete task from PHP database' };
-    }
+    const oldTask = tasks.find(t => t.id === id);
 
+    // ⚡ INSTANT OPTIMISTIC UI UPDATE
     setTasks(prev => prev.filter(t => t.id !== id));
+
+    (async () => {
+      const res = await apiService.deleteTask(id);
+      if (!res || res.success === false) {
+        if (oldTask) setTasks(prev => [oldTask, ...prev]);
+      }
+    })();
+
     return { success: true };
   };
 
