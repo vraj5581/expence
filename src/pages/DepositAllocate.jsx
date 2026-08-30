@@ -233,6 +233,15 @@ const DepositAllocate = () => {
     return { cashDeposited, bankDeposited };
   }, [activeVaultDepositsList]);
 
+  const totalUserRemaining = useMemo(() => {
+    return (users || []).reduce((sum, u) => {
+      const stats = getUserStats ? getUserStats(u.name) : null;
+      const rem = stats?.remaining || 0;
+      const need = stats?.needFromCompany || 0;
+      return sum + (rem - need);
+    }, 0);
+  }, [users, getUserStats]);
+
   const getBankStats = (bankName) => {
     const cleanBank = (bankName || '').toLowerCase().trim();
 
@@ -451,17 +460,67 @@ const DepositAllocate = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 print:hidden">
-        {/* CARD 1: COMPANY VAULT (Available Cash Reserve) */}
-        <div className="glass-card p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#002B49] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white flex flex-col justify-between">
-          <div>
-            <p className="text-[10px] sm:text-xs uppercase font-bold text-slate-500 truncate print:text-[10px] print:text-slate-800 print:font-extrabold">Company Vault</p>
-            <p className="text-xl sm:text-3xl font-extrabold text-[#002B49] mt-0.5 sm:mt-2 truncate print:text-base print:font-black print:text-black print:mt-0">
-              {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-1 font-medium truncate print:text-[9px] print:text-slate-700 print:mt-0">Available Cash Reserve</p>
-        </div>
+      <div className="grid grid-cols-1 gap-2.5 sm:gap-4 print:hidden">
+        {/* CARD 1: TOTAL CASH REMAINING (Master Reserve + User Remaining Balance) */}
+        {(() => {
+          const totalNetCash = (adminVaultBalance || 0) + totalUserRemaining;
+          const isNetPositive = totalNetCash >= 0;
+          const isUserPositive = totalUserRemaining >= 0;
+
+          return (
+            <div className={`glass-card p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-3 sm:border-l-4 shadow-xs flex flex-col justify-between transition-all ${
+              isNetPositive
+                ? 'border-l-emerald-500 bg-emerald-50/40 border border-emerald-200/80'
+                : 'border-l-rose-500 bg-rose-50/40 border border-rose-200/80'
+            }`}>
+              <div className="flex items-center justify-between border-b border-slate-200/70 pb-2 mb-2">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                    isNetPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    💵
+                  </div>
+                  <p className="text-[11px] sm:text-xs uppercase font-black tracking-wider text-slate-800 truncate">
+                    Total Cash Remaining
+                  </p>
+                </div>
+                <span className={`text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg border shadow-2xs whitespace-nowrap shrink-0 ${
+                  isNetPositive
+                    ? 'bg-emerald-100/90 text-emerald-800 border-emerald-300'
+                    : 'bg-rose-100/90 text-rose-800 border-rose-300'
+                }`}>
+                  {totalNetCash < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalNetCash).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="space-y-1.5 text-xs font-bold">
+                {/* Master Reserve Row */}
+                <div className="flex items-center justify-between p-1.5 px-2 rounded-lg bg-blue-50/80 border border-blue-200/80 transition">
+                  <span className="text-blue-900 font-bold text-[10.5px] sm:text-xs">🏛️ Master Vault Reserve:</span>
+                  <span className="text-[#002B49] font-extrabold text-xs sm:text-sm">
+                    {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {/* User Remaining (Balance - Need) Row with Dynamic Light Green (Plus) / Light Red (Minus) Background */}
+                <div className={`flex items-center justify-between p-1.5 px-2 rounded-lg border transition ${
+                  isUserPositive
+                    ? 'bg-emerald-100/90 border-emerald-200/90 text-emerald-900'
+                    : 'bg-rose-100/90 border-rose-200/90 text-rose-900'
+                }`}>
+                  <span className="font-extrabold text-[10.5px] sm:text-xs">
+                    ✋ User Remaining:
+                  </span>
+                  <span className={`font-black text-xs sm:text-sm ${
+                    isUserPositive ? 'text-emerald-800' : 'text-rose-700'
+                  }`}>
+                    {totalUserRemaining < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalUserRemaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* CARD 2: DEPOSIT BREAKDOWN (CASH, BANK & TOTAL DEPOSITED) */}
         <div className="glass-card p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-l-2 sm:border-l-4 border-l-[#c69255] print:p-2.5 print:py-2 print:border print:border-slate-400 print:border-l-4 print:border-l-slate-800 print:rounded-lg print:shadow-none print:bg-white flex flex-col justify-between">

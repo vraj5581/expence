@@ -538,11 +538,15 @@ const CreditDebit = ({ isMyView = false }) => {
   const filteredDebitTxns = useMemo(() => {
     return baseFilteredDebitTxns.filter((t) => {
       if (debitDepositTo !== 'All') {
-        const target = t.depositTo || 'My Hand';
+        const dep = (t.depositTo || 'My Hand').trim();
+        const isBank = dep.toLowerCase().includes('bank');
+
         if (debitDepositTo === 'Banks') {
-          if (target === 'My Hand' || target === 'Company Wallet') return false;
+          if (!isBank) return false;
+        } else if (debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand' || debitDepositTo === 'Cash') {
+          if (isBank) return false;
         } else {
-          if (target !== debitDepositTo) return false;
+          if (!dep.toLowerCase().includes(debitDepositTo.toLowerCase())) return false;
         }
       }
       if (debitStatus !== 'All' && (t.status || 'Done') !== debitStatus) return false;
@@ -554,11 +558,17 @@ const CreditDebit = ({ isMyView = false }) => {
   const filteredCreditTxns = useMemo(() => {
     return baseFilteredCreditTxns.filter((t) => {
       if (creditDepositTo !== 'All') {
-        const target = t.depositTo || 'My Hand';
+        const dep = (t.depositTo || 'My Hand').trim();
+        const isBank = dep.toLowerCase().includes('bank');
+
         if (creditDepositTo === 'Banks') {
-          if (target === 'My Hand' || target === 'Company Wallet') return false;
+          if (!isBank) return false;
+        } else if (creditDepositTo === 'My Hand') {
+          if (dep !== 'My Hand' && dep !== 'Hand') return false;
+        } else if (creditDepositTo === 'Company Wallet') {
+          if (dep !== 'Company Wallet' && dep !== 'Wallet') return false;
         } else {
-          if (target !== creditDepositTo) return false;
+          if (!dep.toLowerCase().includes(creditDepositTo.toLowerCase())) return false;
         }
       }
       if (creditStatus !== 'All' && (t.status || 'Done') !== creditStatus) return false;
@@ -1223,7 +1233,7 @@ const CreditDebit = ({ isMyView = false }) => {
                 )}
                 {debitDepositTo !== 'All' && (
                   <span className="px-2.5 py-1 rounded-lg bg-purple-800 text-white font-extrabold text-[11px] shadow-2xs flex items-center">
-                    Paid From: {debitDepositTo}
+                    Paid From: {debitDepositTo === 'Company Wallet' || debitDepositTo === 'My Hand' ? 'Cash & Wallet' : debitDepositTo}
                   </span>
                 )}
                 {debitStatus !== 'All' && (
@@ -1363,27 +1373,27 @@ const CreditDebit = ({ isMyView = false }) => {
                     <div
                       onClick={() => toggleDebitCardFilter(bName, 'Done')}
                       className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === bName && debitStatus === 'Done' ? 'bg-indigo-200/90 font-black' : ''}`}
-                      title={`Click to filter Done entries for ${bName}`}
+                      title={`Click to filter Done Debit entries for ${bName}`}
                     >
-                      <span className="text-indigo-900 font-semibold truncate mr-1">Done</span>
+                      <span className="text-indigo-900 font-semibold truncate mr-1">Debit (Done)</span>
                       <span className="font-extrabold text-indigo-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{bStats.done.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
 
                     <div
                       onClick={() => toggleDebitCardFilter(bName, 'Due')}
                       className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-indigo-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === bName && debitStatus === 'Due' ? 'bg-indigo-200/90 font-black' : ''}`}
-                      title={`Click to filter Due entries for ${bName}`}
+                      title={`Click to filter Due Debit entries for ${bName}`}
                     >
-                      <span className="text-indigo-900 font-semibold truncate mr-1">Due</span>
+                      <span className="text-indigo-900 font-semibold truncate mr-1">Debit (Due)</span>
                       <span className="font-extrabold text-rose-700 whitespace-nowrap shrink-0 text-[10px] sm:text-xs">{settings.currency}{bStats.due.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
 
                     <div
                       onClick={() => toggleDebitCardFilter(bName, 'All')}
                       className={`pt-1 flex items-center justify-between font-black text-indigo-950 cursor-pointer hover:bg-indigo-100/70 px-1 rounded-md transition min-w-0 ${debitDepositTo === bName && debitStatus === 'All' ? 'bg-indigo-200/90' : ''}`}
-                      title={`Click to filter All entries for ${bName}`}
+                      title={`Click to filter All Debit entries for ${bName}`}
                     >
-                      <span className="truncate mr-1">Total</span>
+                      <span className="truncate mr-1">Debit Total</span>
                       <span className="text-[10.5px] sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{bStats.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>

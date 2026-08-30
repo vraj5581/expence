@@ -275,6 +275,15 @@ const Dashboard = () => {
     return myCreditTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [myCreditTxns]);
 
+  const totalUserRemaining = useMemo(() => {
+    return (users || []).reduce((sum, u) => {
+      const stats = getUserStats ? getUserStats(u.name) : null;
+      const rem = stats?.remaining || 0;
+      const need = stats?.needFromCompany || 0;
+      return sum + (rem - need);
+    }, 0);
+  }, [users, getUserStats]);
+
   const myDoneCredit = useMemo(() => {
     return myCreditTxns.filter(t => (t.status || 'Done') === 'Done').reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
   }, [myCreditTxns]);
@@ -774,9 +783,9 @@ const Dashboard = () => {
       })()}
 
       {/* Simplified Financial Summary Grid */}
-      {/* Financial Summary Cards (3 Compact Table-Style Summary Cards) */}
+      {/* Financial Summary Cards (4 Compact Table-Style Summary Cards) */}
       {isAdmin ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-4">
           {/* CARD 1: DEBIT SUMMARY (Light Red Background) */}
           <div className="h-full bg-rose-50/70 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
             <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
@@ -865,7 +874,70 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* CARD 3: VAULT & RESERVE SUMMARY (Light Warm Amber Background) */}
+          {/* CARD 3: TOTAL CASH REMAINING SUMMARY */}
+          {(() => {
+            const totalNetCash = (adminVaultBalance || 0) + totalUserRemaining;
+            const isNetPositive = totalNetCash >= 0;
+            const isUserPositive = totalUserRemaining >= 0;
+
+            return (
+              <div className={`h-full p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-t-3 sm:border-t-4 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2 transition-all ${
+                isNetPositive
+                  ? 'bg-emerald-50/70 border-emerald-200/90 border-t-emerald-500'
+                  : 'bg-rose-50/70 border-rose-200/90 border-t-rose-500'
+              }`}>
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-1 sm:pb-1.5 gap-1">
+                  <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+                    <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-md flex items-center justify-center font-bold text-[10px] shrink-0 print:hidden ${
+                      isNetPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      💵
+                    </div>
+                    <h3 className="text-[8.5px] lg:text-[10px] xl:text-xs font-black uppercase tracking-tight text-slate-800 whitespace-nowrap">Total Cash Remaining</h3>
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[8.5px] sm:text-[9.5px] font-extrabold uppercase shrink-0 print:hidden ${
+                    isNetPositive
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {totalNetCash < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalNetCash).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="divide-y divide-slate-200/50 text-[9.5px] sm:text-xs">
+                  <div
+                    onClick={() => navigate('/admin/deposit-allocate')}
+                    className="py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-blue-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                    title="Click to view Deposit & Allocate"
+                  >
+                    <span className="text-blue-900 font-semibold truncate mr-1">🏛️ Master Vault Reserve:</span>
+                    <span className="font-extrabold text-[#002B49] whitespace-nowrap shrink-0 text-[10px] sm:text-xs">
+                      {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => navigate('/admin/deposit-allocate')}
+                    className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer px-0.5 sm:px-1 rounded-md transition min-w-0 ${
+                      isUserPositive ? 'hover:bg-emerald-100/60' : 'hover:bg-rose-100/60'
+                    }`}
+                    title="Click to view User Balances"
+                  >
+                    <span className={`font-semibold truncate mr-1 ${isUserPositive ? 'text-emerald-900' : 'text-rose-900'}`}>
+                      ✋ User Remaining:
+                    </span>
+                    <span className={`font-extrabold whitespace-nowrap shrink-0 text-[10px] sm:text-xs ${
+                      isUserPositive ? 'text-emerald-800' : 'text-rose-700'
+                    }`}>
+                      {totalUserRemaining < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalUserRemaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* CARD 4: VAULT & RESERVE SUMMARY (Light Warm Amber Background) */}
           <div className="h-full bg-amber-50/60 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-200/90 border-t-3 sm:border-t-4 border-t-[#c69255] shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
             <div className="flex items-center justify-between border-b border-amber-200/60 pb-1 sm:pb-1.5">
               <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
