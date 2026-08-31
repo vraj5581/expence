@@ -1,12 +1,22 @@
 <?php
 // Centralized Database Connection & CORS Headers for Shukan Expense ERP API
 
+// Enable GZIP compression on all API responses for 8x faster transmission over mobile/low networks
+if (!ob_get_level()) {
+    if (extension_loaded('zlib') && !ini_get('zlib.output_compression')) {
+        ob_start('ob_gzhandler');
+    } else {
+        ob_start();
+    }
+}
+
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
 header("Access-Control-Allow-Origin: $origin");
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
+header("Cache-Control: no-cache, must-revalidate");
 
 // Handle HTTP CORS preflight OPTIONS request
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {

@@ -807,6 +807,27 @@ const CreditDebit = ({ isMyView = false }) => {
     setCreditMaxAmt('');
   };
 
+  const todayYMD = getTodayYMD();
+  const isTodayFiltered = (
+    (debitStartDate === todayYMD && debitEndDate === todayYMD) &&
+    (creditStartDate === todayYMD && creditEndDate === todayYMD)
+  );
+
+  const handleToggleToday = () => {
+    const today = getTodayYMD();
+    if (isTodayFiltered) {
+      setDebitStartDate('');
+      setDebitEndDate('');
+      setCreditStartDate('');
+      setCreditEndDate('');
+    } else {
+      setDebitStartDate(today);
+      setDebitEndDate(today);
+      setCreditStartDate(today);
+      setCreditEndDate(today);
+    }
+  };
+
   // Form Submission
   const handleOpenAddModal = (defaultType = 'Cash Out') => {
     setEditingTxn(null);
@@ -1051,18 +1072,15 @@ const CreditDebit = ({ isMyView = false }) => {
           <h1 className="text-xl sm:text-2xl font-extrabold text-[#002B49] tracking-tight">
             {isMyView ? 'My Debit & Credit' : 'Debit & Credit'}
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            {isMyView ? `Personal debit and credit transaction audit log for ${user?.name}` : 'Company debit and credit transaction audit log'}
-          </p>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap w-full sm:w-auto">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
           {/* Add Debit Button */}
           <button
             onClick={() => handleOpenAddModal('Cash Out')}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-center px-3 py-2 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
           >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Debit
@@ -1071,44 +1089,66 @@ const CreditDebit = ({ isMyView = false }) => {
           {/* Add Credit Button */}
           <button
             onClick={() => handleOpenAddModal('Cash In')}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-center px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap"
           >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Credit
           </button>
 
-          {/* Global Filter Button */}
-          <button
-            onClick={() => setIsGlobalFilterOpen(true)}
-            className={`flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0 border ${
-              hasAnyActiveFilters
-                ? 'bg-amber-700 hover:bg-amber-800 text-white border-amber-700'
-                : 'bg-white hover:bg-slate-50 text-[#002B49] border-slate-300'
-            }`}
-            title="Filter Ledger Entries"
-          >
-            <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0 ${hasAnyActiveFilters ? 'text-white' : 'text-[#002B49]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            Filter
-            {hasAnyActiveFilters && (
-              <span className="ml-1 text-emerald-400 font-black">●</span>
-            )}
-          </button>
+          {/* Utilities Row on Mobile (Span 2 columns, divided into 3 equal buttons) */}
+          <div className="col-span-2 grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:gap-2">
+            {/* Today Filter Button */}
+            <button
+              onClick={handleToggleToday}
+              className={`inline-flex items-center justify-center px-2 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer whitespace-nowrap border ${
+                isTodayFiltered
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 ring-2 ring-blue-400/50'
+                  : 'bg-white hover:bg-blue-50 text-blue-900 border-blue-200'
+              }`}
+              title="Filter all Today's Debit & Credit entries"
+            >
+              <svg className={`w-3.5 h-3.5 mr-1 shrink-0 ${isTodayFiltered ? 'text-white' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Today
+              {isTodayFiltered && (
+                <span className="ml-1 text-[11px] font-black">✓</span>
+              )}
+            </button>
 
-          {/* Print Report Button */}
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center px-2 sm:px-3.5 py-2 rounded-xl bg-[#002B49] text-white hover:bg-[#001D33] text-xs font-bold shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
-            title="Print Report"
-          >
-            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print
-          </button>
+            {/* Global Filter Button */}
+            <button
+              onClick={() => setIsGlobalFilterOpen(true)}
+              className={`inline-flex items-center justify-center px-2 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer whitespace-nowrap border ${
+                hasAnyActiveFilters
+                  ? 'bg-amber-700 hover:bg-amber-800 text-white border-amber-700'
+                  : 'bg-white hover:bg-slate-50 text-[#002B49] border-slate-300'
+              }`}
+              title="Filter Ledger Entries"
+            >
+              <svg className={`w-3.5 h-3.5 mr-1 shrink-0 ${hasAnyActiveFilters ? 'text-white' : 'text-[#002B49]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Filter
+              {hasAnyActiveFilters && (
+                <span className="ml-1 text-emerald-400 font-black">●</span>
+              )}
+            </button>
+
+            {/* Print Report Button */}
+            <button
+              onClick={() => setIsPrintModalOpen(true)}
+              className="inline-flex items-center justify-center px-2 py-2 rounded-xl bg-[#002B49] text-white hover:bg-[#001D33] text-xs font-bold shadow-xs transition cursor-pointer whitespace-nowrap"
+              title="Print Report"
+            >
+              <svg className="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print
+            </button>
+          </div>
         </div>
       </div>
 

@@ -1,14 +1,18 @@
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-async function request(endpoint, options = {}) {
+async function request(endpoint, options = {}, timeoutMs = 12000) {
   const url = `${BASE_URL}/${endpoint}`;
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   const config = {
     ...options,
+    signal: options.signal || controller.signal,
     headers: {
       ...defaultHeaders,
       ...options.headers,
@@ -21,6 +25,7 @@ async function request(endpoint, options = {}) {
 
   try {
     const res = await fetch(url, config);
+    clearTimeout(timeoutId);
     if (!res.ok) {
       const errorText = await res.text();
       let parsedMessage = '';
@@ -34,8 +39,11 @@ async function request(endpoint, options = {}) {
     }
     return await res.json();
   } catch (err) {
-    console.error(`API Request failed for ${endpoint}:`, err.message);
-    return { success: false, error: err.message || 'Failed to connect to PHP database server' };
+    clearTimeout(timeoutId);
+    const isTimeout = err.name === 'AbortError';
+    const errMsg = isTimeout ? 'Network timeout: Slow or weak connection' : (err.message || 'Network connection error');
+    console.warn(`API Request warning for ${endpoint}:`, errMsg);
+    return { success: false, error: errMsg, isTimeout };
   }
 }
 

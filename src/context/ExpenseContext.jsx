@@ -47,29 +47,34 @@ const initialSettings = {
   approvalThreshold: 20000
 };
 
+const loadCachedSnapshot = () => {
+  try {
+    const raw = localStorage.getItem('shukan_erp_cached_snapshot');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+};
+
 export const ExpenseProvider = ({ children }) => {
-  const [vaultDeposits, setVaultDeposits] = useState([]);
-  const [userAllocations, setUserAllocations] = useState({});
-  const [allocationsHistory, setAllocationsHistory] = useState([]);
-  const [debitTransactions, setDebitTransactions] = useState([]);
-  const [creditTransactions, setCreditTransactions] = useState([]);
-  const [users, setUsers] = useState(initialUsers);
-  const [settings, setSettings] = useState(initialSettings);
-  const [tasks, setTasks] = useState([]);
+  const cached = useMemo(() => loadCachedSnapshot(), []);
+
+  const [vaultDeposits, setVaultDeposits] = useState(cached?.vaultDeposits || []);
+  const [userAllocations, setUserAllocations] = useState(cached?.userAllocations || {});
+  const [allocationsHistory, setAllocationsHistory] = useState(cached?.allocationsHistory || []);
+  const [debitTransactions, setDebitTransactions] = useState(cached?.debits || []);
+  const [creditTransactions, setCreditTransactions] = useState(cached?.credits || []);
+  const [users, setUsers] = useState((Array.isArray(cached?.users) && cached.users.length > 0) ? cached.users : initialUsers);
+  const [settings, setSettings] = useState(cached?.settings || initialSettings);
+  const [tasks, setTasks] = useState(cached?.tasks || []);
   const [isDbConnected, setIsDbConnected] = useState(true);
   const [dbError, setDbError] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState(cached?.cachedAt ? new Date(cached.cachedAt) : null);
 
   // Edit Audit Logs State (Database Backed)
-  const [editLogs, setEditLogs] = useState([]);
+  const [editLogs, setEditLogs] = useState(cached?.auditLogs || []);
 
-  // Auto-clear legacy localStorage on mount to ensure clean blank storage
-  useEffect(() => {
-    try {
-      localStorage.clear();
-    } catch (e) {}
-  }, []);
+  const isFetchingRef = React.useRef(false);
 
   const recordEditLog = async (editorName, txnId, txnType, entrySummary, changeDetails, oldData = null) => {
     const now = new Date();
@@ -107,82 +112,47 @@ export const ExpenseProvider = ({ children }) => {
     }
   };
 
-  const parseOldValuesFromLog = (log) => {
-    if (!log) return null;
-    if (log.oldData) {
-      try {
-        return typeof log.oldData === 'string' ? JSON.parse(log.oldData) : log.oldData;
-      } catch (e) {}
-    }
-
-    const details = log.changeDetails || '';
-    const parsed = {};
-
-    const amountMatch = details.match(/Amount:\s*[^0-9]*([0-9,.]+)\s*➔/i);
-    if (amountMatch) {
-      parsed.amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-    }
-
-    const statusMatch = details.match(/Status:\s*([A-Za-z]+)\s*➔/i);
-    if (statusMatch) {
-      parsed.status = statusMatch[1].trim();
-    }
-
-    const notesMatch = details.match(/Notes:\s*"([^"]*)"\s*➔/i);
-    if (notesMatch) {
-      parsed.description = notesMatch[1] === '-' ? '' : notesMatch[1];
-      parsed.notes = parsed.description;
-    }
-
-    const userMatch = details.match(/User:\s*([^➔|]+)\s*➔/i);
-    if (userMatch) {
-      parsed.userName = userMatch[1].trim();
-    }
-
-    return parsed;
-  };
-
-  const revertAuditLog = async (log) => {
-    if (!log) return { success: false, message: 'Invalid log record' };
-
-    const oldValues = parseOldValuesFromLog(log);
-    if (!oldValues || Object.keys(oldValues).length === 0) {
-      return { success: false, message: 'Could not parse original values to revert' };
-    }
-
-    const targetTxnId = log.txnId;
-    let res = null;
-
-    if (log.txnType === 'Money Transfer') {
-      res = await updateAllocation(targetTxnId, oldValues);
-    } else {
-      res = await updateTransaction(targetTxnId, oldValues);
-    }
-
-    if (res && res.success) {
-      await deleteAuditLog(log.id);
-      return { success: true, message: 'Successfully reverted edit and restored original entry values!' };
-    }
-
-    return { success: false, message: res?.message || 'Failed to revert entry in database' };
-  };
-
-  const updateAuditLog = async (id, updatedData) => {
-    const res = await apiService.updateAuditLog(id, updatedData);
+  const updateAuditLog = async (id, updatedLog) => {
+    setEditLogs(prev => prev.map(log => log.id === id ? { ...log, ...updatedLog } : log));
+    const res = await apiService.updateAuditLog(id, updatedLog);
     if (!res || res.success === false) {
       return { success: false, message: res?.error || res?.message || 'Database error: Failed to update audit log' };
     }
-    setEditLogs(prev => prev.map(log => log.id === id ? { ...log, ...updatedData } : log));
     return { success: true };
   };
 
   const deleteAuditLog = async (id) => {
+    const oldLogs = editLogs;
+    setEditLogs(prev => prev.filter(log => log.id !== id));
     const res = await apiService.deleteAuditLog(id);
     if (!res || res.success === false) {
+      setEditLogs(oldLogs);
       return { success: false, message: res?.error || res?.message || 'Database error: Failed to delete audit log' };
     }
-    setEditLogs(prev => prev.filter(log => log.id !== id));
     return { success: true };
+  };
+
+  const revertAuditLog = async (log) => {
+    if (!log || !log.oldData) {
+      return { success: false, message: 'No original snapshot found for this edit log to revert.' };
+    }
+    let parsedOld;
+    try {
+      parsedOld = typeof log.oldData === 'string' ? JSON.parse(log.oldData) : log.oldData;
+    } catch (e) {
+      return { success: false, message: 'Failed to parse original entry snapshot.' };
+    }
+
+    if (!parsedOld || !log.txnId) {
+      return { success: false, message: 'Invalid edit log or missing transaction ID.' };
+    }
+
+    const res = await updateTransaction(log.txnId, parsedOld, `Reverted by Admin`);
+    if (res && res.success) {
+      await deleteAuditLog(log.id);
+      return { success: true, message: `Successfully restored entry to previous values!` };
+    }
+    return { success: false, message: res?.message || 'Failed to revert entry.' };
   };
 
   const deleteLastMonthAuditLogs = async () => {
@@ -197,6 +167,8 @@ export const ExpenseProvider = ({ children }) => {
 
   // Fetch state from PHP backend database (Ultra-fast single request)
   const loadBackendData = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setIsSyncing(true);
     try {
       // 1. Try single-request bulk bootstrap API (1 HTTP request instead of 8)
@@ -211,6 +183,22 @@ export const ExpenseProvider = ({ children }) => {
         if (bootRes.settings) setSettings(bootRes.settings);
         if (Array.isArray(bootRes.tasks)) setTasks(bootRes.tasks);
         if (Array.isArray(bootRes.auditLogs)) setEditLogs(bootRes.auditLogs);
+
+        // Cache snapshot locally for low-connectivity / instant startup
+        try {
+          localStorage.setItem('shukan_erp_cached_snapshot', JSON.stringify({
+            debits: bootRes.debits,
+            credits: bootRes.credits,
+            vaultDeposits: bootRes.vaultDeposits,
+            allocationsHistory: bootRes.allocationsHistory,
+            userAllocations: bootRes.userAllocations,
+            users: bootRes.users,
+            settings: bootRes.settings,
+            tasks: bootRes.tasks,
+            auditLogs: bootRes.auditLogs,
+            cachedAt: Date.now()
+          }));
+        } catch (e) {}
 
         setIsDbConnected(true);
         setDbError(null);
@@ -258,6 +246,7 @@ export const ExpenseProvider = ({ children }) => {
       setDbError(err.message || "Cannot connect to PHP Database");
     } finally {
       setIsSyncing(false);
+      isFetchingRef.current = false;
     }
   };
 
