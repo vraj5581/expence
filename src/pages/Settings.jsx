@@ -4,6 +4,7 @@ import { useExpense } from '../context/ExpenseContext';
 import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
+import { getTodayYMD } from '../utils/dateUtils';
 
 const Settings = () => {
   const location = useLocation();
@@ -175,7 +176,7 @@ const Settings = () => {
       return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getTodayYMD();
     const catSlug = backupCategory.toLowerCase();
 
     if (backupFormat === 'CSV') {

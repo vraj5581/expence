@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatDate } from './dateUtils';
+import { formatDate, getTodayYMD } from './dateUtils';
 
 const PRIMARY_COLOR = [0, 43, 73]; // #002B49
 const ACCENT_COLOR = [158, 110, 52]; // #9e6e34
@@ -113,7 +113,7 @@ export const exportTransferLogPDF = ({ logs, currency = '₹', filterUser = 'All
     }
   });
 
-  doc.save(`Company_Money_Transfer_Log_${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`Company_Money_Transfer_Log_${getTodayYMD()}.pdf`);
 };
 
 /**
@@ -240,7 +240,7 @@ export const exportExpenseLogPDF = ({ transactions, currency = '₹', filterUser
     }
   });
 
-  doc.save(`Shukan_Expense_Receipts_${filterUser}_${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`Shukan_Expense_Receipts_${filterUser}_${getTodayYMD()}.pdf`);
 };
 
 /**
@@ -383,5 +383,5 @@ export const exportCombinedAuditPDF = ({
     }
   });
 
-  doc.save(`Shukan_Audit_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`Shukan_Audit_Report_${getTodayYMD()}.pdf`);
 };

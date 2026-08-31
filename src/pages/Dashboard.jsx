@@ -4,7 +4,7 @@ import { useExpense } from '../context/ExpenseContext';
 import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, getTodayYMD } from '../utils/dateUtils';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -59,7 +59,7 @@ const Dashboard = () => {
   const isAdmin = currentUser?.id === 'admin' || currentUser?.role === 'Administrator' || currentUser?.name?.toLowerCase() === 'vraj';
 
   // Pending Tasks Due Today Logic
-  const todayYMD = new Date().toISOString().split('T')[0];
+  const todayYMD = getTodayYMD();
   const todayD = new Date();
   const todayDayStr = String(todayD.getDate()).padStart(2, '0');
   const todayMonthStr = String(todayD.getMonth() + 1).padStart(2, '0');
@@ -208,7 +208,7 @@ const Dashboard = () => {
       type,
       amount: '',
       userName: 'Shukan Company',
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayYMD(),
       description: ''
     });
     setIsAddTxnModalOpen(true);
@@ -785,7 +785,7 @@ const Dashboard = () => {
       {/* Simplified Financial Summary Grid */}
       {/* Financial Summary Cards (4 Compact Table-Style Summary Cards) */}
       {isAdmin ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-4 select-none">
           {/* CARD 1: DEBIT SUMMARY (Light Red Background) */}
           <div className="h-full bg-rose-50/70 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-rose-200/90 border-t-3 sm:border-t-4 border-t-rose-500 shadow-xs flex flex-col justify-between space-y-1 sm:space-y-2">
             <div className="flex items-center justify-between border-b border-rose-200/60 pb-1 sm:pb-1.5">
@@ -886,31 +886,33 @@ const Dashboard = () => {
                   ? 'bg-emerald-50/70 border-emerald-200/90 border-t-emerald-500'
                   : 'bg-rose-50/70 border-rose-200/90 border-t-rose-500'
               }`}>
-                <div className="flex items-center justify-between border-b border-slate-200/60 pb-1 sm:pb-1.5 gap-1">
+                <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1 sm:pb-1.5">
                   <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
-                    <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-md flex items-center justify-center font-bold text-[10px] shrink-0 print:hidden ${
+                    <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-md sm:rounded-lg flex items-center justify-center font-bold text-xs shrink-0 print:hidden ${
                       isNetPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                     }`}>
                       💵
                     </div>
-                    <h3 className="text-[8.5px] lg:text-[10px] xl:text-xs font-black uppercase tracking-tight text-slate-800 whitespace-nowrap">Total Cash Remaining</h3>
+                    <h3 className="text-[9px] sm:text-xs font-black uppercase tracking-wider text-emerald-900 truncate">
+                      Cash Remaining
+                    </h3>
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[8.5px] sm:text-[9.5px] font-extrabold uppercase shrink-0 print:hidden ${
+                  <span className={`hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase shrink-0 print:hidden ${
                     isNetPositive
                       ? 'bg-emerald-100 text-emerald-800'
                       : 'bg-rose-100 text-rose-800'
                   }`}>
-                    {totalNetCash < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalNetCash).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    Net Cash
                   </span>
                 </div>
 
-                <div className="divide-y divide-slate-200/50 text-[9.5px] sm:text-xs">
+                <div className="divide-y divide-emerald-200/50 text-[9.5px] sm:text-xs">
                   <div
                     onClick={() => navigate('/admin/deposit-allocate')}
                     className="py-0.5 sm:py-1 flex items-center justify-between cursor-pointer hover:bg-blue-100/60 px-0.5 sm:px-1 rounded-md transition min-w-0"
-                    title="Click to view Deposit & Allocate"
+                    title="Click to view Master Vault Reserve in Deposit & Allocate"
                   >
-                    <span className="text-blue-900 font-semibold truncate mr-1">🏛️ Master Vault Reserve:</span>
+                    <span className="text-blue-900 font-semibold truncate mr-1">🏛️ Master Vault</span>
                     <span className="font-extrabold text-[#002B49] whitespace-nowrap shrink-0 text-[10px] sm:text-xs">
                       {settings?.currency || '₹'}{(adminVaultBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
@@ -921,15 +923,28 @@ const Dashboard = () => {
                     className={`py-0.5 sm:py-1 flex items-center justify-between cursor-pointer px-0.5 sm:px-1 rounded-md transition min-w-0 ${
                       isUserPositive ? 'hover:bg-emerald-100/60' : 'hover:bg-rose-100/60'
                     }`}
-                    title="Click to view User Balances"
+                    title="Click to view Team User Balances"
                   >
                     <span className={`font-semibold truncate mr-1 ${isUserPositive ? 'text-emerald-900' : 'text-rose-900'}`}>
-                      ✋ User Remaining:
+                      ✋ User Remaining
                     </span>
                     <span className={`font-extrabold whitespace-nowrap shrink-0 text-[10px] sm:text-xs ${
                       isUserPositive ? 'text-emerald-800' : 'text-rose-700'
                     }`}>
                       {totalUserRemaining < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalUserRemaining).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={() => navigate('/admin/deposit-allocate')}
+                    className="pt-1 flex items-center justify-between font-black text-emerald-950 cursor-pointer hover:bg-emerald-100/70 px-0.5 sm:px-1 rounded-md transition min-w-0"
+                    title="Click to view Total Cash Remaining in Deposit & Allocate"
+                  >
+                    <span className="truncate mr-1">Total Cash</span>
+                    <span className={`text-[10.5px] sm:text-sm whitespace-nowrap shrink-0 ${
+                      isNetPositive ? 'text-emerald-900' : 'text-rose-700'
+                    }`}>
+                      {totalNetCash < 0 ? '-' : ''}{settings?.currency || '₹'}{Math.abs(totalNetCash).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -1980,7 +1995,7 @@ const Dashboard = () => {
                   <label className="block text-xs font-bold text-[#002B49] mb-1">Date</label>
                   <input
                     type="date"
-                    defaultValue={new Date().toISOString().split('T')[0]}
+                    defaultValue={getTodayYMD()}
                     {...regTxn('date', { required: 'Date is required' })}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-slate-900 focus:outline-none"
                   />

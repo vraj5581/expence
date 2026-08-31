@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, getTodayYMD, normalizeToYYYYMMDD } from '../utils/dateUtils';
 import DateInput from '../components/DateInput';
 
 const CreditDebit = ({ isMyView = false }) => {
@@ -821,7 +821,7 @@ const CreditDebit = ({ isMyView = false }) => {
       amount: '',
       depositTo: defaultDep,
       userName: initialUser,
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayYMD(),
       status: 'Done',
       description: ''
     });
@@ -856,24 +856,6 @@ const CreditDebit = ({ isMyView = false }) => {
       description: txn.description || ''
     });
     setIsModalOpen(true);
-  };
-
-  const normalizeToYYYYMMDD = (dateStr) => {
-    if (!dateStr) return new Date().toISOString().split('T')[0];
-    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      return dateStr;
-    }
-    if (typeof dateStr === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
-      const parts = dateStr.split('-');
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    try {
-      const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split('T')[0];
-      }
-    } catch (e) {}
-    return new Date().toISOString().split('T')[0];
   };
 
   const onSubmitForm = async (data) => {
@@ -983,19 +965,32 @@ const CreditDebit = ({ isMyView = false }) => {
   };
 
   const handleStatusChange = async (txn, newStatus) => {
+    if (!txn) return;
     if (txn.isAllocation) {
       toast.info('Company allocation status is fixed as Done', { theme: 'light' });
       return;
     }
-    const res = await updateTransaction(txn.id, { ...txn, status: newStatus }, user?.name || 'Admin');
-    if (res && res.success === false) {
-      toast.error(res.message || 'Failed to update transaction status in PHP database', { theme: 'light' });
-      return;
+
+    const actualId = txn.txnId || txn.id;
+    const isVaultDep = txn.isVaultDeposit || (!txn.txnId && (vaultDeposits || []).some(d => d.id === actualId));
+
+    if (isVaultDep) {
+      const res = await updateVaultDeposit(actualId, { ...txn, status: newStatus });
+      if (res && res.success === false) {
+        toast.error(res.message || 'Failed to update deposit status in PHP database', { theme: 'light' });
+        return;
+      }
+    } else {
+      const res = await updateTransaction(actualId, { ...txn, id: actualId, status: newStatus }, user?.name || 'Admin');
+      if (res && res.success === false) {
+        toast.error(res.message || 'Failed to update transaction status in PHP database', { theme: 'light' });
+        return;
+      }
     }
 
     // Sync vault deposit status if linked to Company Wallet credit entry
-    if (txn.type === 'Cash In' && txn.depositTo === 'Company Wallet') {
-      const linkedDep = vaultDeposits.find(d => d.txnId === txn.id || (d.notes && d.notes.includes(txn.description)));
+    if ((txn.type === 'Cash In' || txn.type === 'Credit') && txn.depositTo === 'Company Wallet') {
+      const linkedDep = vaultDeposits.find(d => d.txnId === actualId || (d.notes && d.notes.includes(txn.description)));
       if (linkedDep) {
         await updateVaultDeposit(linkedDep.id, { ...linkedDep, status: newStatus });
       }

@@ -85,7 +85,7 @@ const staffBottomItems = [
     path: '/user/my-credit-debit',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
       </svg>
     )
   },
@@ -110,22 +110,45 @@ const BottomNav = () => {
   const menuItems = isAdmin ? adminBottomItems : staffBottomItems;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] print:hidden lg:hidden">
-      <div className="flex items-center justify-around px-1 py-1.5 overflow-x-auto no-scrollbar">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] print:hidden lg:hidden pb-[max(env(safe-area-inset-bottom,0px),4px)] select-none">
+      <div 
+        className="w-full grid items-center px-1 pt-1.5 pb-1"
+        style={{ gridTemplateColumns: `repeat(${menuItems.length}, minmax(0, 1fr))` }}
+      >
         {menuItems.map((item) => (
           <NavLink
             key={item.name}
             to={item.path}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center min-w-[56px] py-1 px-2 rounded-xl transition-all duration-200 shrink-0 ${
+              `flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-150 active:scale-95 min-w-0 ${
                 isActive
-                  ? 'bg-[#002B49] text-white shadow-sm font-extrabold scale-102'
-                  : 'text-slate-500 hover:text-slate-900 font-semibold hover:bg-slate-100/70'
+                  ? 'text-[#002B49] font-black'
+                  : 'text-slate-400 hover:text-slate-700 font-semibold'
               }`
             }
           >
-            <div className="shrink-0 mb-0.5">{item.icon}</div>
-            <span className="text-[10px] leading-tight tracking-tight whitespace-nowrap">{item.name}</span>
+            {({ isActive }) => (
+              <>
+                {/* Active Indicator Top Pill */}
+                <div className={`h-1 w-4 sm:w-5 rounded-full mb-1 transition-all duration-200 ${
+                  isActive ? 'bg-[#002B49] scale-100' : 'bg-transparent scale-0'
+                }`} />
+
+                {/* Icon */}
+                <div className={`shrink-0 transition-transform duration-150 ${
+                  isActive ? 'text-[#002B49] scale-110' : 'text-slate-400'
+                }`}>
+                  {item.icon}
+                </div>
+
+                {/* Label */}
+                <span className={`text-[9px] sm:text-[10px] leading-tight tracking-tight mt-1 truncate w-full text-center px-0.5 ${
+                  isActive ? 'text-[#002B49] font-black' : 'text-slate-500 font-medium'
+                }`}>
+                  {item.name}
+                </span>
+              </>
+            )}
           </NavLink>
         ))}
       </div>

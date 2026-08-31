@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/api';
+import { getTodayYMD } from '../utils/dateUtils';
 
 const ExpenseContext = createContext();
 
@@ -72,7 +73,7 @@ export const ExpenseProvider = ({ children }) => {
 
   const recordEditLog = async (editorName, txnId, txnType, entrySummary, changeDetails, oldData = null) => {
     const now = new Date();
-    const formattedDate = now.toISOString().split('T')[0];
+    const formattedDate = getTodayYMD(now);
     const formattedTime = now.toLocaleTimeString('en-IN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -189,7 +190,7 @@ export const ExpenseProvider = ({ children }) => {
     if (!res || res.success === false) {
       return { success: false, message: res?.error || res?.message || 'Database error: Failed to clear previous month audit logs' };
     }
-    const currentMonthStart = new Date().toISOString().slice(0, 7) + '-01';
+    const currentMonthStart = getTodayYMD().slice(0, 7) + '-01';
     setEditLogs(prev => prev.filter(log => log.date >= currentMonthStart));
     return { success: true };
   };
@@ -300,30 +301,46 @@ export const ExpenseProvider = ({ children }) => {
     };
   }, []);
 
-  // Effective Vault Deposits = Direct Manual Deposits + Completed Company Wallet Credit Transactions (No Duplicates!)
+  // Helper to determine if an account / destination is a Bank
+  const isBankDestination = (dest) => {
+    if (!dest) return false;
+    const clean = String(dest).toLowerCase().trim();
+    if (clean === 'company wallet' || clean === 'my hand' || clean === 'hand' || clean === 'cash') return false;
+    if (clean.includes('bank') || clean === 'banks') return true;
+    const availableBanks = (settings?.banks || 'IOB Bank, BOB Bank').split(',').map(b => b.trim().toLowerCase()).filter(Boolean);
+    return availableBanks.some(b => b && (clean.includes(b) || b.includes(clean)));
+  };
+
+  // Effective Vault Deposits = Direct Manual Deposits + Completed Company Wallet & Bank Credit Transactions (No Duplicates!)
   const effectiveVaultDeposits = useMemo(() => {
     // 1. Direct manual deposits (excluding those auto-generated from Company Wallet credits)
     const directManualDeposits = (vaultDeposits || []).filter(d =>
       !d.txnId &&
-      (!d.notes || !d.notes.includes('Company Wallet Credit'))
-    );
+      (!d.notes || (!d.notes.includes('Company Wallet Credit') && !d.notes.includes('Bank Credit')))
+    ).map(d => ({
+      ...d,
+      depositTo: d.depositTo || 'Company Wallet'
+    }));
 
-    // 2. Completed Company Wallet Credit transactions
-    const creditWalletDeposits = (transactions || [])
-      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && t.depositTo === 'Company Wallet' && (t.status || 'Done') === 'Done')
+    // 2. Completed Company Wallet & Bank Credit transactions created by users
+    const creditTxnDeposits = (transactions || [])
+      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && (t.depositTo === 'Company Wallet' || isBankDestination(t.depositTo)) && (t.status || 'Done') === 'Done')
       .map(t => ({
         id: `DEP-TXN-${t.id}`,
         txnId: t.id,
         date: t.date,
         userName: t.userName,
+        depositTo: t.depositTo || 'Company Wallet',
         amount: parseFloat(t.amount) || 0,
-        notes: `Company Wallet Credit: ${t.description || 'Deposit to Vault'}`,
+        notes: isBankDestination(t.depositTo)
+          ? `${t.depositTo} Credit: ${t.description || 'Bank Deposit'}`
+          : `Company Wallet Credit: ${t.description || 'Deposit to Vault'}`,
         status: 'Done',
         isCreditTxn: true
       }));
 
-    return [...creditWalletDeposits, ...directManualDeposits].sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [vaultDeposits, transactions]);
+    return [...creditTxnDeposits, ...directManualDeposits].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [vaultDeposits, transactions, settings?.banks]);
 
   const isDepositDue = (d) => {
     if (!d) return false;
@@ -338,7 +355,7 @@ export const ExpenseProvider = ({ children }) => {
   // Calculate Admin Vault Balance dynamically: [ Total Done Cash Deposit - Total Allocated to Team - Total Company Direct Expenses ]
   const totalVaultDeposited = (effectiveVaultDeposits || []).reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
   const totalDoneCashDeposit = (effectiveVaultDeposits || [])
-    .filter(d => (!d?.depositTo || d?.depositTo === 'Company Wallet' || d?.depositTo === 'My Hand') && d?.status !== 'Due')
+    .filter(d => !isBankDestination(d?.depositTo) && d?.status !== 'Due')
     .reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
 
   const totalDoneDebit = (debitTransactions || [])
@@ -352,9 +369,9 @@ export const ExpenseProvider = ({ children }) => {
       if (!t || t.status === 'Due' || t.type === 'Cash In' || t.type === 'Credit') return false;
       const isCompany = t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault';
       if (!isCompany) return false;
-      const dep = (t.depositTo || 'Company Wallet').toLowerCase().trim();
+      const dep = t.depositTo || t.account || t.paymentMethod || t.bankName || 'Company Wallet';
       // Exclude Bank Debits from Company Vault cash reserve calculation
-      return !dep.includes('bank');
+      return !isBankDestination(dep);
     })
     .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
 
@@ -369,10 +386,13 @@ export const ExpenseProvider = ({ children }) => {
 
     const newDeposit = {
       id: `DEP-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: depositData.date || new Date().toISOString().split('T')[0],
+      date: depositData.date || getTodayYMD(),
       userName: depositData.userName || 'Shukan Admin',
+      depositTo: depositData.depositTo || 'Company Wallet',
       amount: numAmount,
-      notes: depositData.notes || ''
+      notes: depositData.notes || '',
+      status: depositData.status || 'Done',
+      txnId: depositData.txnId || null
     };
 
     // ⚡ INSTANT OPTIMISTIC UI UPDATE
@@ -401,6 +421,7 @@ export const ExpenseProvider = ({ children }) => {
     setVaultDeposits(prev => prev.map(d => (d.id === id ? {
       ...d,
       ...updatedData,
+      depositTo: updatedData.depositTo !== undefined ? updatedData.depositTo : (d.depositTo || 'Company Wallet'),
       amount: !isNaN(numAmount) ? numAmount : d.amount
     } : d)));
 
@@ -454,7 +475,7 @@ export const ExpenseProvider = ({ children }) => {
       userName,
       type: 'User Transfer',
       amount: numAmount,
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayYMD(),
       notes: notes || ''
     };
 
@@ -601,19 +622,38 @@ export const ExpenseProvider = ({ children }) => {
       return u.toLowerCase() === targetUser ? sum + amt : sum;
     }, 0);
     
-    // User Completed Expenses (Cash Out / Debit submitted by user - Done status)
+    // User Completed Cash Expenses (Cash Out / Debit paid in Cash by user - Done status, excluding Bank debits)
     const spent = transactions
-      .filter(t => (t.userName || '').toLowerCase() === targetUser && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Done')
+      .filter(t => {
+        if ((t.userName || '').toLowerCase() !== targetUser) return false;
+        if (t.type === 'Cash In' || t.type === 'Credit') return false;
+        if ((t.status || 'Done') !== 'Done') return false;
+        const dep = t.depositTo || t.account || t.paymentMethod || t.bankName || 'My Hand';
+        return !isBankDestination(dep);
+      })
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-    // User Due Expenses (Unpaid bills)
+    // User Due Cash Expenses (Unpaid cash bills, excluding Bank)
     const dueSpent = transactions
-      .filter(t => (t.userName || '').toLowerCase() === targetUser && t.type !== 'Cash In' && t.type !== 'Credit' && (t.status || 'Done') === 'Due')
+      .filter(t => {
+        if ((t.userName || '').toLowerCase() !== targetUser) return false;
+        if (t.type === 'Cash In' || t.type === 'Credit') return false;
+        if ((t.status || 'Done') !== 'Due') return false;
+        const dep = t.depositTo || t.account || t.paymentMethod || t.bankName || 'My Hand';
+        return !isBankDestination(dep);
+      })
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-    // Additional Credit / Cash In received directly by user in My Hand (Done status)
+    // Additional Cash In received directly by user in My Hand (Done status, excluding Company Wallet and Bank credits)
     const cashInReceived = transactions
-      .filter(t => (t.userName || '').toLowerCase() === targetUser && (t.type === 'Cash In' || t.type === 'Credit') && t.depositTo !== 'Company Wallet' && (t.status || 'Done') === 'Done')
+      .filter(t => {
+        if ((t.userName || '').toLowerCase() !== targetUser) return false;
+        if (t.type !== 'Cash In' && t.type !== 'Credit') return false;
+        if ((t.status || 'Done') !== 'Done') return false;
+        const dep = (t.depositTo || 'My Hand').trim();
+        if (dep === 'Company Wallet') return false;
+        return !isBankDestination(dep);
+      })
       .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
     const totalCashAvailable = allocated + cashInReceived;
@@ -644,20 +684,26 @@ export const ExpenseProvider = ({ children }) => {
       return { success: false, message: 'Description is required for expense entries' };
     }
 
+    const isCredit = txnData.type === 'Cash In' || txnData.type === 'Credit';
     const isCompanyTxn = txnData.userName === 'Shukan Company' || txnData.userName === 'Shukan Packaging (Company)' || txnData.userName === 'Company Vault';
 
-    if (isCompanyTxn && txnData.status !== 'Due') {
-      if (adminVaultBalance <= 0) {
-        return {
-          success: false,
-          message: `Cannot record company expense. Company Vault balance is ${settings?.currency || '₹'}0.00. Please click "Deposit Vault" to add funds first!`
-        };
-      }
-      if (adminVaultBalance < numAmount) {
-        return {
-          success: false,
-          message: `Cannot record expense of ${settings?.currency || '₹'}${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}. Company Vault has only ${settings?.currency || '₹'}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available. Please deposit vault funds first!`
-        };
+    // Only apply balance check for company DEBIT / EXPENSE (Cash Out) transactions that are NOT Bank debits
+    if (!isCredit && isCompanyTxn && txnData.status !== 'Due') {
+      const dep = txnData.depositTo || txnData.account || txnData.paymentMethod || txnData.bankName || 'Company Wallet';
+      const isBank = isBankDestination(dep);
+      if (!isBank) {
+        if (adminVaultBalance <= 0) {
+          return {
+            success: false,
+            message: `Cannot record company expense. Company Vault balance is ${settings?.currency || '₹'}0.00. Please click "Deposit Vault" to add funds first!`
+          };
+        }
+        if (adminVaultBalance < numAmount) {
+          return {
+            success: false,
+            message: `Cannot record expense of ${settings?.currency || '₹'}${numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}. Company Vault has only ${settings?.currency || '₹'}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available. Please deposit vault funds first!`
+          };
+        }
       }
     }
 
@@ -667,8 +713,6 @@ export const ExpenseProvider = ({ children }) => {
       ...txnData,
       amount: numAmount
     };
-
-    const isCredit = newTxn.type === 'Cash In' || newTxn.type === 'Credit';
 
     // ⚡ INSTANT OPTIMISTIC UI UPDATE
     if (isCredit) {
@@ -715,22 +759,27 @@ export const ExpenseProvider = ({ children }) => {
     const newStatus = updatedData.status !== undefined ? updatedData.status : oldTxn.status;
     const newDescription = updatedData.description !== undefined ? updatedData.description : oldTxn.description;
 
+    const isCredit = (updatedData.type || oldTxn.type) === 'Cash In' || (updatedData.type || oldTxn.type) === 'Credit';
     const isCompanyTxn = newUserName === 'Shukan Company' || newUserName === 'Shukan Packaging (Company)' || newUserName === 'Company Vault';
 
-    if (isCompanyTxn && newStatus !== 'Due') {
-      const wasCompanyTxn = oldTxn.userName === 'Shukan Company' || oldTxn.userName === 'Shukan Packaging (Company)' || oldTxn.userName === 'Company Vault';
-      const oldAmount = (wasCompanyTxn && oldTxn.status !== 'Due') ? oldTxn.amount : 0;
-      const diff = newAmount - oldAmount;
+    // Only apply balance check for company DEBIT / EXPENSE (Cash Out) transactions that are NOT Bank debits
+    if (!isCredit && isCompanyTxn && newStatus !== 'Due') {
+      const dep = updatedData.depositTo || oldTxn.depositTo || 'Company Wallet';
+      const isBank = isBankDestination(dep);
+      if (!isBank) {
+        const wasCompanyTxn = (!oldTxn.type || (oldTxn.type !== 'Cash In' && oldTxn.type !== 'Credit')) && (oldTxn.userName === 'Shukan Company' || oldTxn.userName === 'Shukan Packaging (Company)' || oldTxn.userName === 'Company Vault');
+        const oldAmount = (wasCompanyTxn && oldTxn.status !== 'Due' && !isBankDestination(oldTxn.depositTo)) ? oldTxn.amount : 0;
+        const diff = newAmount - oldAmount;
 
-      if (diff > 0 && adminVaultBalance < diff) {
-        return {
-          success: false,
-          message: `Cannot update expense. Insufficient Company Vault balance (${settings?.currency || '₹'}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available).`
-        };
+        if (diff > 0 && adminVaultBalance < diff) {
+          return {
+            success: false,
+            message: `Cannot update expense. Insufficient Company Vault balance (${settings?.currency || '₹'}${adminVaultBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available).`
+          };
+        }
       }
     }
 
-    const isCredit = (updatedData.type || oldTxn.type) === 'Cash In' || (updatedData.type || oldTxn.type) === 'Credit';
     const nextTxn = { ...oldTxn, ...updatedData, amount: newAmount, status: newStatus };
 
     // ⚡ INSTANT OPTIMISTIC UI UPDATE
@@ -785,7 +834,7 @@ export const ExpenseProvider = ({ children }) => {
         } else if (newStatus === 'Done') {
           const newDep = {
             id: `DEP-${Math.floor(1000 + Math.random() * 9000)}`,
-            date: updatedData.date || oldTxn.date || new Date().toISOString().split('T')[0],
+            date: updatedData.date || oldTxn.date || getTodayYMD(),
             userName: newUserName,
             amount: newAmount,
             notes: `Company Wallet Credit: ${updatedData.description || oldTxn.description || 'Deposit to Vault'}`,
@@ -863,7 +912,7 @@ export const ExpenseProvider = ({ children }) => {
       password: userData.password || 'partner123',
       role: userData.role || 'Partner',
       status: userData.status || 'Active',
-      createdAt: new Date().toISOString().split('T')[0]
+      createdAt: getTodayYMD()
     };
 
     // ⚡ INSTANT OPTIMISTIC UI UPDATE
@@ -963,7 +1012,7 @@ export const ExpenseProvider = ({ children }) => {
   const addTask = async (taskData) => {
     const newTask = {
       id: `TSK-${Math.floor(1000 + Math.random() * 9000)}`,
-      createdAt: new Date().toISOString().split('T')[0],
+      createdAt: getTodayYMD(),
       status: taskData.status || 'Pending',
       priority: taskData.priority || 'Medium',
       category: taskData.category || 'General',
@@ -1053,6 +1102,7 @@ export const ExpenseProvider = ({ children }) => {
         totalDoneDebit,
         vaultDeposits: effectiveVaultDeposits,
         isDepositDue,
+        isBankDestination,
         userAllocations,
         allocationsHistory,
         transactions,

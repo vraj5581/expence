@@ -3,7 +3,7 @@ import { useExpense } from '../context/ExpenseContext';
 import { useAuth } from '../context/AuthContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, getTodayYMD } from '../utils/dateUtils';
 
 const Tasks = () => {
   const { tasks, addTask, updateTask, deleteTask, updateTaskStatus, users } = useExpense();
@@ -62,7 +62,7 @@ const Tasks = () => {
       priority: 'Medium',
       category: 'General',
       status: 'Pending',
-      dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]
+      dueDate: getTodayYMD(new Date(Date.now() + 86400000 * 2))
     });
     setIsModalOpen(true);
   };

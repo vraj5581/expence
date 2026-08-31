@@ -15,8 +15,8 @@ if ($method === 'POST') {
             exit();
         }
 
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :u1 OR id = :u2 LIMIT 1");
-        $stmt->execute(['u1' => $username, 'u2' => $username]);
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :u1 OR id = :u2 OR name = :u3 LIMIT 1");
+        $stmt->execute(['u1' => $username, 'u2' => $username, 'u3' => $username]);
         $user = $stmt->fetch();
 
         if ($user) {

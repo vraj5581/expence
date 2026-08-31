@@ -1,6 +1,50 @@
-// Centralized Date Utility to enforce DD-MM-YYYY format across the entire application
+// Centralized Date Utility to enforce local timezone date handling & DD-MM-YYYY format across the entire application
 
 const dateCache = new Map();
+
+export const getTodayYMD = (dateInput = new Date()) => {
+  if (!dateInput) dateInput = new Date();
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const normalizeToYYYYMMDD = (dateStr) => {
+  if (!dateStr) return getTodayYMD();
+  if (typeof dateStr === 'string') {
+    const clean = dateStr.split('T')[0].trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      return clean;
+    }
+    if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
+      const [d, m, y] = clean.split('-');
+      return `${y}-${m}-${d}`;
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
+      const [d, m, y] = clean.split('/');
+      return `${y}-${m}-${d}`;
+    }
+  }
+  try {
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  } catch (e) {}
+  return getTodayYMD();
+};
 
 export const formatDate = (dateInput) => {
   if (!dateInput) return '-';
@@ -43,5 +87,5 @@ export const formatDate = (dateInput) => {
 };
 
 export const getTodayFormatted = () => {
-  return formatDate(new Date());
+  return formatDate(getTodayYMD());
 };

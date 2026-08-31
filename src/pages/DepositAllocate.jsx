@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, getTodayYMD } from '../utils/dateUtils';
 import DateInput from '../components/DateInput';
 
 const shukanPartners = ['Vraj', 'Raj', 'Teerth', 'Mayank'];
@@ -16,6 +16,7 @@ const DepositAllocate = () => {
     totalVaultDeposited,
     vaultDeposits,
     isDepositDue,
+    isBankDestination,
     allocationsHistory,
     transactions,
     users,
@@ -23,6 +24,7 @@ const DepositAllocate = () => {
     addVaultDeposit,
     updateVaultDeposit,
     deleteVaultDeposit,
+    updateTransaction,
     deleteTransaction,
     allocateMoneyToUser,
     updateAllocation,
@@ -121,7 +123,7 @@ const DepositAllocate = () => {
   const handleOpenAddModal = () => {
     setEditingDeposit(null);
     reset({
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayYMD(),
       userName: shukanPartners[0],
       depositTo: 'Company Wallet',
       amount: '',
@@ -166,6 +168,33 @@ const DepositAllocate = () => {
       } else {
         toast.error(res?.message || 'Failed to save deposit in PHP database', { theme: 'light' });
       }
+    }
+  };
+
+  const handleStatusChange = async (txnItem, newStatus) => {
+    if (!txnItem) return;
+    const rawItem = txnItem.rawItem || txnItem;
+    const isCreditTxn = txnItem.isCreditTxn || rawItem.isCreditTxn || rawItem.txnId;
+
+    if (isCreditTxn) {
+      const txnId = rawItem.txnId || rawItem.id;
+      const res = await updateTransaction(txnId, { status: newStatus });
+      if (res && res.success === false) {
+        toast.error(res?.message || 'Failed to update transaction status in PHP database', { theme: 'light' });
+        return;
+      }
+    } else {
+      const res = await updateVaultDeposit(rawItem.id, { ...rawItem, status: newStatus });
+      if (res && res.success === false) {
+        toast.error(res?.message || 'Failed to update deposit status in PHP database', { theme: 'light' });
+        return;
+      }
+    }
+
+    if (newStatus === 'Done') {
+      toast.success('Deposit marked as Done (Paid)', { theme: 'light' });
+    } else {
+      toast.info('Deposit marked as Due (Pending)', { theme: 'light' });
     }
   };
 
@@ -217,21 +246,23 @@ const DepositAllocate = () => {
   const activeVaultDepositsList = (vaultDeposits || []).filter(d => isDepositDue ? !isDepositDue(d) : d.status !== 'Due');
 
   const vaultBreakdown = useMemo(() => {
-    let cashDeposited = 0;
-    let bankDeposited = 0;
+    let totalDoneCredit = 0;
+    let totalDoneBankCredit = 0;
 
     activeVaultDepositsList.forEach(d => {
       const amt = parseFloat(d.amount) || 0;
       const dep = d.depositTo || 'Company Wallet';
-      if (dep === 'Company Wallet' || dep === 'My Hand') {
-        cashDeposited += amt;
-      } else {
-        bankDeposited += amt;
+      totalDoneCredit += amt;
+      if (isBankDestination ? isBankDestination(dep) : (dep !== 'Company Wallet' && dep !== 'My Hand')) {
+        totalDoneBankCredit += amt;
       }
     });
 
-    return { cashDeposited, bankDeposited };
-  }, [activeVaultDepositsList]);
+    // Total Cash Deposit = Total Done Credit - Total Done Bank Credit
+    const cashDeposited = Math.max(0, totalDoneCredit - totalDoneBankCredit);
+
+    return { totalDoneCredit, totalDoneBankCredit, cashDeposited, bankDeposited: totalDoneBankCredit };
+  }, [activeVaultDepositsList, isBankDestination]);
 
   const totalUserRemaining = useMemo(() => {
     return (users || []).reduce((sum, u) => {
@@ -273,6 +304,13 @@ const DepositAllocate = () => {
     return { totalCredit, totalDebit, availableReserve };
   };
 
+  const totalBankAvailable = useMemo(() => {
+    return (availableBanks || []).reduce((sum, bName) => {
+      const stats = getBankStats(bName);
+      return sum + (stats?.availableReserve || 0);
+    }, 0);
+  }, [availableBanks, vaultDeposits, transactions, isDepositDue]);
+
   const bankDepositsBreakdown = useMemo(() => {
     const map = {};
     availableBanks.forEach(b => {
@@ -291,18 +329,19 @@ const DepositAllocate = () => {
   }, [activeVaultDepositsList, availableBanks]);
   const formattedVaultDeposits = activeVaultDepositsList.map((d) => ({
     id: d.id || `DEP-${Math.random()}`,
-    date: d.date || new Date().toISOString().split('T')[0],
+    date: d.date || getTodayYMD(),
     userName: (d.userName && d.userName !== 'Shukan Admin') ? d.userName : 'Vraj',
     depositTo: d.depositTo || 'Company Wallet',
     amount: parseFloat(d.amount) || 0,
     notes: d.notes ? d.notes.replace(/Admin Capital/g, 'Company Capital') : 'Company Capital Deposit',
+    status: d.status || 'Done',
     txnCategory: 'Add Money',
     rawItem: d
   }));
 
   const formattedAllocations = (allocationsHistory || []).map((a) => ({
     id: a.id || `ALC-${Math.random()}`,
-    date: a.date || new Date().toISOString().split('T')[0],
+    date: a.date || getTodayYMD(),
     userName: a.userName || 'Staff',
     amount: parseFloat(a.amount) || 0,
     notes: a.notes ? a.notes.replace(/Admin allocated/g, 'Company allocated') : (a.purpose || 'Petty Cash Allowance'),
@@ -324,14 +363,19 @@ const DepositAllocate = () => {
     if (startDate && t.date < startDate) return false;
     if (endDate && t.date > endDate) return false;
 
-    if (selectedDepositType === 'Cash') {
+    if (selectedDepositType === 'Cash' || selectedDepositType === 'Company Wallet') {
       if (t.txnCategory !== 'Add Money') return false;
       const dep = t.depositTo || 'Company Wallet';
       if (dep !== 'Company Wallet' && dep !== 'My Hand') return false;
-    } else if (selectedDepositType === 'Bank') {
+    } else if (selectedDepositType === 'Bank' || selectedDepositType === 'Banks') {
       if (t.txnCategory !== 'Add Money') return false;
       const dep = t.depositTo || 'Company Wallet';
       if (dep === 'Company Wallet' || dep === 'My Hand') return false;
+    } else if (selectedDepositType !== 'All' && selectedDepositType) {
+      if (t.txnCategory === 'Add Money') {
+        const dep = (t.depositTo || 'Company Wallet').toLowerCase().trim();
+        if (!dep.includes(selectedDepositType.toLowerCase().trim())) return false;
+      }
     }
 
     if (!searchTerm.trim()) return true;
@@ -460,7 +504,7 @@ const DepositAllocate = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-2.5 sm:gap-4 print:hidden">
+      <div className="grid grid-cols-1 gap-2.5 sm:gap-4 print:hidden select-none">
         {/* CARD 1: TOTAL CASH REMAINING (Master Reserve + User Remaining Balance) */}
         {(() => {
           const totalNetCash = (adminVaultBalance || 0) + totalUserRemaining;
@@ -535,7 +579,7 @@ const DepositAllocate = () => {
               title="Click to view Cash Deposits"
             >
               <span className="text-slate-700 font-semibold text-[11px] sm:text-xs">💵 Total Cash Deposit:</span>
-              <span className="text-emerald-700 font-extrabold">{settings?.currency || '₹'}{vaultBreakdown.cashDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span className="text-emerald-700 font-extrabold">{settings?.currency || '₹'}{(vaultBreakdown?.cashDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
 
             <div
@@ -544,7 +588,7 @@ const DepositAllocate = () => {
               title="Click to view Bank Deposits"
             >
               <span className="text-slate-700 font-semibold text-[11px] sm:text-xs">🏦 Total Bank Deposit:</span>
-              <span className="text-indigo-700 font-extrabold">{settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span className="text-indigo-700 font-extrabold">{settings?.currency || '₹'}{(totalBankAvailable || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
 
             <div
@@ -553,7 +597,7 @@ const DepositAllocate = () => {
               title="Click to view All Deposits"
             >
               <span className="text-[#002B49] font-black text-xs sm:text-sm">📥 Total Deposited:</span>
-              <span className="text-[#9e6e34] font-black text-xs sm:text-sm">{settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span className="text-[#9e6e34] font-black text-xs sm:text-sm">{settings?.currency || '₹'}{((vaultBreakdown?.cashDeposited || 0) + (totalBankAvailable || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
@@ -573,7 +617,7 @@ const DepositAllocate = () => {
             </h2>
           </div>
           <span className="text-[11px] font-extrabold text-slate-500">
-            Total Bank Reserve: {settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            Total Bank Reserve: {settings?.currency || '₹'}{totalBankAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </span>
         </div>
 
@@ -1341,6 +1385,41 @@ const DepositAllocate = () => {
               )}
             </div>
 
+            {/* Status Change Buttons (Done / Due) for Deposits */}
+            {selectedTxnForAction.txnCategory === 'Add Money' && (
+              <div>
+                <label className="block text-xs font-extrabold text-[#002B49] uppercase tracking-wider mb-1.5">Change Payment Status</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      handleStatusChange(selectedTxnForAction, 'Done');
+                      setSelectedTxnForAction(prev => prev ? { ...prev, status: 'Done', rawItem: { ...prev.rawItem, status: 'Done' } } : null);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer border flex items-center justify-center space-x-1.5 ${
+                      (selectedTxnForAction.status || selectedTxnForAction.rawItem?.status || 'Done') === 'Done'
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-300'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <span>✓ Done (Paid)</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleStatusChange(selectedTxnForAction, 'Due');
+                      setSelectedTxnForAction(prev => prev ? { ...prev, status: 'Due', rawItem: { ...prev.rawItem, status: 'Due' } } : null);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer border flex items-center justify-center space-x-1.5 ${
+                      (selectedTxnForAction.status || selectedTxnForAction.rawItem?.status || 'Done') === 'Due'
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50'
+                    }`}
+                  >
+                    <span>⏳ Due (Pending)</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons: Edit & Delete */}
             <div className="flex items-center space-x-2 pt-2 border-t border-slate-100">
               <button
@@ -1435,16 +1514,16 @@ const DepositAllocate = () => {
               <div className="card-body">
                 <div className="card-row">
                   <span className="card-label">Cash Deposit</span>
-                  <span className="card-value">{settings?.currency || '₹'}{vaultBreakdown.cashDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span className="card-value">{settings?.currency || '₹'}{(vaultBreakdown?.cashDeposited || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="card-row">
                   <span className="card-label">Bank Deposit</span>
-                  <span className="card-value">{settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span className="card-value">{settings?.currency || '₹'}{(totalBankAvailable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
               <div className="card-total">
                 <span className="card-label">TOTAL DEPOSITED</span>
-                <span className="card-value">{settings?.currency || '₹'}{(totalVaultDeposited || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="card-value">{settings?.currency || '₹'}{((vaultBreakdown?.cashDeposited || 0) + (totalBankAvailable || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
 
@@ -1457,13 +1536,13 @@ const DepositAllocate = () => {
                 {Object.entries(bankDepositsBreakdown).map(([bName, bAmt]) => (
                   <div key={bName} className="card-row">
                     <span className="card-label">{bName}</span>
-                    <span className="card-value">{settings?.currency || '₹'}{bAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    <span className="card-value">{settings?.currency || '₹'}{(bAmt || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                 ))}
               </div>
               <div className="card-total">
                 <span className="card-label">TOTAL BANK</span>
-                <span className="card-value">{settings?.currency || '₹'}{vaultBreakdown.bankDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="card-value">{settings?.currency || '₹'}{(totalBankAvailable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>

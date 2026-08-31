@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useExpense } from '../context/ExpenseContext';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, getTodayYMD } from '../utils/dateUtils';
 import {
   exportTransferLogPDF,
   exportExpenseLogPDF,
@@ -52,7 +52,7 @@ const Reports = () => {
       txnType: log.txnType || 'Entry',
       entrySummary: log.entrySummary || '',
       changeDetails: log.changeDetails || '',
-      date: log.date || new Date().toISOString().split('T')[0],
+      date: log.date || getTodayYMD(),
       time: log.time || ''
     });
     setIsEditAuditModalOpen(true);
@@ -137,7 +137,7 @@ const Reports = () => {
     const now = new Date();
 
     if (filterPeriod === 'Today') {
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = getTodayYMD(now);
       return dateStr === todayStr;
     }
 
