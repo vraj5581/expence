@@ -42,6 +42,7 @@ const Dashboard = () => {
     allocationsHistory,
     transactions,
     vaultDeposits,
+    isDepositDue,
     totalAllocatedToTeam,
     totalCashIn,
     totalCashOut,
@@ -110,6 +111,18 @@ const Dashboard = () => {
   const handleRowClick = (accountName) => {
     const targetPath = isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit';
     navigate(targetPath, { state: { selectedUser: accountName } });
+  };
+
+  const handleAccountClick = (accountName, typeFilter = 'All', statusFilter = 'All', depositToFilter = 'All') => {
+    const targetPath = isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit';
+    navigate(targetPath, {
+      state: {
+        selectedUser: accountName,
+        typeFilter: typeFilter, // 'All' | 'Credit' | 'Debit'
+        statusFilter: statusFilter, // 'All' | 'Done' | 'Due'
+        depositToFilter: depositToFilter // 'All' | 'My Hand' | 'Company Wallet' | 'Banks' | bank name
+      }
+    });
   };
 
   // Modals state
@@ -372,15 +385,14 @@ const Dashboard = () => {
     const cleanBank = (bankName || '').toLowerCase().trim();
 
     const vaultCredits = (vaultDeposits || [])
-      .filter(d => (d.depositTo || '').toLowerCase().trim() === cleanBank)
+      .filter(d => (isDepositDue ? !isDepositDue(d) : d.status !== 'Due'))
+      .filter(d => {
+        const dep = (d.depositTo || '').toLowerCase().trim();
+        return dep === cleanBank || (dep.includes('bank') && cleanBank.includes(dep));
+      })
       .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
-    const directCredits = (transactions || [])
-      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && (t.status || 'Done') === 'Done')
-      .filter(t => (t.depositTo || t.account || '').toLowerCase().trim() === cleanBank)
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-
-    const totalCredit = vaultCredits + directCredits;
+    const totalCredit = vaultCredits;
 
     const totalDebit = (transactions || [])
       .filter(t => (t.type !== 'Cash In' && t.type !== 'Credit') && (t.status || 'Done') === 'Done')
@@ -564,17 +576,6 @@ const Dashboard = () => {
         position: 'bottom',
       }
     }
-  };
-
-  const handleAccountClick = (userName, typeFilter = 'All', statusFilter = 'All') => {
-    const targetRoute = isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit';
-    navigate(targetRoute, {
-      state: {
-        selectedUser: userName,
-        typeFilter: typeFilter,
-        statusFilter: statusFilter
-      }
-    });
   };
 
   return (
@@ -1105,9 +1106,9 @@ const Dashboard = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           {/* 1. CASH IN HAND */}
           <div
-            onClick={() => navigate('/user/my-credit-debit', { state: { statusFilter: 'Done' } })}
+            onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'All', depositToFilter: 'My Hand', statusFilter: 'Done' } })}
             className="p-2.5 rounded-xl bg-white border border-blue-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
-            title="Click middle to view Done entries"
+            title="Click to view Cash in Hand entries"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-[11px] font-black uppercase text-blue-900 tracking-wider">CASH IN HAND</span>
@@ -1125,7 +1126,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', depositToFilter: 'My Hand', statusFilter: 'Done' } }); }}
                 className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                 title="Click to view Hand Received Credits"
               >
@@ -1133,7 +1134,7 @@ const Dashboard = () => {
                 <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', depositToFilter: 'My Hand', statusFilter: 'Done' } }); }}
                 className="hover:text-slate-900 hover:underline transition cursor-pointer"
                 title="Click to view Spent Debits"
               >
@@ -1148,11 +1149,11 @@ const Dashboard = () => {
             const companyOwesMe = Math.max(0, myDoneDebit - myHandDoneCredit);
             return (
               <div
-                onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+                onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
                 className={`p-2.5 rounded-xl bg-white border shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between ${
                   companyOwesMe > 0 ? 'border-rose-200/90 bg-rose-50/20' : 'border-slate-200/80'
                 }`}
-                title="Click middle to view Done Out-of-pocket Expenses"
+                title="Click to view Out-of-pocket Expenses"
               >
                 <div className="flex items-center justify-between">
                   <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${companyOwesMe > 0 ? 'text-rose-900' : 'text-slate-600'}`}>
@@ -1176,7 +1177,7 @@ const Dashboard = () => {
                 </div>
                 <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } }); }}
                     className="hover:text-rose-700 hover:underline transition cursor-pointer"
                     title="Click to view Total Spent"
                   >
@@ -1184,7 +1185,7 @@ const Dashboard = () => {
                     <span className="text-slate-800">{settings.currency}{myDoneDebit.toLocaleString('en-IN')}</span>
                   </div>
                   <div
-                    onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done' } }); }}
                     className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                     title="Click to view Money Received"
                   >
@@ -1198,9 +1199,9 @@ const Dashboard = () => {
 
           {/* 3. TOTAL DEBIT */}
           <div
-            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
+            onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Done' } })}
             className="p-2.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
-            title="Click middle to view Total Spent entries"
+            title="Click to view Total Spent entries"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-[11px] font-black uppercase text-amber-900 tracking-wider">TOTAL DEBIT</span>
@@ -1218,7 +1219,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-extrabold">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'All' } }); }}
                 className="hover:text-amber-900 hover:underline transition cursor-pointer"
                 title="Click to view All Debit entries"
               >
@@ -1226,7 +1227,7 @@ const Dashboard = () => {
                 <span className="text-slate-800">{settings.currency}{myDebitTotal.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate('/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Debit', statusFilter: 'Due' } }); }}
                 className="hover:text-amber-700 hover:underline transition cursor-pointer"
                 title="Click to view Unpaid Due Debit entries"
               >
@@ -1238,9 +1239,9 @@ const Dashboard = () => {
 
           {/* 4. TOTAL CREDIT */}
           <div
-            onClick={() => navigate('/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
+            onClick={() => navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', statusFilter: 'Done', depositToFilter: 'All' } })}
             className="p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
-            title="Click middle to view Money Received entries"
+            title="Click to view Money Received entries"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-[11px] font-black uppercase text-emerald-800 tracking-wider">TOTAL CREDIT</span>
@@ -1258,7 +1259,7 @@ const Dashboard = () => {
             </div>
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9px] sm:text-[10px] font-extrabold gap-1">
               <div
-                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', depositToFilter: 'My Hand', statusFilter: 'Done' } }); }}
                 className="hover:text-emerald-700 hover:underline transition cursor-pointer"
                 title="Click to view My Hand Credit entries"
               >
@@ -1266,7 +1267,7 @@ const Dashboard = () => {
                 <span className="text-emerald-700">{settings.currency}{myHandDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', depositToFilter: 'Company Wallet', statusFilter: 'Done' } }); }}
                 className="hover:text-purple-700 hover:underline transition cursor-pointer"
                 title="Click to view Company Wallet Credit entries"
               >
@@ -1274,7 +1275,7 @@ const Dashboard = () => {
                 <span className="text-purple-700">{settings.currency}{myWalletDoneCredit.toLocaleString('en-IN')}</span>
               </div>
               <div
-                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit' } }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(isAdmin ? '/admin/credit-debit' : '/user/my-credit-debit', { state: { typeFilter: 'Credit', depositToFilter: 'Banks', statusFilter: 'Done' } }); }}
                 className="hover:text-blue-700 hover:underline transition cursor-pointer"
                 title="Click to view Bank Credit entries"
               >

@@ -50,15 +50,6 @@ const adminBottomItems = [
     )
   },
   {
-    name: 'Team',
-    path: '/admin/team',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-      </svg>
-    )
-  },
-  {
     name: 'Settings',
     path: '/admin/settings',
     icon: (
@@ -112,7 +103,7 @@ const BottomNav = () => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] print:hidden lg:hidden pb-[max(env(safe-area-inset-bottom,0px),4px)] select-none">
       <div 
-        className="w-full grid items-center px-1 pt-1.5 pb-1"
+        className="w-full grid items-center px-1 pt-1 pb-1"
         style={{ gridTemplateColumns: `repeat(${menuItems.length}, minmax(0, 1fr))` }}
       >
         {menuItems.map((item) => (
@@ -120,31 +111,39 @@ const BottomNav = () => {
             key={item.name}
             to={item.path}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-150 active:scale-95 min-w-0 ${
+              `relative flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-150 active:scale-95 min-w-0 ${
                 isActive
-                  ? 'text-[#002B49] font-black'
-                  : 'text-slate-400 hover:text-slate-700 font-semibold'
+                  ? 'text-[#002B49]'
+                  : 'text-slate-400 hover:text-slate-700'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                {/* Active Indicator Top Pill */}
-                <div className={`h-1 w-4 sm:w-5 rounded-full mb-1 transition-all duration-200 ${
-                  isActive ? 'bg-[#002B49] scale-100' : 'bg-transparent scale-0'
-                }`} />
+                {/* Active Indicator Top Flush Bar */}
+                <div
+                  className={`absolute top-0 w-7 h-[3px] rounded-b-full transition-all duration-200 ${
+                    isActive ? 'bg-[#002B49] opacity-100 scale-100' : 'bg-transparent opacity-0 scale-50'
+                  }`}
+                />
 
-                {/* Icon */}
-                <div className={`shrink-0 transition-transform duration-150 ${
-                  isActive ? 'text-[#002B49] scale-110' : 'text-slate-400'
-                }`}>
+                {/* Icon Container */}
+                <div
+                  className={`shrink-0 p-1 rounded-xl transition-all duration-200 ${
+                    isActive
+                      ? 'text-[#002B49] scale-110 bg-[#002B49]/8'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
                   {item.icon}
                 </div>
 
                 {/* Label */}
-                <span className={`text-[9px] sm:text-[10px] leading-tight tracking-tight mt-1 truncate w-full text-center px-0.5 ${
-                  isActive ? 'text-[#002B49] font-black' : 'text-slate-500 font-medium'
-                }`}>
+                <span
+                  className={`text-[9.5px] leading-tight tracking-tight mt-0.5 truncate w-full text-center px-0.5 ${
+                    isActive ? 'text-[#002B49] font-black' : 'text-slate-500 font-semibold'
+                  }`}
+                >
                   {item.name}
                 </span>
               </>

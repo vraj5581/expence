@@ -67,7 +67,7 @@ function App() {
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="credit-debit" element={<CreditDebit />} />
                     <Route path="deposit-allocate" element={<DepositAllocate />} />
-                    <Route path="team" element={<TeamAccounts />} />
+                    <Route path="team" element={<Navigate to="/admin/settings?tab=team" replace />} />
                     <Route path="tasks" element={<Tasks />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="settings" element={<Settings />} />

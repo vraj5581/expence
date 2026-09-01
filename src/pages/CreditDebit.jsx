@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useExpense } from '../context/ExpenseContext';
 import { useForm } from 'react-hook-form';
@@ -9,6 +9,7 @@ import DateInput from '../components/DateInput';
 
 const CreditDebit = ({ isMyView = false }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     transactions,
@@ -363,7 +364,7 @@ const CreditDebit = ({ isMyView = false }) => {
     }
   }, [isMyView, user?.name]);
 
-  // Handle location state ONCE on initial navigation and clear history state so F5 refresh NEVER auto-filters
+  // Handle location state on navigation from Dashboard cards or user cards
   useEffect(() => {
     if (location.state) {
       if (!isMyView && location.state.selectedUser !== undefined) {
@@ -381,15 +382,36 @@ const CreditDebit = ({ isMyView = false }) => {
         setActiveTab('credit');
         if (statusFromState) setCreditStatus(statusFromState);
         if (depositToFromState) setCreditDepositTo(depositToFromState);
+      } else if (typeFromState === 'All') {
+        setActiveTab('all');
+        if (statusFromState) {
+          setDebitStatus(statusFromState);
+          setCreditStatus(statusFromState);
+        }
+        if (depositToFromState) {
+          setDebitDepositTo(depositToFromState);
+          setCreditDepositTo(depositToFromState);
+        }
       } else if (statusFromState) {
         setDebitStatus(statusFromState);
         setCreditStatus(statusFromState);
       }
 
-      // Clear history state so browser refresh (F5) resets filters cleanly to 'All'
-      window.history.replaceState({}, document.title);
+      if (depositToFromState && !typeFromState) {
+        setDebitDepositTo(depositToFromState);
+        setCreditDepositTo(depositToFromState);
+      }
+
+      if (location.state.startDate) {
+        setDebitStartDate(location.state.startDate);
+        setCreditStartDate(location.state.startDate);
+      }
+      if (location.state.endDate) {
+        setDebitEndDate(location.state.endDate);
+        setCreditEndDate(location.state.endDate);
+      }
     }
-  }, []);
+  }, [location.state, location.key, isMyView]);
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
   const selectedSpender = watch('userName', 'Shukan Company');
@@ -424,18 +446,23 @@ const CreditDebit = ({ isMyView = false }) => {
         rawItem: d
       }));
 
-    // Map all Company Cash Allocations into Credit transactions for staff users (Money received in hand)
-    const mappedAllocations = (allocationsHistory || []).map(a => ({
-      id: a.id,
-      type: 'Credit',
-      depositTo: 'My Hand',
-      userName: a.userName,
-      amount: parseFloat(a.amount) || 0,
-      date: a.date,
-      description: a.notes || `Company Cash Allocation (${a.userName})`,
-      status: 'Done',
-      isAllocation: true
-    }));
+    // Map Company Cash Allocations into Credit transactions ONLY for staff personal view (Money received in hand)
+    // In Admin / Company view, allocations are internal transfers out of vault, not incoming company credit
+    const mappedAllocations = isMyView
+      ? (allocationsHistory || [])
+          .filter(a => (a.userName || '').toLowerCase() === (user?.name || '').toLowerCase())
+          .map(a => ({
+            id: a.id,
+            type: 'Credit',
+            depositTo: 'My Hand',
+            userName: a.userName,
+            amount: parseFloat(a.amount) || 0,
+            date: a.date,
+            description: a.notes || `Company Cash Allocation (${a.userName})`,
+            status: 'Done',
+            isAllocation: true
+          }))
+      : [];
 
     return [...mappedVaultDeposits, ...mappedAllocations, ...directCredits]
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
@@ -443,7 +470,7 @@ const CreditDebit = ({ isMyView = false }) => {
         const key = `${t.id || ''} ${t.userName || ''} ${t.depositTo || ''} ${t.account || ''} ${t.category || ''} ${t.description || ''} ${t.notes || ''} ${t.amount || ''} ${t.date || ''} ${formatDate(t.date) || ''}`.toLowerCase();
         return { ...t, _searchKey: key };
       });
-  }, [transactions, vaultDeposits, allocationsHistory]);
+  }, [transactions, vaultDeposits, allocationsHistory, isMyView, user?.name]);
 
   // High-performance Search Matcher (Uses pre-computed _searchKey for 0ms latency)
   const matchesTxnSearch = (t, searchStr) => {
@@ -633,6 +660,31 @@ const CreditDebit = ({ isMyView = false }) => {
 
     return { total, doneTotal, dueTotal, myHandTotal, myHandDone, myHandDue, walletTotal, walletDone, walletDue, bankTotal, bankDone, bankDue };
   }, [baseFilteredCreditTxns]);
+
+  // Filtered Allocations dynamically updated by active filters
+  const filteredAllocationsList = useMemo(() => {
+    const activeTargetUser = isMyView ? (user?.name || '') : selectedUser;
+    return (allocationsHistory || []).filter(a => {
+      if (isMyView) {
+        if (!activeTargetUser) return false;
+        if ((a.userName || '').toLowerCase() !== activeTargetUser.toLowerCase()) return false;
+      } else if (selectedUser !== 'All') {
+        if ((a.userName || '').toLowerCase() !== selectedUser.toLowerCase()) return false;
+      }
+      if (creditStartDate && a.date < creditStartDate) return false;
+      if (creditEndDate && a.date > creditEndDate) return false;
+      if (creditSearch && creditSearch.trim()) {
+        const query = creditSearch.toLowerCase();
+        const str = `${a.userName || ''} ${a.notes || ''} ${a.amount || ''} ${a.date || ''}`.toLowerCase();
+        if (!str.includes(query)) return false;
+      }
+      return true;
+    });
+  }, [allocationsHistory, isMyView, user?.name, selectedUser, creditStartDate, creditEndDate, creditSearch]);
+
+  const filteredAllocationTotal = useMemo(() => {
+    return filteredAllocationsList.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+  }, [filteredAllocationsList]);
 
   // Filtered Debit Total for Table Footer (exact sum of displayed filtered rows)
   const filteredDebitTotal = useMemo(() => {
@@ -1806,46 +1858,46 @@ const CreditDebit = ({ isMyView = false }) => {
               </div>
             </div>
 
-            {/* CARD 2: MY HAND SUMMARY (Light Blue Background) */}
-            <div className="h-full bg-blue-50/70 p-2.5 sm:p-4 rounded-2xl border border-blue-200/90 border-t-4 border-t-blue-500 shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
-              <div className="flex items-center justify-between border-b border-blue-200/60 pb-1.5">
+            {/* CARD 2: ALLOCATION SUMMARY (Light Amber / Gold Background) */}
+            <div className="h-full bg-amber-50/70 p-2.5 sm:p-4 rounded-2xl border border-amber-200/90 border-t-4 border-t-[#c69255] shadow-xs flex flex-col justify-between space-y-2 print-summary-card">
+              <div className="flex items-center justify-between border-b border-amber-200/60 pb-1.5">
                 <div className="flex items-center space-x-1.5 min-w-0">
-                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold shrink-0">
-                    <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5a1.5 1.5 0 013 0v4.5m0-4.5a1.5 1.5 0 013 0V11" />
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 font-bold shrink-0">
+                    <svg className="w-3.5 h-3.5 text-[#9e6e34]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-blue-900 truncate">My Hand</h3>
+                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-amber-900 truncate">Allocation</h3>
                 </div>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-blue-100 text-blue-800 uppercase shrink-0">Cash</span>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-900 uppercase shrink-0">Transfers</span>
               </div>
 
-              <div className="divide-y divide-blue-200/50 text-[10.5px] sm:text-xs">
+              <div className="divide-y divide-amber-200/50 text-[10.5px] sm:text-xs">
                 <div
-                  onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Done'); }}
-                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-blue-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'My Hand' && creditStatus === 'Done' ? 'bg-blue-100/80 font-bold' : ''}`}
-                  title="Click to view Done My Hand entries"
+                  onClick={() => navigate('/admin/deposit-allocate', { state: { activeTab: 'Give Money' } })}
+                  className="py-1 flex items-center justify-between cursor-pointer hover:bg-amber-100/60 px-1 rounded-lg transition min-w-0"
+                  title="Click to view Team Allocations"
                 >
-                  <span className="text-blue-800 font-semibold truncate mr-1">In Hand (Done)</span>
-                  <span className="font-extrabold text-blue-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.myHandDone.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-amber-900 font-semibold truncate mr-1">Money Given</span>
+                  <span className="font-extrabold text-[#9e6e34] whitespace-nowrap shrink-0">{settings.currency}{filteredAllocationTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
 
                 <div
-                  onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('Due'); }}
-                  className={`py-1 flex items-center justify-between cursor-pointer hover:bg-blue-100/60 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'My Hand' && creditStatus === 'Due' ? 'bg-blue-100/80 font-bold' : ''}`}
-                  title="Click to view Due My Hand entries"
+                  onClick={() => navigate('/admin/reports')}
+                  className="py-1 flex items-center justify-between cursor-pointer hover:bg-amber-100/60 px-1 rounded-lg transition min-w-0"
+                  title="Click to view Transfer Reports"
                 >
-                  <span className="text-blue-800 font-semibold truncate mr-1">In Hand (Due)</span>
-                  <span className="font-extrabold text-amber-700 whitespace-nowrap shrink-0">{settings.currency}{creditSummary.myHandDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-amber-900 font-semibold truncate mr-1">Transfer Logs</span>
+                  <span className="font-extrabold text-amber-800 whitespace-nowrap shrink-0">{filteredAllocationsList.length} Logs</span>
                 </div>
 
                 <div
-                  onClick={() => { setCreditDepositTo('My Hand'); setCreditStatus('All'); }}
-                  className={`pt-1.5 flex items-center justify-between font-black text-blue-950 cursor-pointer hover:bg-blue-100/70 px-1 rounded-lg transition min-w-0 ${creditDepositTo === 'My Hand' && creditStatus === 'All' ? 'bg-blue-100/80' : ''}`}
-                  title="Click to view All My Hand entries"
+                  onClick={() => navigate('/admin/deposit-allocate', { state: { activeTab: 'Give Money' } })}
+                  className="pt-1.5 flex items-center justify-between font-black text-amber-950 cursor-pointer hover:bg-amber-100/70 px-1 rounded-lg transition min-w-0"
+                  title="Click to view Total Allocation"
                 >
-                  <span className="truncate mr-1">Total In Hand</span>
-                  <span className="text-xs sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{creditSummary.myHandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span className="truncate mr-1">Total Allocated</span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap shrink-0">{settings.currency}{filteredAllocationTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -3189,24 +3241,24 @@ const CreditDebit = ({ isMyView = false }) => {
                   </div>
                 </div>
 
-                {/* CARD 2: MY HAND */}
+                {/* CARD 2: ALLOCATION */}
                 <div className="print-card">
                   <div className="card-title">
-                    MY HAND
+                    ALLOCATION
                   </div>
                   <div className="card-body">
                     <div className="card-row">
-                      <span className="card-label">In Hand (Done)</span>
-                      <span className="card-value">{settings.currency}{(creditSummary?.myHandDone || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="card-label">Money Given</span>
+                      <span className="card-value">{settings.currency}{(filteredAllocationTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="card-row">
-                      <span className="card-label">In Hand (Due)</span>
-                      <span className="card-value">{settings.currency}{(creditSummary?.myHandDue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="card-label">Transfer Records</span>
+                      <span className="card-value">{filteredAllocationsList.length} Logs</span>
                     </div>
                   </div>
                   <div className="card-total">
-                    <span className="card-label">TOTAL IN HAND</span>
-                    <span className="card-value">{settings.currency}{(creditSummary?.myHandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    <span className="card-label">TOTAL ALLOCATED</span>
+                    <span className="card-value">{settings.currency}{(filteredAllocationTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
 

@@ -276,18 +276,16 @@ const DepositAllocate = () => {
   const getBankStats = (bankName) => {
     const cleanBank = (bankName || '').toLowerCase().trim();
 
-    // 1. Total Credit (Vault deposits + Cash In/Credit transactions for this bank)
+    // 1. Total Credit (Vault deposits already includes direct deposits and bank credit transactions via ExpenseContext)
     const vaultCredits = (vaultDeposits || [])
       .filter(d => (isDepositDue ? !isDepositDue(d) : d.status !== 'Due'))
-      .filter(d => (d.depositTo || '').toLowerCase().trim() === cleanBank)
+      .filter(d => {
+        const dep = (d.depositTo || '').toLowerCase().trim();
+        return dep === cleanBank || (dep.includes('bank') && cleanBank.includes(dep));
+      })
       .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
-    const directCredits = (transactions || [])
-      .filter(t => (t.type === 'Cash In' || t.type === 'Credit') && (t.status || 'Done') === 'Done')
-      .filter(t => (t.depositTo || t.account || '').toLowerCase().trim() === cleanBank)
-      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-
-    const totalCredit = vaultCredits + directCredits;
+    const totalCredit = vaultCredits;
 
     // 2. Total Debit (Cash Out/Debit transactions paid from or linked to this bank)
     const totalDebit = (transactions || [])
@@ -579,7 +577,7 @@ const DepositAllocate = () => {
               title="Click to view Cash Deposits"
             >
               <span className="text-slate-700 font-semibold text-[11px] sm:text-xs">💵 Total Cash Deposit:</span>
-              <span className="text-emerald-700 font-extrabold">{settings?.currency || '₹'}{(vaultBreakdown?.cashDeposited || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span className="text-emerald-700 font-extrabold">{settings?.currency || '₹'}{(vaultBreakdown?.cashDeposited || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
 
             <div
@@ -588,7 +586,7 @@ const DepositAllocate = () => {
               title="Click to view Bank Deposits"
             >
               <span className="text-slate-700 font-semibold text-[11px] sm:text-xs">🏦 Total Bank Deposit:</span>
-              <span className="text-indigo-700 font-extrabold">{settings?.currency || '₹'}{(totalBankAvailable || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span className="text-indigo-700 font-extrabold">{settings?.currency || '₹'}{(totalBankAvailable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
 
             <div
@@ -597,7 +595,7 @@ const DepositAllocate = () => {
               title="Click to view All Deposits"
             >
               <span className="text-[#002B49] font-black text-xs sm:text-sm">📥 Total Deposited:</span>
-              <span className="text-[#9e6e34] font-black text-xs sm:text-sm">{settings?.currency || '₹'}{((vaultBreakdown?.cashDeposited || 0) + (totalBankAvailable || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span className="text-[#9e6e34] font-black text-xs sm:text-sm">{settings?.currency || '₹'}{((vaultBreakdown?.cashDeposited || 0) + (totalBankAvailable || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
