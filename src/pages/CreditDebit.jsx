@@ -102,6 +102,232 @@ const CreditDebit = ({ isMyView = false }) => {
     triggerPrint(target);
   };
 
+  // Dedicated Filtered CSV Export Handler
+  const handleExportCSV = (target = 'all') => {
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '""';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    };
+
+    const isAll = target === 'all';
+    const isDebit = target === 'debit';
+    const isCredit = target === 'credit';
+
+    const companyName = settings.companyName || 'Shukan Packaging';
+    const currencySymbol = settings?.currency || '₹';
+    const userLabel = selectedUser !== 'All' ? selectedUser : (isMyView ? (user?.name || 'My View') : 'All Users');
+    const now = new Date();
+    const generatedAt = `${formatDate(now)} ${now.toLocaleTimeString()}`;
+
+    const reportTitle = isDebit
+      ? 'DEBIT STATEMENT REPORT (Cash Out Expenses)'
+      : isCredit
+        ? 'CREDIT STATEMENT REPORT (Cash In & Money Received)'
+        : 'DEBIT & CREDIT AUDIT LEDGER';
+
+    let csvLines = [];
+
+    // 1. Executive Summary & Filter Metadata Header Block
+    csvLines.push(`${escapeCSV(companyName)} - ${escapeCSV(reportTitle)}`);
+    csvLines.push(`Generated On,${escapeCSV(generatedAt)}`);
+    csvLines.push(`User / Partner Filter,${escapeCSV(userLabel)}`);
+
+    if (isDebit || isAll) {
+      if (debitStatus !== 'All') csvLines.push(`Debit Status Filter,${escapeCSV(debitStatus)}`);
+      if (debitDepositTo !== 'All') csvLines.push(`Debit Account Filter,${escapeCSV(debitDepositTo)}`);
+      if (debitStartDate || debitEndDate) {
+        csvLines.push(`Debit Date Range,${escapeCSV((debitStartDate ? formatDate(debitStartDate) : 'Start') + ' to ' + (debitEndDate ? formatDate(debitEndDate) : 'End'))}`);
+      }
+    }
+
+    if (isCredit || isAll) {
+      if (creditStatus !== 'All') csvLines.push(`Credit Status Filter,${escapeCSV(creditStatus)}`);
+      if (creditDepositTo !== 'All') csvLines.push(`Credit Account Filter,${escapeCSV(creditDepositTo)}`);
+      if (creditStartDate || creditEndDate) {
+        csvLines.push(`Credit Date Range,${escapeCSV((creditStartDate ? formatDate(creditStartDate) : 'Start') + ' to ' + (creditEndDate ? formatDate(creditEndDate) : 'End'))}`);
+      }
+    }
+
+    // Totals calculations
+    const debitDoneTotal = (filteredDebitTxns || [])
+      .filter(t => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const debitDueTotal = (filteredDebitTxns || [])
+      .filter(t => (t.status || 'Done') === 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const debitGrandTotal = debitDoneTotal + debitDueTotal;
+
+    const creditDoneTotal = (filteredCreditTxns || [])
+      .filter(t => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const creditDueTotal = (filteredCreditTxns || [])
+      .filter(t => (t.status || 'Done') === 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const creditGrandTotal = creditDoneTotal + creditDueTotal;
+
+    if (isDebit || isAll) {
+      csvLines.push(`Total Debit Entries,${filteredDebitTxns.length}`);
+      csvLines.push(`Total Debit Amount (${currencySymbol}),${debitGrandTotal.toFixed(2)} (Done: ${debitDoneTotal.toFixed(2)} | Due: ${debitDueTotal.toFixed(2)})`);
+    }
+
+    if (isCredit || isAll) {
+      csvLines.push(`Total Credit Entries,${filteredCreditTxns.length}`);
+      csvLines.push(`Total Credit Amount (${currencySymbol}),${creditGrandTotal.toFixed(2)} (Done: ${creditDoneTotal.toFixed(2)} | Due: ${creditDueTotal.toFixed(2)})`);
+    }
+
+    csvLines.push(''); // Blank line separator
+
+    // 2. Data Table Structure
+    if (isDebit) {
+      csvLines.push([
+        'Sr No',
+        'Transaction ID',
+        'Date',
+        'User / Partner',
+        'Category',
+        'Paid From / Bank Account',
+        'Description / Notes',
+        `Amount (${currencySymbol})`,
+        'Status'
+      ].map(escapeCSV).join(','));
+
+      filteredDebitTxns.forEach((t, index) => {
+        csvLines.push([
+          index + 1,
+          t.id || '-',
+          formatDate(t.date),
+          t.userName || '-',
+          t.category || 'Expense',
+          t.depositTo || t.account || 'My Hand',
+          t.description || t.notes || '-',
+          Number(t.amount || 0).toFixed(2),
+          t.status || 'Done'
+        ].map(escapeCSV).join(','));
+      });
+
+      csvLines.push([
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        `${filteredDebitTxns.length} Record(s)`,
+        debitGrandTotal.toFixed(2),
+        ''
+      ].map(escapeCSV).join(','));
+
+    } else if (isCredit) {
+      csvLines.push([
+        'Sr No',
+        'Ref ID',
+        'Date',
+        'User / Partner',
+        'Deposit Destination / Account',
+        'Description / Notes',
+        `Amount (${currencySymbol})`,
+        'Status'
+      ].map(escapeCSV).join(','));
+
+      filteredCreditTxns.forEach((t, index) => {
+        csvLines.push([
+          index + 1,
+          t.id || '-',
+          formatDate(t.date),
+          t.userName || '-',
+          t.depositTo || 'Company Wallet',
+          t.description || t.notes || '-',
+          Number(t.amount || 0).toFixed(2),
+          t.status || 'Done'
+        ].map(escapeCSV).join(','));
+      });
+
+      csvLines.push([
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        `${filteredCreditTxns.length} Record(s)`,
+        creditGrandTotal.toFixed(2),
+        ''
+      ].map(escapeCSV).join(','));
+
+    } else {
+      // All (Debit & Credit combined into unified audit ledger)
+      csvLines.push([
+        'Sr No',
+        'Type (Debit/Credit)',
+        'Transaction / Ref ID',
+        'Date',
+        'User / Partner',
+        'Category',
+        'Bank / Account Destination',
+        'Description / Notes Details',
+        `Amount (${currencySymbol})`,
+        'Status'
+      ].map(escapeCSV).join(','));
+
+      let rowIdx = 1;
+      filteredDebitTxns.forEach((t) => {
+        csvLines.push([
+          rowIdx++,
+          'Debit (Cash Out)',
+          t.id || '-',
+          formatDate(t.date),
+          t.userName || '-',
+          t.category || 'Expense',
+          t.depositTo || t.account || 'My Hand',
+          t.description || t.notes || '-',
+          Number(t.amount || 0).toFixed(2),
+          t.status || 'Done'
+        ].map(escapeCSV).join(','));
+      });
+
+      filteredCreditTxns.forEach((t) => {
+        csvLines.push([
+          rowIdx++,
+          'Credit (Cash In)',
+          t.id || '-',
+          formatDate(t.date),
+          t.userName || '-',
+          'Credit / Deposit',
+          t.depositTo || 'Company Wallet',
+          t.description || t.notes || '-',
+          Number(t.amount || 0).toFixed(2),
+          t.status || 'Done'
+        ].map(escapeCSV).join(','));
+      });
+
+      csvLines.push([
+        'SUMMARY TOTALS',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        `Debit: ${currencySymbol}${debitGrandTotal.toFixed(2)} | Credit: ${currencySymbol}${creditGrandTotal.toFixed(2)}`,
+        `Net: ${currencySymbol}${(creditGrandTotal - debitGrandTotal).toFixed(2)}`,
+        ''
+      ].map(escapeCSV).join(','));
+    }
+
+    // Add UTF-8 BOM (\uFEFF) for Excel and Google Sheets
+    const csvString = '\uFEFF' + csvLines.join('\r\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const fileName = getDynamicPdfTitle(target).replace(/_Report/g, '_Report_Export') + '.csv';
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${target.toUpperCase()} CSV Statement!`, { theme: 'light' });
+  };
+
   // Direct WhatsApp Report Sharing Generator (No download required)
   const generateWhatsAppMessage = (target = 'all') => {
     const isAll = target === 'all';
@@ -2849,89 +3075,164 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
 
             {/* Options List */}
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {/* Option 1: All (Debit & Credit) */}
-              <div className="flex items-center gap-1.5">
-                <button
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 shadow-2xs space-y-2.5">
+                <div
                   onClick={() => handlePrintSelection('all')}
-                  className="flex-1 p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-left transition flex items-center justify-between group cursor-pointer"
+                  className="flex items-center justify-between cursor-pointer group"
                 >
                   <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-[#002B49] text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#002B49] text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition shadow-2xs">
                       📄
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xs font-extrabold text-[#002B49] group-hover:text-amber-600 transition truncate">
+                      <h4 className="text-xs sm:text-sm font-extrabold text-[#002B49] group-hover:text-amber-600 transition truncate">
                         All Audit Ledger
                       </h4>
-                      <p className="text-[10px] text-slate-500 font-medium truncate">Both Debit & Credit records</p>
+                      <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate">Both Debit & Credit records ({filteredDebitTxns.length + filteredCreditTxns.length})</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-slate-400 shrink-0 ml-1">🖨️</span>
-                </button>
-                <button
-                  onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('all'); }}
-                  className="px-3 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition cursor-pointer flex items-center shrink-0"
-                  title="Direct Share All Ledger on WhatsApp"
-                >
-                  💬 Share
-                </button>
+                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-[#002B49] bg-white border border-slate-200 px-2 py-1 rounded-lg shrink-0">
+                    View
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-200/70">
+                  <button
+                    type="button"
+                    onClick={() => handlePrintSelection('all')}
+                    className="py-2 px-1 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Print or Save PDF"
+                  >
+                    <span>🖨️</span>
+                    <span>Print/PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrintModalOpen(false); handleExportCSV('all'); }}
+                    className="py-2 px-1 rounded-xl bg-[#c69255] hover:bg-[#b88548] text-white text-[11px] sm:text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Export All Filtered Records to CSV (Excel)"
+                  >
+                    <span>📥</span>
+                    <span>CSV</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('all'); }}
+                    className="py-2 px-1 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-[11px] sm:text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Direct Share All Ledger on WhatsApp"
+                  >
+                    <span>💬</span>
+                    <span>Share</span>
+                  </button>
+                </div>
               </div>
 
               {/* Option 2: Debit Only */}
-              <div className="flex items-center gap-1.5">
-                <button
+              <div className="p-3 rounded-2xl bg-rose-50/50 border border-rose-200/90 shadow-2xs space-y-2.5">
+                <div
                   onClick={() => handlePrintSelection('debit')}
-                  className="flex-1 p-3 rounded-2xl bg-rose-50/60 hover:bg-rose-100/70 border border-rose-200/80 text-left transition flex items-center justify-between group cursor-pointer"
+                  className="flex items-center justify-between cursor-pointer group"
                 >
                   <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-rose-700 text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-rose-700 text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition shadow-2xs">
                       🧾
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xs font-extrabold text-rose-950 group-hover:text-rose-700 transition truncate">
+                      <h4 className="text-xs sm:text-sm font-extrabold text-rose-950 group-hover:text-rose-700 transition truncate">
                         Debit Statement Only
                       </h4>
-                      <p className="text-[10px] text-rose-800/80 font-medium truncate">Cash Out expense entries</p>
+                      <p className="text-[10px] sm:text-[11px] text-rose-800/80 font-medium truncate">Cash Out expense entries ({filteredDebitTxns.length})</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-rose-400 shrink-0 ml-1">🖨️</span>
-                </button>
-                <button
-                  onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('debit'); }}
-                  className="px-3 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition cursor-pointer flex items-center shrink-0"
-                  title="Direct Share Debit Statement on WhatsApp"
-                >
-                  💬 Share
-                </button>
+                  <span className="text-[10px] font-bold text-rose-600 group-hover:text-rose-900 bg-white border border-rose-200 px-2 py-1 rounded-lg shrink-0">
+                    View
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-rose-200/60">
+                  <button
+                    type="button"
+                    onClick={() => handlePrintSelection('debit')}
+                    className="py-2 px-1 rounded-xl bg-white hover:bg-rose-100 border border-rose-200 text-rose-900 text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Print or Save Debit PDF"
+                  >
+                    <span>🖨️</span>
+                    <span>Print/PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrintModalOpen(false); handleExportCSV('debit'); }}
+                    className="py-2 px-1 rounded-xl bg-[#c69255] hover:bg-[#b88548] text-white text-[11px] sm:text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Export Filtered Debit Records to CSV (Excel)"
+                  >
+                    <span>📥</span>
+                    <span>CSV</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('debit'); }}
+                    className="py-2 px-1 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-[11px] sm:text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Direct Share Debit Statement on WhatsApp"
+                  >
+                    <span>💬</span>
+                    <span>Share</span>
+                  </button>
+                </div>
               </div>
 
               {/* Option 3: Credit Only */}
-              <div className="flex items-center gap-1.5">
-                <button
+              <div className="p-3 rounded-2xl bg-emerald-50/50 border border-emerald-200/90 shadow-2xs space-y-2.5">
+                <div
                   onClick={() => handlePrintSelection('credit')}
-                  className="flex-1 p-3 rounded-2xl bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-200/80 text-left transition flex items-center justify-between group cursor-pointer"
+                  className="flex items-center justify-between cursor-pointer group"
                 >
                   <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition shadow-2xs">
                       💰
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xs font-extrabold text-emerald-950 group-hover:text-emerald-700 transition truncate">
+                      <h4 className="text-xs sm:text-sm font-extrabold text-emerald-950 group-hover:text-emerald-700 transition truncate">
                         Credit Statement Only
                       </h4>
-                      <p className="text-[10px] text-emerald-800/80 font-medium truncate">Cash In & Allocations</p>
+                      <p className="text-[10px] sm:text-[11px] text-emerald-800/80 font-medium truncate">Cash In & Allocations ({filteredCreditTxns.length})</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-emerald-400 shrink-0 ml-1">🖨️</span>
-                </button>
-                <button
-                  onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('credit'); }}
-                  className="px-3 py-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition cursor-pointer flex items-center shrink-0"
-                  title="Direct Share Credit Statement on WhatsApp"
-                >
-                  💬 Share
-                </button>
+                  <span className="text-[10px] font-bold text-emerald-700 group-hover:text-emerald-900 bg-white border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
+                    View
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-emerald-200/60">
+                  <button
+                    type="button"
+                    onClick={() => handlePrintSelection('credit')}
+                    className="py-2 px-1 rounded-xl bg-white hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Print or Save Credit PDF"
+                  >
+                    <span>🖨️</span>
+                    <span>Print/PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrintModalOpen(false); handleExportCSV('credit'); }}
+                    className="py-2 px-1 rounded-xl bg-[#c69255] hover:bg-[#b88548] text-white text-[11px] sm:text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Export Filtered Credit Records to CSV (Excel)"
+                  >
+                    <span>📥</span>
+                    <span>CSV</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrintModalOpen(false); handleShareWhatsApp('credit'); }}
+                    className="py-2 px-1 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-[11px] sm:text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                    title="Direct Share Credit Statement on WhatsApp"
+                  >
+                    <span>💬</span>
+                    <span>Share</span>
+                  </button>
+                </div>
               </div>
             </div>
 
