@@ -111,5 +111,10 @@ export const apiService = {
   updateAuditLog: (id, logData) => request('audit_logs.php', { method: 'PUT', body: { id, ...logData } }),
   deleteAuditLog: (id) => request(`audit_logs.php?id=${id}`, { method: 'DELETE', body: { id } }),
   deleteLastMonthAuditLogs: () => request('audit_logs.php?id=last_month', { method: 'DELETE', body: { id: 'last_month' } }),
+
+  // Box Calculations (backed by MySQL database)
+  getCalculations: () => request('calculator.php', { method: 'GET' }),
+  saveCalculation: (calcData) => request('calculator.php', { method: 'POST', body: calcData }),
+  deleteCalculation: (id) => request(`calculator.php?id=${id}`, { method: 'DELETE', body: { id } }),
 };
 

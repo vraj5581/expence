@@ -50,6 +50,15 @@ const adminBottomItems = [
     )
   },
   {
+    name: 'Calc',
+    path: '/admin/calculator',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    )
+  },
+  {
     name: 'Settings',
     path: '/admin/settings',
     icon: (
@@ -129,9 +138,9 @@ const BottomNav = () => {
 
                 {/* Icon Container */}
                 <div
-                  className={`shrink-0 p-1 rounded-xl transition-all duration-200 ${
+                  className={`shrink-0 p-0.5 sm:p-1 rounded-xl transition-all duration-200 ${
                     isActive
-                      ? 'text-[#002B49] scale-110 bg-[#002B49]/8'
+                      ? 'text-[#002B49] scale-105 sm:scale-110 bg-[#002B49]/8'
                       : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
@@ -140,8 +149,8 @@ const BottomNav = () => {
 
                 {/* Label */}
                 <span
-                  className={`text-[9.5px] leading-tight tracking-tight mt-0.5 truncate w-full text-center px-0.5 ${
-                    isActive ? 'text-[#002B49] font-black' : 'text-slate-500 font-semibold'
+                  className={`text-[8.5px] sm:text-[9.5px] leading-tight tracking-tight mt-0.5 truncate w-full text-center px-0.5 ${
+                    isActive ? 'text-[#002B49] font-black' : 'text-slate-500 font-medium'
                   }`}
                 >
                   {item.name}

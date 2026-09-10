@@ -16,6 +16,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DepositAllocate = lazy(() => import('./pages/DepositAllocate'));
 const CreditDebit = lazy(() => import('./pages/CreditDebit'));
 const Reports = lazy(() => import('./pages/Reports'));
+const Calculator = lazy(() => import('./pages/Calculator'));
 const TeamAccounts = lazy(() => import('./pages/TeamAccounts'));
 const Settings = lazy(() => import('./pages/Settings'));
 const MyCreditDebit = lazy(() => import('./pages/MyCreditDebit'));
@@ -70,6 +71,7 @@ function App() {
                     <Route path="team" element={<Navigate to="/admin/settings?tab=team" replace />} />
                     <Route path="tasks" element={<Tasks />} />
                     <Route path="reports" element={<Reports />} />
+                    <Route path="calculator" element={<Calculator />} />
                     <Route path="settings" element={<Settings />} />
                     <Route path="my-credit-debit" element={<MyCreditDebit />} />
 
