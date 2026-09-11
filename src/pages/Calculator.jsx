@@ -15,6 +15,10 @@ const Calculator = () => {
   const [directDecal, setDirectDecal] = useState('');
   const [directCutting, setDirectCutting] = useState('');
 
+  // Extra inches allowance (added to Decal and Cutting)
+  const [extraDecal, setExtraDecal] = useState('');
+  const [extraCutting, setExtraCutting] = useState('');
+
   // GSM & Fluting inputs
   const [gsm1, setGsm1] = useState(''); // Decal top liner (auto blank)
   const [gsm2, setGsm2] = useState(''); // Decal fluting paper (auto blank)
@@ -38,8 +42,10 @@ const Calculator = () => {
   const [boxName, setBoxName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const [justCopied, setJustCopied] = useState(false);
   const [lastSavedId, setLastSavedId] = useState(null);
   const [isLoadingDb, setIsLoadingDb] = useState(false);
+  const [printMode, setPrintMode] = useState('all'); // 'all' | 'saved' | 'current'
 
   // Calculation History in localStorage
   const [savedHistory, setSavedHistory] = useState(() => {
@@ -51,12 +57,86 @@ const Calculator = () => {
     }
   });
 
+  // Search, filter, and sort states for Saved Box Calculations
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDateFilter, setHistoryDateFilter] = useState('all'); // 'all' | 'today' | '7days' | 'month'
+  const [historySort, setHistorySort] = useState('newest'); // 'newest' | 'oldest' | 'name' | 'weight_desc' | 'weight_asc'
+
+  // Filtered & sorted history items for display and filter-wise print
+  const filteredHistory = useMemo(() => {
+    let result = [...savedHistory];
+
+    // Text search (Box name, Decal, Cutting, GSM)
+    if (historySearch.trim()) {
+      const q = historySearch.trim().toLowerCase();
+      result = result.filter((item) => {
+        const title = (item.title || '').toLowerCase();
+        const decal = String(item.decalSize || '');
+        const cutting = String(item.cuttingSize || '');
+        const gsm = `${item.gsm1 || ''}/${item.gsm2 || ''}/${item.gsm3 || ''}`.toLowerCase();
+        const weight = String(item.totalWeightGrams || '');
+        return (
+          title.includes(q) ||
+          decal.includes(q) ||
+          cutting.includes(q) ||
+          gsm.includes(q) ||
+          weight.includes(q)
+        );
+      });
+    }
+
+    // Date range filter
+    if (historyDateFilter !== 'all') {
+      const now = new Date();
+      result = result.filter((item) => {
+        if (!item.date) return false;
+        const itemDate = new Date(item.date);
+        if (historyDateFilter === 'today') {
+          return itemDate.toDateString() === now.toDateString();
+        }
+        if (historyDateFilter === '7days') {
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return itemDate >= sevenDaysAgo;
+        }
+        if (historyDateFilter === 'month') {
+          return (
+            itemDate.getMonth() === now.getMonth() &&
+            itemDate.getFullYear() === now.getFullYear()
+          );
+        }
+        return true;
+      });
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (historySort === 'oldest') {
+        return new Date(a.date || 0) - new Date(b.date || 0);
+      }
+      if (historySort === 'name') {
+        return (a.title || '').localeCompare(b.title || '');
+      }
+      if (historySort === 'weight_desc') {
+        return (parseFloat(b.totalWeightGrams) || 0) - (parseFloat(a.totalWeightGrams) || 0);
+      }
+      if (historySort === 'weight_asc') {
+        return (parseFloat(a.totalWeightGrams) || 0) - (parseFloat(b.totalWeightGrams) || 0);
+      }
+      // default: newest first
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    });
+
+    return result;
+  }, [savedHistory, historySearch, historyDateFilter, historySort]);
+
   // Numeric parsers
   const parsedLength = parseFloat(length) || 0;
   const parsedWidth = parseFloat(width) || 0;
   const parsedHeight = parseFloat(height) || 0;
   const parsedDirectDecal = parseFloat(directDecal) || 0;
   const parsedDirectCutting = parseFloat(directCutting) || 0;
+  const parsedExtraDecal = parseFloat(extraDecal) || 0;
+  const parsedExtraCutting = parseFloat(extraCutting) || 0;
   const parsedGsm1 = parseFloat(gsm1) || 0;
   const parsedGsm2 = parseFloat(gsm2) || 0;
   const parsedGsm3 = parseFloat(gsm3) || 0;
@@ -64,17 +144,19 @@ const Calculator = () => {
   const parsedQty = parseInt(batchQuantity, 10) || 1;
   const parsedRate = parseFloat(ratePerKg) || 0;
 
-  // Rule 1: width + height = decal size
+  // Rule 1: width + height + extra = decal size
   const decalSize = useMemo(() => {
     if (inputMode === 'direct') return parsedDirectDecal;
-    return (parsedWidth > 0 || parsedHeight > 0) ? (parsedWidth + parsedHeight) : 0;
-  }, [inputMode, parsedDirectDecal, parsedWidth, parsedHeight]);
+    const base = (parsedWidth > 0 || parsedHeight > 0) ? (parsedWidth + parsedHeight) : 0;
+    return base > 0 ? parseFloat((base + parsedExtraDecal).toFixed(2)) : 0;
+  }, [inputMode, parsedDirectDecal, parsedWidth, parsedHeight, parsedExtraDecal]);
 
-  // Rule 2: length + width = cutting size
+  // Rule 2: length + width + extra = cutting size
   const cuttingSize = useMemo(() => {
     if (inputMode === 'direct') return parsedDirectCutting;
-    return (parsedLength > 0 || parsedWidth > 0) ? (parsedLength + parsedWidth) : 0;
-  }, [inputMode, parsedDirectCutting, parsedLength, parsedWidth]);
+    const base = (parsedLength > 0 || parsedWidth > 0) ? (parsedLength + parsedWidth) : 0;
+    return base > 0 ? parseFloat((base + parsedExtraCutting).toFixed(2)) : 0;
+  }, [inputMode, parsedDirectCutting, parsedLength, parsedWidth, parsedExtraCutting]);
 
   // Effective Liner GSM calculation based on selected formula mode
   const { linerEffectiveGsm, formulaGsmLabel } = useMemo(() => {
@@ -139,6 +221,8 @@ const Calculator = () => {
     setHeight('');
     setDirectDecal('');
     setDirectCutting('');
+    setExtraDecal('');
+    setExtraCutting('');
     setGsm1('');
     setGsm2('');
     setGsm3('230');
@@ -208,6 +292,8 @@ const Calculator = () => {
       length: parsedLength,
       width: parsedWidth,
       height: parsedHeight,
+      extraDecal: parsedExtraDecal,
+      extraCutting: parsedExtraCutting,
       decalSize,
       cuttingSize,
       gsm1: parsedGsm1,
@@ -232,6 +318,8 @@ const Calculator = () => {
       length: parsedLength,
       width: parsedWidth,
       height: parsedHeight,
+      extraDecal: parsedExtraDecal,
+      extraCutting: parsedExtraCutting,
       decalSize,
       cuttingSize,
       gsm1: parsedGsm1,
@@ -286,10 +374,14 @@ const Calculator = () => {
       setLength(item.length.toString());
       setWidth(item.width.toString());
       setHeight(item.height.toString());
+      setExtraDecal(item.extraDecal ? item.extraDecal.toString() : '');
+      setExtraCutting(item.extraCutting ? item.extraCutting.toString() : '');
     } else {
       setInputMode('direct');
       setDirectDecal(item.decalSize.toString());
       setDirectCutting(item.cuttingSize.toString());
+      setExtraDecal('');
+      setExtraCutting('');
     }
 
     setGsm1(item.gsm1 ? item.gsm1.toString() : '');
@@ -305,9 +397,40 @@ const Calculator = () => {
     toast.success('Loaded', { autoClose: 900, theme: 'light' });
   };
 
-  const handleCopySummary = () => {
+  const copyTextToClipboard = async (text) => {
+    // 1. Modern navigator.clipboard API (requires HTTPS or localhost)
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('navigator.clipboard write failed, using fallback:', err);
+      }
+    }
+
+    // 2. Cross-browser fallback using hidden textarea + document.execCommand
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const success = document.execCommand('copy');
+      textArea.remove();
+      return success;
+    } catch (err) {
+      console.error('Copy fallback failed:', err);
+      return false;
+    }
+  };
+
+  const handleCopySummary = async () => {
     if (totalWeightGrams <= 0) {
-      toast.warning('Enter dimensions to copy result', { theme: 'light' });
+      toast.warning('Please enter dimensions first to calculate and copy', { theme: 'light' });
       return;
     }
 
@@ -315,10 +438,13 @@ const Calculator = () => {
     const dimLine = inputMode === 'dimensions'
       ? `• Dimensions: ${parsedLength}" × ${parsedWidth}" × ${parsedHeight}"\n`
       : '';
+    const decalExtraDetail = (inputMode === 'dimensions' && parsedExtraDecal > 0) ? ` (${parsedWidth}" + ${parsedHeight}" + ${parsedExtraDecal}" extra)` : '';
+    const cuttingExtraDetail = (inputMode === 'dimensions' && parsedExtraCutting > 0) ? ` (${parsedLength}" + ${parsedWidth}" + ${parsedExtraCutting}" extra)` : '';
+
     const summary = 
 `${titleLine}━━━━━━━━━━━━━━━━━
-${dimLine}• Decal (W+H): *${decalSize}"*
-• Cutting (L+W): *${cuttingSize}"*
+${dimLine}• Decal (W+H): *${decalSize}"*${decalExtraDetail}
+• Cutting (L+W): *${cuttingSize}"*${cuttingExtraDetail}
 • GSM: ${parsedGsm1} / ${parsedGsm2} / ${parsedGsm3} | Fluting: ${parsedFluting}%
 ━━━━━━━━━━━━━━━━━
 ⚖️ *WEIGHT RESULT:*
@@ -326,19 +452,32 @@ ${dimLine}• Decal (W+H): *${decalSize}"*
 • Paper Weight: *${paperWeightGrams.toFixed(2)} g* (${paperWeightKg.toFixed(4)} kg)
 ⭐ *TOTAL LINER + DECAL WEIGHT: ${totalWeightGrams.toFixed(2)} g (${totalWeightKg.toFixed(4)} kg)*
 ━━━━━━━━━━━━━━━━━
-${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchWeightKg.toFixed(2)} kg*\n` : ''}${parsedRate > 0 ? `• Paper Cost: ₹${batchPaperCost.toFixed(2)} (@ ₹${parsedRate}/kg)\n` : ''}_Shukan Packaging_`;
+_Shukan Packaging_`;
 
-    navigator.clipboard.writeText(summary);
-    toast.success('Copied to clipboard!', { theme: 'light' });
+    const copied = await copyTextToClipboard(summary);
+    if (copied) {
+      setJustCopied(true);
+      setTimeout(() => setJustCopied(false), 2200);
+      toast.success('Calculation summary copied to clipboard!', { theme: 'light', autoClose: 2000 });
+    } else {
+      toast.error('Could not copy automatically. Please copy manually.', { theme: 'light' });
+    }
   };
 
-  const handlePrint = () => {
+  const handlePrint = (mode = 'all') => {
+    setPrintMode(mode);
     const originalTitle = document.title;
-    document.title = (boxName.trim() ? boxName.trim().replace(/\s+/g, '_') : 'Box_Weight') + '_Report';
+    if (mode === 'saved') {
+      const searchSuffix = historySearch.trim() ? `_${historySearch.trim().replace(/\s+/g, '_')}` : '';
+      document.title = `Saved_Calculations${searchSuffix}_Report`;
+    } else {
+      document.title = (boxName.trim() ? boxName.trim().replace(/\s+/g, '_') : 'Box_Weight') + '_Report';
+    }
     setTimeout(() => {
       window.print();
       setTimeout(() => {
         document.title = originalTitle;
+        setPrintMode('all');
       }, 1000);
     }, 150);
   };
@@ -359,21 +498,18 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
             <h1 className="text-base sm:text-lg font-black text-[#002B49] tracking-tight truncate leading-tight">
               Box Weight Calculator
             </h1>
-            <p className="text-[11px] text-slate-500 font-medium truncate">
-              Corrugated Packaging Liner & Paper Weight
-            </p>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             type="button"
             onClick={handleReset}
-            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+            className="inline-flex items-center justify-center px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 shadow-xs transition cursor-pointer whitespace-nowrap focus:outline-none"
             title="Reset form"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-slate-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             <span className="hidden sm:inline">Reset</span>
@@ -382,69 +518,82 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
           <button
             type="button"
             onClick={handleCopySummary}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#002B49] hover:bg-[#003860] text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            title="Copy summary"
+            className={`inline-flex items-center justify-center px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap focus:outline-none active:scale-95 shadow-md ${
+              justCopied
+                ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+                : 'bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white'
+            }`}
+            title="Copy calculation summary"
           >
-            <svg className="w-4 h-4 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-            </svg>
-            <span>Copy</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer border border-slate-200"
-            title="Print Black & White Table"
-          >
-            <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            <span>Print</span>
+            {justCopied ? (
+              <>
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <span>Copy</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* 2. Mode Selector: 3 Tabs (Box Size | Direct | Saved Data) */}
-      <div className="bg-slate-200/70 p-1 rounded-2xl grid grid-cols-3 gap-1 text-[11px] sm:text-xs font-bold">
+      {/* 2. Mode Selector: 3 Tabs (Box Size | Sheet Size | Saved Calculations) */}
+      <div className="bg-slate-200/70 p-1 sm:p-1.5 rounded-2xl border border-slate-300/60 backdrop-blur-xs grid grid-cols-3 gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-bold">
         <button
           type="button"
           onClick={() => handleSwitchMode('dimensions')}
-          className={`py-2 sm:py-2.5 px-2 rounded-xl transition text-center flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
+          className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 focus:outline-none select-none ${
             inputMode === 'dimensions'
-              ? 'bg-white text-[#002B49] shadow-xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-white text-[#002B49] shadow-md font-black border border-slate-200/80'
+              : 'text-slate-600 hover:text-[#002B49] hover:bg-white/50'
           }`}
         >
-          <span>📦 Box Size</span>
-          <span className="hidden sm:inline">(L×W×H)</span>
+          <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors ${inputMode === 'dimensions' ? 'text-[#c69255]' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+          <span className="truncate">Box Size</span>
+          <span className="hidden sm:inline text-[10px] font-medium text-slate-400">(L×W×H)</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleSwitchMode('direct')}
-          className={`py-2 sm:py-2.5 px-2 rounded-xl transition text-center flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
+          className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 focus:outline-none select-none ${
             inputMode === 'direct'
-              ? 'bg-white text-[#002B49] shadow-xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-white text-[#002B49] shadow-md font-black border border-slate-200/80'
+              : 'text-slate-600 hover:text-[#002B49] hover:bg-white/50'
           }`}
         >
-          <span>✏️ Direct</span>
-          <span className="hidden sm:inline">(Decal & Cutting)</span>
+          <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors ${inputMode === 'direct' ? 'text-[#c69255]' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="truncate">Sheet Size</span>
+          <span className="hidden sm:inline text-[10px] font-medium text-slate-400">(Decal & Cutting)</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleSwitchMode('saved')}
-          className={`py-2 sm:py-2.5 px-2 rounded-xl transition text-center flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
+          className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 focus:outline-none select-none ${
             inputMode === 'saved'
-              ? 'bg-white text-[#002B49] shadow-xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-white text-[#002B49] shadow-md font-black border border-slate-200/80'
+              : 'text-slate-600 hover:text-[#002B49] hover:bg-white/50'
           }`}
         >
-          <span>💾 Saved Data</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-black ${
-            inputMode === 'saved' ? 'bg-[#002B49] text-white' : 'bg-slate-300 text-slate-700'
+          <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors ${inputMode === 'saved' ? 'text-[#c69255]' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+          </svg>
+          <span className="truncate">Saved</span>
+          <span className="hidden sm:inline">Calculations</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-black transition-colors ${
+            inputMode === 'saved' ? 'bg-[#c69255] text-white shadow-2xs' : 'bg-slate-300 text-slate-700'
           }`}>
             {savedHistory.length}
           </span>
@@ -454,48 +603,127 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
       {/* 3. Conditional Content: Dedicated Saved Data Table OR 2-Column Calculator */}
       {inputMode === 'saved' ? (
         <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
-            <div>
-              <h2 className="text-sm sm:text-base font-black text-[#002B49] uppercase tracking-wide">
-                Saved Box Calculations ({savedHistory.length})
-              </h2>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Data saved in MySQL database
-              </p>
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h2 className="text-xs sm:text-base font-black text-[#002B49] uppercase tracking-wide truncate">
+                  Saved Calculations
+                </h2>
+                <span className="px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-md bg-[#002B49] text-white text-[10px] sm:text-xs font-black shrink-0">
+                  {filteredHistory.length}{filteredHistory.length !== savedHistory.length ? ` / ${savedHistory.length}` : ''}
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Action Buttons: Just '+' and 'Print' */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => handleSwitchMode('dimensions')}
-                className="px-3 py-1.5 rounded-xl bg-[#002B49] hover:bg-[#003860] text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white shadow-xs transition cursor-pointer focus:outline-none active:scale-95 shrink-0"
+                title="New Calculation (+)"
               >
-                <span>+ New Calculation</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={fetchFromDb}
-                disabled={isLoadingDb}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1 cursor-pointer border border-slate-200"
-                title="Refresh from database"
-              >
-                <svg className={`w-3.5 h-3.5 ${isLoadingDb ? 'animate-spin text-[#c69255]' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </button>
 
               <button
                 type="button"
-                onClick={handlePrint}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer border border-slate-200"
-                title="Print Black & White Table"
+                onClick={() => handlePrint('saved')}
+                className="inline-flex items-center px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#002B49] hover:bg-[#001D33] text-white font-bold text-[11px] sm:text-xs shadow-xs transition gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap focus:outline-none active:scale-95 shrink-0"
+                title="Print Filtered Calculations Table"
               >
-                <svg className="w-3.5 h-3.5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
-                <span>Print Table</span>
+                <span>Print{filteredHistory.length !== savedHistory.length ? ` (${filteredHistory.length})` : ''}</span>
               </button>
+            </div>
+          </div>
+
+          {/* Search & Filter Bar (Mobile Optimized) */}
+          <div className="bg-slate-50/90 p-2.5 sm:p-3 rounded-2xl border border-slate-200/90 space-y-2 sm:space-y-2.5">
+            {/* Search Input Box (Full Width) */}
+            <div className="relative w-full">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Search by box name, size, or GSM..."
+                className="w-full pl-8 sm:pl-9 pr-7 sm:pr-8 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-[#002B49] placeholder-slate-400 focus:outline-none focus:border-[#002B49] transition shadow-2xs"
+              />
+              {historySearch && (
+                <button
+                  type="button"
+                  onClick={() => setHistorySearch('')}
+                  className="absolute inset-y-0 right-0 pr-2 sm:pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer focus:outline-none"
+                  title="Clear search"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Filter and Sort Controls (Clean Flow, Never Clips) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Date Filter Dropdown */}
+              <div className="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <select
+                  value={historyDateFilter}
+                  onChange={(e) => setHistoryDateFilter(e.target.value)}
+                  className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="all">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="month">This Month</option>
+                </select>
+              </div>
+
+              {/* Sort Dropdown */}
+              <div className="inline-flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                </svg>
+                <select
+                  value={historySort}
+                  onChange={(e) => setHistorySort(e.target.value)}
+                  className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="name">Name (A-Z)</option>
+                  <option value="weight_desc">Weight ↓</option>
+                  <option value="weight_asc">Weight ↑</option>
+                </select>
+              </div>
+
+              {/* Reset Filter Button */}
+              {(historySearch || historyDateFilter !== 'all' || historySort !== 'newest') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistorySearch('');
+                    setHistoryDateFilter('all');
+                    setHistorySort('newest');
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition cursor-pointer border border-rose-200/80 shadow-2xs focus:outline-none active:scale-95 whitespace-nowrap ml-auto"
+                  title="Reset all filters"
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
           </div>
 
@@ -511,16 +739,39 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
               <button
                 type="button"
                 onClick={() => handleSwitchMode('dimensions')}
-                className="mt-3 px-3 py-1.5 rounded-xl bg-[#002B49] text-white text-xs font-bold transition cursor-pointer"
+                className="mt-3 inline-flex items-center px-4 py-2 rounded-xl bg-[#002B49] hover:bg-[#003860] text-white text-xs font-bold transition cursor-pointer shadow-xs focus:outline-none"
               >
                 Go to Calculator
+              </button>
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50/60 rounded-2xl border border-slate-200/60 text-slate-400">
+              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center mx-auto mb-2 text-slate-400 shadow-2xs">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </div>
+              <p className="text-xs font-bold text-slate-700">No matching calculations found</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                No saved box matches "<span className="font-semibold text-slate-600">{historySearch}</span>". Try another term or date.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistorySearch('');
+                  setHistoryDateFilter('all');
+                  setHistorySort('newest');
+                }}
+                className="mt-3 inline-flex items-center px-3 py-1.5 rounded-xl bg-[#002B49] hover:bg-[#003860] text-white text-xs font-bold transition cursor-pointer shadow-2xs focus:outline-none"
+              >
+                Clear Search & Filters
               </button>
             </div>
           ) : (
             <div>
               {/* Mobile View: Clean Modern Cards (sm:hidden) */}
               <div className="sm:hidden space-y-3">
-                {savedHistory.map((item) => (
+                {filteredHistory.map((item) => (
                   <div
                     key={item.id}
                     className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/90 shadow-2xs space-y-2.5"
@@ -541,7 +792,7 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                         <button
                           type="button"
                           onClick={() => handleLoadHistory(item)}
-                          className="px-2.5 py-1 rounded-lg bg-[#002B49] hover:bg-[#003860] text-white font-bold text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#002B49] hover:bg-[#003860] text-white font-bold text-[11px] transition cursor-pointer shadow-xs active:scale-95 focus:outline-none"
                           title="Edit calculation"
                         >
                           <svg className="w-3 h-3 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
@@ -553,23 +804,26 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                         <button
                           type="button"
                           onClick={() => handleDeleteHistory(item.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/70 transition cursor-pointer active:scale-95"
-                          title="Delete from database"
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200/80 transition-colors cursor-pointer active:scale-95 shadow-2xs focus:outline-none"
+                          title="Delete calculation"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
                     </div>
 
-                    {/* Decal & Cutting Pills */}
-                    <div className="flex items-center gap-2 text-[11px]">
+                    {/* Decal, Cutting & GSM Pills */}
+                    <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
                       <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 font-bold border border-sky-200/60">
                         Decal: {item.decalSize}"
                       </span>
                       <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold border border-amber-200/60">
                         Cutting: {item.cuttingSize}"
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 font-bold border border-indigo-200/60" title="Top Liner / Fluting Paper / Bottom Paper GSM">
+                        GSM: {item.gsm1 || '-'}/{item.gsm2 || '-'}/{item.gsm3 || '-'} {item.fluting ? `(${item.fluting}%)` : ''}
                       </span>
                     </div>
 
@@ -600,6 +854,7 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                       <th className="px-3.5 py-3">Box Name</th>
                       <th className="px-3 py-3 text-center">Decal</th>
                       <th className="px-3 py-3 text-center">Cutting</th>
+                      <th className="px-3 py-3 text-center">GSM (L/F/P)</th>
                       <th className="px-3 py-3 text-right">Liner Weight</th>
                       <th className="px-3 py-3 text-right">Paper Weight</th>
                       <th className="px-3.5 py-3 text-right font-black text-[#002B49]">Total Weight</th>
@@ -607,7 +862,7 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {savedHistory.map((item) => (
+                    {filteredHistory.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition group">
                         <td className="px-3.5 py-3 font-bold text-[#002B49] max-w-[180px] truncate">
                           <div className="truncate text-xs">{item.title}</div>
@@ -617,6 +872,14 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                         </td>
                         <td className="px-3 py-3 text-center font-bold text-slate-700">{item.decalSize}"</td>
                         <td className="px-3 py-3 text-center font-bold text-slate-700">{item.cuttingSize}"</td>
+                        <td className="px-3 py-3 text-center whitespace-nowrap">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/80 text-indigo-900 font-bold text-[11px]">
+                            {item.gsm1 || '-'}/{item.gsm2 || '-'}/{item.gsm3 || '-'}
+                          </span>
+                          {item.fluting ? (
+                            <div className="text-[9.5px] text-slate-400 font-medium mt-0.5">{item.fluting}% flute</div>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-3 text-right text-slate-700 font-semibold">{item.linerWeightGrams} g</td>
                         <td className="px-3 py-3 text-right text-slate-700 font-semibold">{item.paperWeightGrams} g</td>
                         <td className="px-3.5 py-3 text-right font-black text-[#002B49] whitespace-nowrap text-xs">
@@ -627,7 +890,7 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                             <button
                               type="button"
                               onClick={() => handleLoadHistory(item)}
-                              className="px-2.5 py-1.5 rounded-lg bg-[#002B49] text-white hover:bg-[#003860] font-bold text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#002B49] text-white hover:bg-[#003860] font-bold text-[11px] transition cursor-pointer shadow-xs active:scale-95 focus:outline-none"
                               title="Edit calculation"
                             >
                               <svg className="w-3 h-3 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
@@ -638,11 +901,11 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                             <button
                               type="button"
                               onClick={() => handleDeleteHistory(item.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition cursor-pointer active:scale-95"
-                              title="Delete from database"
+                              className="inline-flex items-center justify-center p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200/80 transition-colors cursor-pointer active:scale-95 shadow-2xs focus:outline-none"
+                              title="Delete calculation"
                             >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                             </button>
                           </div>
@@ -656,615 +919,445 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
           )}
         </div>
       ) : (
-        /* 3. Main Workspace: 2-Column Responsive Layout */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column: Calculator (lg:col-span-7) */}
-        <div className="lg:col-span-7 space-y-4">
+        /* 3. Main Workspace: Focused Calculator (Box Size / Sheet Size) */
+        <div className="max-w-xl mx-auto space-y-2.5 sm:space-y-3">
           {/* Main Dimensions Input Card */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 space-y-3.5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">
-            {inputMode === 'dimensions' ? 'Step 1: Enter Dimensions' : 'Step 1: Enter Decal & Cutting'}
-          </span>
-          <span className="text-[11px] font-semibold text-slate-400">Inches (")</span>
-        </div>
-
-        {/* Box Name / Order Reference */}
-        <div>
-          <label className="block text-[11px] font-bold text-slate-600 mb-1">
-            Box Name <span className="text-[10px] text-slate-400 font-normal">(Printed on table & report)</span>
-          </label>
-          <input
-            type="text"
-            value={boxName}
-            onChange={(e) => setBoxName(e.target.value)}
-            placeholder="e.g. Master Carton 5-Ply / Box A"
-            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-[#002B49] focus:bg-white focus:border-[#002B49] focus:outline-none transition"
-          />
-        </div>
-
-        {/* If Box Dimensions Mode */}
-        {inputMode === 'dimensions' ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Length (L)
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min="0"
-                  value={length}
-                  onChange={(e) => setLength(e.target.value)}
-                  placeholder="0"
-                  className="w-full text-center px-2 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-lg font-black text-[#002B49] focus:bg-white focus:border-[#002B49] focus:outline-none transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Width (W)
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min="0"
-                  value={width}
-                  onChange={(e) => setWidth(e.target.value)}
-                  placeholder="0"
-                  className="w-full text-center px-2 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-lg font-black text-[#002B49] focus:bg-white focus:border-[#002B49] focus:outline-none transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Height (H)
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min="0"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  placeholder="0"
-                  className="w-full text-center px-2 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-lg font-black text-[#002B49] focus:bg-white focus:border-[#002B49] focus:outline-none transition"
-                />
-              </div>
+          <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xs border border-slate-200/80 space-y-2.5">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+              <span className="text-[11px] sm:text-xs font-black text-[#002B49] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#c69255]"></span>
+                {inputMode === 'dimensions' ? 'Step 1: Box Dimensions' : 'Step 1: Sheet Size'}
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400">Unit: Inches (")</span>
             </div>
 
-            {/* Clean Result Pills for Decal & Cutting */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-sky-700 uppercase tracking-tight block">Decal (W + H)</span>
-                  <span className="text-[10px] text-sky-600 font-medium">{parsedWidth || 0}" + {parsedHeight || 0}"</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-base sm:text-lg font-black text-sky-950">{decalSize}"</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-tight block">Cutting (L + W)</span>
-                  <span className="text-[10px] text-amber-600 font-medium">{parsedLength || 0}" + {parsedWidth || 0}"</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-base sm:text-lg font-black text-amber-950">{cuttingSize}"</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Direct Mode */
-          <div className="grid grid-cols-2 gap-3">
+            {/* Box / Order Name */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Decal Size (inches)
-              </label>
               <input
-                type="number"
-                inputMode="decimal"
-                step="any"
-                min="0"
-                value={directDecal}
-                onChange={(e) => setDirectDecal(e.target.value)}
-                placeholder="e.g. 22"
-                className="w-full text-center px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-lg font-black text-[#002B49] focus:bg-white focus:border-[#002B49] focus:outline-none transition"
+                type="text"
+                value={boxName}
+                onChange={(e) => setBoxName(e.target.value)}
+                placeholder={inputMode === 'dimensions' ? "Box / Job Name (e.g. Master Carton 5-Ply)" : "Sheet / Job Name (e.g. Sheet 22×28)"}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-[#002B49] placeholder-slate-400 focus:bg-white focus:border-[#002B49] focus:outline-none transition"
               />
             </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Cutting Size (inches)
-              </label>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="any"
-                min="0"
-                value={directCutting}
-                onChange={(e) => setDirectCutting(e.target.value)}
-                placeholder="e.g. 28"
-                className="w-full text-center px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-lg font-black text-[#002B49] focus:bg-white focus:border-[#002B49] focus:outline-none transition"
-              />
-            </div>
-          </div>
-        )}
-      </div>
+            {/* Input fields based on mode */}
+            {inputMode === 'dimensions' ? (
+              <div className="space-y-2.5">
+                {/* 3 Main Dimension Inputs */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                  <div className="bg-slate-50/90 focus-within:bg-white focus-within:border-[#002B49] p-1.5 sm:p-2 rounded-lg border border-slate-200 transition text-center">
+                    <span className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-tight">Length (L)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min="0"
+                      value={length}
+                      onChange={(e) => setLength(e.target.value)}
+                      placeholder="0"
+                      className="w-full text-center py-0.5 bg-transparent text-base sm:text-lg font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                    />
+                    <span className="block text-[8.5px] text-slate-400">inch</span>
+                  </div>
 
-      {/* 4. GSM & Fluting Specifications Card */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-extrabold text-[#002B49] uppercase tracking-wider">
-            Step 2: Paper GSM & Fluting
-          </span>
-          <span className="text-[10px] text-slate-400 font-semibold">Divisor: 1550</span>
-        </div>
+                  <div className="bg-slate-50/90 focus-within:bg-white focus-within:border-[#002B49] p-1.5 sm:p-2 rounded-lg border border-slate-200 transition text-center">
+                    <span className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-tight">Width (W)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min="0"
+                      value={width}
+                      onChange={(e) => setWidth(e.target.value)}
+                      placeholder="0"
+                      className="w-full text-center py-0.5 bg-transparent text-base sm:text-lg font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                    />
+                    <span className="block text-[8.5px] text-slate-400">inch</span>
+                  </div>
 
-        {/* 4 Inputs in 2x2 Grid on Mobile, 4 columns on Desktop */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-          {/* GSM 1 */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tight truncate">
-              GSM 1 (Decal)
-            </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              step="any"
-              min="0"
-              value={gsm1}
-              onChange={(e) => setGsm1(e.target.value)}
-              placeholder="0"
-              className="w-full mt-1 text-center py-1.5 bg-white rounded-lg border border-slate-200 text-base font-black text-[#002B49] focus:outline-none focus:border-[#002B49] transition"
-            />
-            <div className="text-[9.5px] text-slate-400 text-center mt-1">Top Liner</div>
-          </div>
+                  <div className="bg-slate-50/90 focus-within:bg-white focus-within:border-[#002B49] p-1.5 sm:p-2 rounded-lg border border-slate-200 transition text-center">
+                    <span className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-tight">Height (H)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min="0"
+                      value={height}
+                      onChange={(e) => setHeight(e.target.value)}
+                      placeholder="0"
+                      className="w-full text-center py-0.5 bg-transparent text-base sm:text-lg font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                    />
+                    <span className="block text-[8.5px] text-slate-400">inch</span>
+                  </div>
+                </div>
 
-          {/* GSM 2 */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tight truncate">
-              GSM 2 (Decal)
-            </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              step="any"
-              min="0"
-              value={gsm2}
-              onChange={(e) => setGsm2(e.target.value)}
-              placeholder="0"
-              className="w-full mt-1 text-center py-1.5 bg-white rounded-lg border border-slate-200 text-base font-black text-[#002B49] focus:outline-none focus:border-[#002B49] transition"
-            />
-            <div className="text-[9.5px] text-slate-400 text-center mt-1">Flute Paper</div>
-          </div>
+                {/* Derived Sheet Size: Decal & Cutting with compact inline extra inches */}
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                  {/* Decal */}
+                  <div className="p-2 rounded-lg bg-sky-50/70 border border-sky-200/80">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-black text-sky-900 uppercase">Decal</span>
+                        <span className="text-[9px] text-sky-700 ml-1">(W+H)</span>
+                      </div>
+                      <span className="text-sm sm:text-base font-black text-sky-950">{decalSize}"</span>
+                    </div>
 
-          {/* GSM 3 */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tight truncate">
-              GSM 3 (Cutting)
-            </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              step="any"
-              min="0"
-              value={gsm3}
-              onChange={(e) => setGsm3(e.target.value)}
-              placeholder="230"
-              className="w-full mt-1 text-center py-1.5 bg-white rounded-lg border border-slate-200 text-base font-black text-[#002B49] focus:outline-none focus:border-[#002B49] transition"
-            />
-            <div className="text-[9.5px] text-slate-400 text-center mt-1">Inner Paper</div>
-          </div>
+                    <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-sky-200/60 text-[9.5px]">
+                      <span className="font-bold text-sky-800 shrink-0">+Extra:</span>
+                      <div className="flex items-center gap-1 justify-end flex-wrap">
+                        {['0.5', '1'].map((val) => {
+                          const isActive = extraDecal === val;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setExtraDecal(isActive ? '' : val)}
+                              className={`px-1.5 py-0.2 rounded font-bold transition cursor-pointer ${
+                                isActive
+                                  ? 'bg-sky-700 text-white'
+                                  : 'bg-white text-sky-800 border border-sky-200 hover:bg-sky-100'
+                              }`}
+                            >
+                              +{val}"
+                            </button>
+                          );
+                        })}
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="any"
+                          min="0"
+                          placeholder='+"'
+                          value={extraDecal}
+                          onChange={(e) => setExtraDecal(e.target.value)}
+                          className="w-10 text-center py-0.2 px-0.5 font-bold rounded bg-white border border-sky-300 text-sky-950 placeholder-sky-300 focus:outline-none text-[10px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-          {/* Fluting */}
-          <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-tight">Fluting</span>
-              <span className="text-[9px] font-bold text-amber-700 bg-amber-200/60 px-1 rounded">%</span>
-            </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              step="any"
-              min="0"
-              value={fluting}
-              onChange={(e) => setFluting(e.target.value)}
-              placeholder="40"
-              className="w-full mt-1 text-center py-1.5 bg-white rounded-lg border border-amber-300 text-base font-black text-[#002B49] focus:outline-none focus:border-[#002B49] transition"
-            />
-            <div className="text-[9.5px] text-amber-800 text-center mt-1 font-semibold">Auto 40%</div>
-          </div>
-        </div>
-      </div>
+                  {/* Cutting */}
+                  <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-black text-amber-900 uppercase">Cutting</span>
+                        <span className="text-[9px] text-amber-700 ml-1">(L+W)</span>
+                      </div>
+                      <span className="text-sm sm:text-base font-black text-amber-950">{cuttingSize}"</span>
+                    </div>
 
-      {/* 5. Clean Hero Result Card */}
-      <div className="bg-gradient-to-br from-[#002B49] via-[#003459] to-[#001D33] text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-md border border-white/10 relative overflow-hidden">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] font-extrabold text-[#c69255] uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#c69255] animate-pulse"></span>
-            Total Liner + Decal Weight
-          </span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
-            {decalSize > 0 && cuttingSize > 0 ? `${decalSize}" × ${cuttingSize}"` : '0" × 0"'}
-          </span>
-        </div>
-
-        {/* Large Main Result */}
-        <div className="flex items-baseline justify-between flex-wrap gap-2">
-          <div className="flex items-baseline space-x-2">
-            <span className="text-3xl sm:text-5xl font-black tracking-tight text-white">
-              {totalWeightGrams > 0 ? totalWeightGrams.toFixed(2) : '0.00'}
-            </span>
-            <span className="text-base sm:text-xl font-extrabold text-[#c69255]">grams</span>
-          </div>
-          <div className="text-right">
-            <div className="text-base sm:text-lg font-black text-slate-200">
-              {totalWeightKg > 0 ? totalWeightKg.toFixed(4) : '0.0000'} <span className="text-xs font-normal text-slate-400">kg</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium">per sheet / box</span>
-          </div>
-        </div>
-
-        {/* Split Sub-Weights (Liner & Paper) */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-4 pt-3.5 border-t border-white/15">
-          <div className="bg-white/10 rounded-xl p-2.5 sm:p-3">
-            <div className="text-[10px] font-bold text-slate-300 uppercase tracking-tight">
-              3. Liner Weight
-            </div>
-            <div className="text-base sm:text-lg font-black text-white mt-0.5">
-              {linerWeightGrams > 0 ? linerWeightGrams.toFixed(2) : '0.00'} <span className="text-xs font-normal text-slate-300">g</span>
-            </div>
-            <div className="text-[10px] text-[#c69255] font-semibold">
-              {linerWeightKg > 0 ? linerWeightKg.toFixed(4) : '0.0000'} kg
-            </div>
-          </div>
-
-          <div className="bg-white/10 rounded-xl p-2.5 sm:p-3">
-            <div className="text-[10px] font-bold text-slate-300 uppercase tracking-tight">
-              4. Paper Weight
-            </div>
-            <div className="text-base sm:text-lg font-black text-white mt-0.5">
-              {paperWeightGrams > 0 ? paperWeightGrams.toFixed(2) : '0.00'} <span className="text-xs font-normal text-slate-300">g</span>
-            </div>
-            <div className="text-[10px] text-emerald-400 font-semibold">
-              {paperWeightKg > 0 ? paperWeightKg.toFixed(4) : '0.0000'} kg
-            </div>
-          </div>
-        </div>
-
-        {/* Action Bar Inside Result Card: Copy and Save */}
-        <div className="grid grid-cols-2 gap-3 mt-4 pt-3.5 border-t border-white/10">
-          <button
-            type="button"
-            onClick={handleCopySummary}
-            className="py-2.5 px-3 rounded-xl bg-[#c69255] hover:bg-[#b58145] text-white font-extrabold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-            </svg>
-            <span>Copy</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSaveToDatabase}
-            disabled={isSaving}
-            className={`py-2.5 px-3 rounded-xl font-extrabold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-70 ${
-              justSaved ? 'bg-emerald-500 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            }`}
-            title="Save to database"
-          >
-            {isSaving ? (
-              <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
-            ) : justSaved ? (
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+                    <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-amber-200/60 text-[9.5px]">
+                      <span className="font-bold text-amber-800 shrink-0">+Extra:</span>
+                      <div className="flex items-center gap-1 justify-end flex-wrap">
+                        {['0.5', '1'].map((val) => {
+                          const isActive = extraCutting === val;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setExtraCutting(isActive ? '' : val)}
+                              className={`px-1.5 py-0.2 rounded font-bold transition cursor-pointer ${
+                                isActive
+                                  ? 'bg-amber-700 text-white'
+                                  : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-100'
+                              }`}
+                            >
+                              +{val}"
+                            </button>
+                          );
+                        })}
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="any"
+                          min="0"
+                          placeholder='+"'
+                          value={extraCutting}
+                          onChange={(e) => setExtraCutting(e.target.value)}
+                          className="w-10 text-center py-0.2 px-0.5 font-bold rounded bg-white border border-amber-300 text-amber-950 placeholder-amber-300 focus:outline-none text-[10px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <svg className="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-              </svg>
-            )}
-            <span>{isSaving ? 'Saving...' : justSaved ? 'Saved!' : 'Save'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 6. Clean Collapsible Sections for Advanced Features */}
-      <div className="space-y-2.5">
-        
-        {/* Accordion 1: Batch Quantity & Cost Estimator */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setShowBatchTools(!showBatchTools)}
-            className="w-full p-3.5 sm:p-4 text-left flex items-center justify-between text-xs font-black text-[#002B49] hover:bg-slate-50 transition cursor-pointer"
-          >
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              <span>Batch Quantity & Paper Cost (Optional)</span>
-            </div>
-            <span className="text-slate-400 font-bold text-sm">{showBatchTools ? '−' : '+'}</span>
-          </button>
-
-          {showBatchTools && (
-            <div className="p-3.5 sm:p-4 pt-0 border-t border-slate-100 space-y-3">
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Order Quantity (pcs)
-                  </label>
+              /* Sheet Size Mode (Direct Decal & Cutting) */
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                <div className="bg-slate-50/90 focus-within:bg-white focus-within:border-[#002B49] p-2 rounded-lg border border-slate-200 transition text-center">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-black text-[#002B49] uppercase">Decal Size</span>
+                    <span className="text-[9px] text-slate-400">Roll Width</span>
+                  </div>
                   <input
                     type="number"
-                    min="1"
-                    value={batchQuantity}
-                    onChange={(e) => setBatchQuantity(e.target.value)}
-                    placeholder="1000"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-[#002B49] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Paper Rate (₹/kg)
-                  </label>
-                  <input
-                    type="number"
+                    inputMode="decimal"
                     step="any"
                     min="0"
-                    value={ratePerKg}
-                    onChange={(e) => setRatePerKg(e.target.value)}
-                    placeholder="e.g. 42"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-[#002B49] focus:outline-none"
+                    value={directDecal}
+                    onChange={(e) => setDirectDecal(e.target.value)}
+                    placeholder="0"
+                    className="w-full text-center py-0.5 bg-transparent text-base sm:text-lg font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
                   />
+                  <div className="text-center text-[8.5px] text-slate-400">inches (")</div>
                 </div>
-              </div>
 
-              {/* Batch Summary */}
-              {totalWeightKg > 0 && (
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
-                  <span className="font-bold text-slate-600">Total Batch ({parsedQty.toLocaleString()} pcs):</span>
-                  <span className="font-black text-[#002B49]">{totalBatchWeightKg.toFixed(2)} kg</span>
-                  {parsedRate > 0 && (
-                    <span className="font-black text-[#c69255]">₹{batchPaperCost.toFixed(2)}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Accordion 2: Formula & Calculation Math */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setShowFormulaSteps(!showFormulaSteps)}
-            className="w-full p-3.5 sm:p-4 text-left flex items-center justify-between text-xs font-black text-[#002B49] hover:bg-slate-50 transition cursor-pointer"
-          >
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              <span>Calculation Math & Formula Explainer</span>
-            </div>
-            <span className="text-slate-400 font-bold text-sm">{showFormulaSteps ? '−' : '+'}</span>
-          </button>
-
-          {showFormulaSteps && (
-            <div className="p-3.5 sm:p-4 pt-0 border-t border-slate-100 space-y-3">
-              {/* Formula Mode Toggle */}
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1.5">
-                  Liner Effective GSM Method
-                </label>
-                <div className="grid grid-cols-3 gap-1 text-[11px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setFormulaMode('takeup')}
-                    className={`py-1.5 px-2 rounded-lg border text-center transition cursor-pointer ${
-                      formulaMode === 'takeup'
-                        ? 'bg-[#002B49] text-white border-[#002B49]'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    Take-up (1.40x)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormulaMode('literal')}
-                    className={`py-1.5 px-2 rounded-lg border text-center transition cursor-pointer ${
-                      formulaMode === 'literal'
-                        ? 'bg-[#002B49] text-white border-[#002B49]'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    G1 × G2 + 40
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormulaMode('additive')}
-                    className={`py-1.5 px-2 rounded-lg border text-center transition cursor-pointer ${
-                      formulaMode === 'additive'
-                        ? 'bg-[#002B49] text-white border-[#002B49]'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    GSM1 + GSM2
-                  </button>
-                </div>
-              </div>
-
-              {/* Step math details */}
-              <div className="space-y-1.5 text-[11px] font-mono text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-                <p>1. Decal = {decalSize}"</p>
-                <p>2. Cutting = {cuttingSize}"</p>
-                <p>3. Liner = ({decalSize} × {cuttingSize} × [{formulaGsmLabel}]) / 1550 = {linerWeightGrams.toFixed(2)} g</p>
-                <p>4. Paper = ({decalSize} × {cuttingSize} × {parsedGsm3}) / 1550 = {paperWeightGrams.toFixed(2)} g</p>
-                <p className="font-bold text-[#002B49]">5. Total Liner + Decal = {totalWeightGrams.toFixed(2)} g ({totalWeightKg.toFixed(4)} kg)</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      </div>
-      
-      {/* Right Column: Dedicated "Saved Data" Column (lg:col-span-5) */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 space-y-3.5">
-            {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-slate-100">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm">
-                  💾
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h2 className="text-xs font-black text-[#002B49] uppercase tracking-wider">
-                      Saved Data
-                    </h2>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
-                      {savedHistory.length}
-                    </span>
+                <div className="bg-slate-50/90 focus-within:bg-white focus-within:border-[#002B49] p-2 rounded-lg border border-slate-200 transition text-center">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-black text-[#002B49] uppercase">Cutting Size</span>
+                    <span className="text-[9px] text-slate-400">Chop Length</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    Saved in MySQL database
-                  </p>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min="0"
+                    value={directCutting}
+                    onChange={(e) => setDirectCutting(e.target.value)}
+                    placeholder="0"
+                    className="w-full text-center py-0.5 bg-transparent text-base sm:text-lg font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                  />
+                  <div className="text-center text-[8.5px] text-slate-400">inches (")</div>
                 </div>
               </div>
+            )}
+          </div>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={fetchFromDb}
-                  disabled={isLoadingDb}
-                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
-                  title="Refresh from database"
-                >
-                  <svg className={`w-3.5 h-3.5 ${isLoadingDb ? 'animate-spin text-[#c69255]' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition flex items-center gap-1 cursor-pointer border border-slate-200"
-                  title="Print Saved Table"
-                >
-                  <svg className="w-3.5 h-3.5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  <span>Print</span>
-                </button>
+          {/* 4. GSM & Fluting Specifications Card */}
+          <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xs border border-slate-200/80 space-y-2.5">
+            <div className="flex items-center justify-between flex-wrap gap-1.5 pb-1.5 border-b border-slate-100">
+              <span className="text-[11px] sm:text-xs font-black text-[#002B49] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#c69255]"></span>
+                Step 2: GSM & Fluting
+              </span>
+              {/* Quick GSM Presets */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {[
+                  { label: '120/120/230', g1: '120', g2: '120', g3: '230' },
+                  { label: '150/150/230', g1: '150', g2: '150', g3: '230' },
+                  { label: '180/150/230', g1: '180', g2: '150', g3: '230' },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setGsm1(preset.g1);
+                      setGsm2(preset.g2);
+                      setGsm3(preset.g3);
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-[#002B49] hover:text-white text-slate-700 text-[9px] font-bold transition cursor-pointer"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* List of Saved Calculations */}
-            {savedHistory.length === 0 ? (
-              <div className="text-center py-10 px-4 text-slate-400">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-300">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                </div>
-                <p className="text-xs font-bold text-slate-600">No saved data yet</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Calculate and click <strong className="text-emerald-700">Save</strong> to display records here.
-                </p>
+            {/* 4 Inputs in 1 Row */}
+            <div className="grid grid-cols-4 gap-1 sm:gap-2">
+              {/* GSM 1 */}
+              <div className="p-1.5 sm:p-2 rounded-lg bg-slate-50 border border-slate-200 focus-within:border-[#002B49] focus-within:bg-white transition text-center">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate">GSM 1</div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  step="any"
+                  min="0"
+                  value={gsm1}
+                  onChange={(e) => setGsm1(e.target.value)}
+                  placeholder="0"
+                  className="w-full text-center py-0.5 bg-transparent text-sm sm:text-base font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                />
+                <div className="text-[8.5px] text-slate-400 truncate">Top Liner</div>
               </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[640px] overflow-y-auto pr-1">
-                {savedHistory.map((item) => {
-                  const isRecentlySaved = item.id === lastSavedId;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`p-3 rounded-xl border transition relative ${
-                        isRecentlySaved
-                          ? 'border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-400/60 shadow-sm'
-                          : 'border-slate-200/90 bg-slate-50/70 hover:bg-slate-50 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-black text-[#002B49] truncate">
-                              {item.title}
-                            </span>
-                            {isRecentlySaved && (
-                              <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-white text-[9px] font-black animate-pulse">
-                                Just Saved
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10.5px] text-slate-500 font-medium mt-0.5">
-                            Decal: <span className="font-bold text-slate-700">{item.decalSize}"</span> | Cutting: <span className="font-bold text-slate-700">{item.cuttingSize}"</span>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleLoadHistory(item)}
-                            className="px-2.5 py-1 rounded-lg bg-[#002B49] hover:bg-[#003860] text-white font-bold text-[10.5px] transition flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
-                            title="Edit calculation"
-                          >
-                            <svg className="w-3 h-3 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                            <span>Edit</span>
-                          </button>
+              {/* GSM 2 */}
+              <div className="p-1.5 sm:p-2 rounded-lg bg-slate-50 border border-slate-200 focus-within:border-[#002B49] focus-within:bg-white transition text-center">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate">GSM 2</div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  step="any"
+                  min="0"
+                  value={gsm2}
+                  onChange={(e) => setGsm2(e.target.value)}
+                  placeholder="0"
+                  className="w-full text-center py-0.5 bg-transparent text-sm sm:text-base font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                />
+                <div className="text-[8.5px] text-slate-400 truncate">Flute Paper</div>
+              </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteHistory(item.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                            title="Delete from database"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
+              {/* GSM 3 */}
+              <div className="p-1.5 sm:p-2 rounded-lg bg-slate-50 border border-slate-200 focus-within:border-[#002B49] focus-within:bg-white transition text-center">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tight truncate">GSM 3</div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  step="any"
+                  min="0"
+                  value={gsm3}
+                  onChange={(e) => setGsm3(e.target.value)}
+                  placeholder="230"
+                  className="w-full text-center py-0.5 bg-transparent text-sm sm:text-base font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                />
+                <div className="text-[8.5px] text-slate-400 truncate">Inner Paper</div>
+              </div>
 
-                      {/* 3-Column Weight Breakdown */}
-                      <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-slate-200/60 text-center">
-                        <div className="bg-white rounded-lg p-1.5 border border-slate-100">
-                          <div className="text-[9px] font-bold text-slate-400 uppercase">Liner</div>
-                          <div className="text-[11px] font-bold text-slate-700">{item.linerWeightGrams} g</div>
-                        </div>
-                        <div className="bg-white rounded-lg p-1.5 border border-slate-100">
-                          <div className="text-[9px] font-bold text-slate-400 uppercase">Paper</div>
-                          <div className="text-[11px] font-bold text-slate-700">{item.paperWeightGrams} g</div>
-                        </div>
-                        <div className="bg-[#002B49]/5 rounded-lg p-1.5 border border-[#002B49]/10">
-                          <div className="text-[9px] font-bold text-[#002B49] uppercase">Total</div>
-                          <div className="text-[11px] font-black text-[#002B49]">{item.totalWeightGrams} g</div>
-                        </div>
-                      </div>
+              {/* Fluting */}
+              <div className="p-1.5 sm:p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 focus-within:border-amber-500 focus-within:bg-white transition text-center">
+                <div className="text-[9px] font-bold text-amber-900 uppercase tracking-tight truncate">Fluting</div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  step="any"
+                  min="0"
+                  value={fluting}
+                  onChange={(e) => setFluting(e.target.value)}
+                  placeholder="40"
+                  className="w-full text-center py-0.5 bg-transparent text-sm sm:text-base font-black text-[#002B49] placeholder-slate-300 focus:outline-none"
+                />
+                <div className="text-[8.5px] text-amber-800 font-semibold truncate">40%</div>
+              </div>
+            </div>
+          </div>
 
-                      {item.date && (
-                        <div className="text-[9.5px] text-slate-400 mt-1.5 text-right font-medium">
-                          {new Date(item.date).toLocaleDateString('en-GB')} {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+          {/* 5. Clean Hero Result Card */}
+          <div className="bg-gradient-to-br from-[#002B49] via-[#003459] to-[#001D33] text-white rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-md border border-white/10 relative overflow-hidden space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] font-extrabold text-[#c69255] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#c69255] animate-pulse"></span>
+                Total Weight
+              </span>
+              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
+                {decalSize > 0 && cuttingSize > 0 ? `${decalSize}" × ${cuttingSize}"` : '0" × 0"'}
+              </span>
+            </div>
+
+            {/* Main Result */}
+            <div className="flex items-baseline justify-between flex-wrap gap-1">
+              <div className="flex items-baseline space-x-1.5">
+                <span className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                  {totalWeightGrams > 0 ? totalWeightGrams.toFixed(2) : '0.00'}
+                </span>
+                <span className="text-xs sm:text-sm font-extrabold text-[#c69255]">grams</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs sm:text-sm font-black text-slate-200">
+                  {totalWeightKg > 0 ? totalWeightKg.toFixed(4) : '0.0000'} kg
+                </span>
+                <span className="text-[9px] text-slate-400 block">per sheet / box</span>
+              </div>
+            </div>
+
+            {/* Split Sub-Weights (Liner & Paper) */}
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 pt-2 border-t border-white/15">
+              <div className="bg-white/10 rounded-lg p-1.5 sm:p-2">
+                <div className="text-[9px] font-bold text-slate-300 uppercase">3. Liner Weight</div>
+                <div className="text-xs sm:text-sm font-black text-white mt-0.5">
+                  {linerWeightGrams > 0 ? linerWeightGrams.toFixed(2) : '0.00'} <span className="text-[10px] font-normal text-slate-300">g</span>
+                </div>
+                <div className="text-[9px] text-[#c69255] font-semibold">
+                  {linerWeightKg > 0 ? linerWeightKg.toFixed(4) : '0.0000'} kg
+                </div>
+              </div>
+
+              <div className="bg-white/10 rounded-lg p-1.5 sm:p-2">
+                <div className="text-[9px] font-bold text-slate-300 uppercase">4. Paper Weight</div>
+                <div className="text-xs sm:text-sm font-black text-white mt-0.5">
+                  {paperWeightGrams > 0 ? paperWeightGrams.toFixed(2) : '0.00'} <span className="text-[10px] font-normal text-slate-300">g</span>
+                </div>
+                <div className="text-[9px] text-emerald-400 font-semibold">
+                  {paperWeightKg > 0 ? paperWeightKg.toFixed(4) : '0.0000'} kg
+                </div>
+              </div>
+            </div>
+
+            {/* Action Bar Inside Result Card: Copy and Save */}
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={handleCopySummary}
+                className={`py-1.5 sm:py-2 px-2.5 rounded-lg font-bold text-xs shadow-xs transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 focus:outline-none ${
+                  justCopied
+                    ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+                    : 'bg-gradient-to-r from-[#c69255] to-[#b88548] hover:from-[#d4a359] hover:to-[#a67437] text-white'
+                }`}
+                title="Copy calculation summary"
+              >
+                {justCopied ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span>Copy Summary</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveToDatabase}
+                disabled={isSaving}
+                className={`py-1.5 sm:py-2 px-2.5 rounded-lg font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-70 focus:outline-none ${
+                  justSaved ? 'bg-emerald-500 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
+                }`}
+                title="Save to database"
+              >
+                {isSaving ? (
+                  <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                ) : justSaved ? (
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                )}
+                <span>{isSaving ? 'Saving...' : justSaved ? 'Saved!' : 'Save'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 6. Clean Collapsible Section for Formula Explainer */}
+          <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowFormulaSteps(!showFormulaSteps)}
+              className="w-full p-2.5 text-left flex items-center justify-between text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+            >
+              <div className="flex items-center space-x-1.5">
+                <svg className="w-3.5 h-3.5 text-[#c69255]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <span>Calculation Math Explainer</span>
+              </div>
+              <span className="text-slate-400 font-bold text-xs">{showFormulaSteps ? '−' : '+'}</span>
+            </button>
+
+            {showFormulaSteps && (
+              <div className="p-2.5 pt-0 border-t border-slate-100 space-y-2">
+                <div className="space-y-1 text-[10px] font-mono text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200/80">
+                  <p>1. Decal = {decalSize}" {parsedExtraDecal > 0 ? `(${parsedWidth}" + ${parsedHeight}" + ${parsedExtraDecal}" extra)` : ''}</p>
+                  <p>2. Cutting = {cuttingSize}" {parsedExtraCutting > 0 ? `(${parsedLength}" + ${parsedWidth}" + ${parsedExtraCutting}" extra)` : ''}</p>
+                  <p>3. Liner = ({decalSize} × {cuttingSize} × [{formulaGsmLabel}]) / 1550 = {linerWeightGrams.toFixed(2)} g</p>
+                  <p>4. Paper = ({decalSize} × {cuttingSize} × {parsedGsm3}) / 1550 = {paperWeightGrams.toFixed(2)} g</p>
+                  <p className="font-bold text-[#002B49]">5. Total Liner + Decal = {totalWeightGrams.toFixed(2)} g ({totalWeightKg.toFixed(4)} kg)</p>
+                </div>
               </div>
             )}
           </div>
         </div>
-      </div>
       )}
       </div>
       {/* End of print:hidden screen view */}
@@ -1279,11 +1372,15 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
             </h1>
             <p className="text-xs text-black font-semibold mt-0.5">
               Corrugated Box Weight & Specification Sheet
+              {historySearch.trim() ? ` (Filtered: "${historySearch.trim()}")` : ''}
             </p>
           </div>
           <div className="text-right text-xs text-black space-y-0.5">
             <p><strong>Date:</strong> {new Date().toLocaleDateString('en-GB')}</p>
             <p><strong>Time:</strong> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+            {printMode === 'saved' && (
+              <p><strong>Total Records:</strong> {filteredHistory.length}</p>
+            )}
           </div>
         </div>
 
@@ -1294,37 +1391,49 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
               <th className="border border-black px-3 py-2 text-left font-black uppercase">Box Name</th>
               <th className="border border-black px-3 py-2 text-center font-black uppercase">Decal</th>
               <th className="border border-black px-3 py-2 text-center font-black uppercase">Cutting</th>
+              <th className="border border-black px-3 py-2 text-center font-black uppercase">GSM (L/F/P)</th>
               <th className="border border-black px-3 py-2 text-right font-black uppercase">Liner Weight</th>
               <th className="border border-black px-3 py-2 text-right font-black uppercase">Paper Weight</th>
               <th className="border border-black px-3 py-2 text-right font-black uppercase">Total Weight</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-black">
-              <td className="border border-black px-3 py-2.5 font-bold text-left">
-                {boxName.trim() || 'Standard Box'}
-              </td>
-              <td className="border border-black px-3 py-2.5 text-center font-bold">{decalSize ? `${decalSize}"` : '-'}</td>
-              <td className="border border-black px-3 py-2.5 text-center font-bold">{cuttingSize ? `${cuttingSize}"` : '-'}</td>
-              <td className="border border-black px-3 py-2.5 text-right font-bold">
-                {linerWeightGrams.toFixed(2)} g
-              </td>
-              <td className="border border-black px-3 py-2.5 text-right font-bold">
-                {paperWeightGrams.toFixed(2)} g
-              </td>
-              <td className="border border-black px-3 py-2.5 text-right font-black">
-                {totalWeightGrams.toFixed(2)} g
-              </td>
-            </tr>
+            {/* Active calculation row: ONLY render if NOT 'saved' mode, calculation has weight > 0, and not duplicate in savedHistory */}
+            {printMode !== 'saved' && totalWeightGrams > 0 && (!lastSavedId || !savedHistory.some(item => item.id === lastSavedId)) && (
+              <tr className="border-b border-black">
+                <td className="border border-black px-3 py-2.5 font-bold text-left">
+                  {boxName.trim() || `Box ${decalSize}" × ${cuttingSize}"`}
+                </td>
+                <td className="border border-black px-3 py-2.5 text-center font-bold">{decalSize ? `${decalSize}"` : '-'}</td>
+                <td className="border border-black px-3 py-2.5 text-center font-bold">{cuttingSize ? `${cuttingSize}"` : '-'}</td>
+                <td className="border border-black px-3 py-2.5 text-center font-bold">
+                  {parsedGsm1 || '-'}/{parsedGsm2 || '-'}/{parsedGsm3 || '-'}
+                  {parsedFluting ? <span className="block text-[10px] font-normal">({parsedFluting}%)</span> : null}
+                </td>
+                <td className="border border-black px-3 py-2.5 text-right font-bold">
+                  {linerWeightGrams.toFixed(2)} g
+                </td>
+                <td className="border border-black px-3 py-2.5 text-right font-bold">
+                  {paperWeightGrams.toFixed(2)} g
+                </td>
+                <td className="border border-black px-3 py-2.5 text-right font-black">
+                  {totalWeightGrams.toFixed(2)} g
+                </td>
+              </tr>
+            )}
 
-            {/* If any additional saved items exist in history, list them in the table */}
-            {savedHistory.map((item) => (
+            {/* Saved items list: render when in 'saved' or 'all' mode (filtered according to active search/filters) */}
+            {printMode !== 'current' && filteredHistory.map((item) => (
               <tr key={item.id} className="border-b border-black">
                 <td className="border border-black px-3 py-2 text-left font-bold">
                   {item.title}
                 </td>
                 <td className="border border-black px-3 py-2 text-center font-semibold">{item.decalSize}"</td>
                 <td className="border border-black px-3 py-2 text-center font-semibold">{item.cuttingSize}"</td>
+                <td className="border border-black px-3 py-2 text-center font-medium">
+                  {item.gsm1 || '-'}/{item.gsm2 || '-'}/{item.gsm3 || '-'}
+                  {item.fluting ? <span className="block text-[10px] font-normal">({item.fluting}%)</span> : null}
+                </td>
                 <td className="border border-black px-3 py-2 text-right">
                   {item.linerWeightGrams} g
                 </td>
@@ -1336,6 +1445,19 @@ ${parsedQty > 1 ? `• Batch (${parsedQty.toLocaleString()} pcs): *${totalBatchW
                 </td>
               </tr>
             ))}
+
+            {/* Fallback if no records to print */}
+            {((printMode === 'current' && totalWeightGrams <= 0) ||
+              (printMode === 'saved' && filteredHistory.length === 0) ||
+              (printMode === 'all' && totalWeightGrams <= 0 && filteredHistory.length === 0)) && (
+              <tr>
+                <td colSpan="7" className="border border-black px-3 py-4 text-center text-gray-500 italic">
+                  {savedHistory.length > 0 && filteredHistory.length === 0
+                    ? 'No calculation records match the current filter'
+                    : 'No calculation records to print'}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
