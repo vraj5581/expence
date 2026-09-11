@@ -111,52 +111,76 @@ textarea,
   box-shadow: 0 0 0 3px rgba(198, 146, 85, 0.2);
 }
 
-/* Pure Black & White Professional A4 Print Report Styles */
+/* Pure Black & White Professional Print Report Styles (Optimized for iPhone, Mobile & Desktop) */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm 9mm 12mm 9mm;
+    margin: 8mm 6mm;
   }
 
-  /* Universal Root Layout Reset for Clean Paper Rendering */
-  html, body, #root, main, #root > div, .screen-dashboard {
+  /* Universal Root Layout Reset for Clean Paper & iPhone AirPrint Rendering */
+  html {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    float: none !important;
-    position: static !important;
-    box-sizing: border-box !important;
+    width: 794px !important;
+    min-width: 794px !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Reset layout display modes on root wrappers */
-  html, body, #root, main, #root > div {
-    display: block !important;
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 794px !important;
+    min-width: 794px !important;
+    max-width: 794px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    float: none !important;
+    position: static !important;
+    box-sizing: border-box !important;
+    -webkit-text-size-adjust: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Completely hide screen dashboard UI, sidebar, navbar, bottom nav, modals in print */
+  /* Universal print color adjustment for iOS WebKit & all browsers */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Reset layout display modes on root wrappers */
+  #root, main, #root > div {
+    display: block !important;
+    width: 794px !important;
+    min-width: 794px !important;
+    max-width: 794px !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* Completely hide screen dashboard UI, sidebar, navbar, bottom nav, modals in print without messing up iPhone print viewport bounding box */
   .screen-dashboard,
   aside, nav, header, footer, .no-print, button, input, select, .print\:hidden {
     display: none !important;
-    width: 0 !important;
-    height: 0 !important;
     visibility: hidden !important;
-    overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
-    position: absolute !important;
-    left: -9999px !important;
-    top: -9999px !important;
+    position: static !important;
   }
 
   /* Reset layout padding from sidebar */
@@ -165,16 +189,31 @@ textarea,
     margin-left: 0 !important;
   }
 
-  /* Display print report container */
+  /* Display print report container (responsive for iPhone, iPad & desktop) */
   .print-ledger-report {
     display: block !important;
-    width: 100% !important;
-    max-width: 192mm !important;
+    width: 794px !important;
+    min-width: 794px !important;
+    max-width: 794px !important;
     margin: 0 auto !important;
+    padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
-    position: relative !important;
+    position: static !important;
     overflow: visible !important;
+    box-sizing: border-box !important;
+  }
+
+  /* iOS WebKit Fix: Remove overflow clipping on all containers during print */
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-hidden,
+  [class*="overflow-"] {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    max-width: 100% !important;
   }
 
   /* Strict B&W resets for print report contents */
@@ -187,7 +226,7 @@ textarea,
     text-shadow: none !important;
     filter: none !important;
     -webkit-filter: none !important;
-    font-family: Arial, Helvetica, sans-serif !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, Helvetica, sans-serif !important;
   }
 
   /* Print Header & Section titles */
@@ -199,7 +238,7 @@ textarea,
     page-break-inside: avoid !important;
   }
 
-  /* Credit Summary Print Grid (3 Columns, Equal Height) */
+  /* Credit Summary Print Grid (Responsive cards row) */
   .credit-summary-print-wrapper {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -208,11 +247,12 @@ textarea,
   }
 
   .credit-summary-print-grid {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 4mm !important;
-    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
     align-items: stretch !important;
+    gap: 3.5mm !important;
+    width: 100% !important;
     margin: 3mm 0 4mm 0 !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -235,6 +275,8 @@ textarea,
 
   /* Print Card Component Styling */
   .print-card {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
@@ -242,7 +284,7 @@ textarea,
     border: 1px solid #000000 !important;
     background: #ffffff !important;
     color: #000000 !important;
-    padding: 3mm !important;
+    padding: 2.5mm 3mm !important;
     height: 100% !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -307,21 +349,25 @@ textarea,
     color: #000000 !important;
   }
 
-  /* Credit & Debit Print Tables */
+  /* Credit & Debit & Ledger Print Tables */
   .credit-print-table,
   .debit-print-table,
-  .print-table {
+  .print-table,
+  .calculator-print-table,
+  .print-ledger-report table {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 0 12px 0 !important;
     border-collapse: collapse !important;
-    table-layout: fixed !important;
     box-sizing: border-box !important;
+    table-layout: fixed !important;
   }
 
   .credit-print-table thead,
   .debit-print-table thead,
-  .print-table thead {
+  .print-table thead,
+  .calculator-print-table thead,
+  .print-ledger-report table thead {
     display: table-header-group !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -329,13 +375,17 @@ textarea,
 
   .credit-print-table tbody,
   .debit-print-table tbody,
-  .print-table tbody {
+  .print-table tbody,
+  .calculator-print-table tbody,
+  .print-ledger-report table tbody {
     display: table-row-group !important;
   }
 
   .credit-print-table tr,
   .debit-print-table tr,
-  .print-table tr {
+  .print-table tr,
+  .calculator-print-table tr,
+  .print-ledger-report table tr {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -346,7 +396,9 @@ textarea,
   .debit-print-table tbody tr:nth-last-child(2),
   .debit-print-table tbody tr:nth-last-child(3),
   .print-table tbody tr:nth-last-child(2),
-  .print-table tbody tr:nth-last-child(3) {
+  .print-table tbody tr:nth-last-child(3),
+  .calculator-print-table tbody tr:nth-last-child(2),
+  .calculator-print-table tbody tr:nth-last-child(3) {
     break-after: avoid !important;
     page-break-after: avoid !important;
   }
@@ -356,20 +408,27 @@ textarea,
   .debit-print-table th,
   .debit-print-table td,
   .print-table th,
-  .print-table td {
+  .print-table td,
+  .calculator-print-table th,
+  .calculator-print-table td,
+  .print-ledger-report table th,
+  .print-ledger-report table td {
     border: 1px solid #000000 !important;
-    padding: 1.5mm 1.5mm !important;
+    padding: 1.8mm 1.5mm !important;
     color: #000000 !important;
     background: #ffffff !important;
     font-size: 8pt !important;
-    line-height: 1.2 !important;
+    line-height: 1.25 !important;
     vertical-align: middle !important;
     box-sizing: border-box !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
   }
 
   .credit-print-table th,
   .debit-print-table th,
-  .print-table th {
+  .print-table th,
+  .calculator-print-table th {
     font-weight: 700 !important;
     text-align: center !important;
     vertical-align: middle !important;
@@ -400,6 +459,15 @@ textarea,
   .debit-print-table th:nth-child(5), .debit-print-table td:nth-child(5) { width: 34% !important; }
   .debit-print-table th:nth-child(6), .debit-print-table td:nth-child(6) { width: 18% !important; }
   .debit-print-table th:nth-child(7), .debit-print-table td:nth-child(7) { width: 9% !important; }
+
+  /* Specific column width selectors for Calculator Table (7 columns) */
+  .calculator-print-table th:nth-child(1), .calculator-print-table td:nth-child(1) { width: 28% !important; }
+  .calculator-print-table th:nth-child(2), .calculator-print-table td:nth-child(2) { width: 11% !important; }
+  .calculator-print-table th:nth-child(3), .calculator-print-table td:nth-child(3) { width: 11% !important; }
+  .calculator-print-table th:nth-child(4), .calculator-print-table td:nth-child(4) { width: 16% !important; }
+  .calculator-print-table th:nth-child(5), .calculator-print-table td:nth-child(5) { width: 11% !important; }
+  .calculator-print-table th:nth-child(6), .calculator-print-table td:nth-child(6) { width: 11% !important; }
+  .calculator-print-table th:nth-child(7), .calculator-print-table td:nth-child(7) { width: 12% !important; }
 
   /* Explicit Cell Classes & Alignments */
   .sr-cell {

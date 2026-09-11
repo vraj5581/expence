@@ -1486,7 +1486,7 @@ const DepositAllocate = () => {
 
         {/* 2. Print Summary Cards Grid */}
         <div className="credit-summary-print-wrapper mb-3">
-          <div className="grid grid-cols-3 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4mm' }}>
+          <div className="credit-summary-print-grid">
             {/* CARD 1: COMPANY VAULT */}
             <div className="print-card">
               <div className="card-title">

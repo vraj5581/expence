@@ -479,7 +479,7 @@ _Shukan Packaging_`;
         document.title = originalTitle;
         setPrintMode('all');
       }, 1000);
-    }, 150);
+    }, 250);
   };
 
   return (
@@ -1363,7 +1363,7 @@ _Shukan Packaging_`;
       {/* End of print:hidden screen view */}
 
       {/* 7. Dedicated Black & White Print View (Table Form) */}
-      <div className="hidden print:block text-black bg-white p-4 sm:p-6 font-sans">
+      <div className="hidden print:block print-ledger-report text-black bg-white p-0 font-sans">
         {/* Company Header */}
         <div className="border-b-2 border-black pb-3 mb-4 flex justify-between items-end">
           <div>
@@ -1385,16 +1385,16 @@ _Shukan Packaging_`;
         </div>
 
         {/* Black & White Table */}
-        <table className="w-full border-collapse border-2 border-black text-xs text-black">
+        <table className="print-table calculator-print-table w-full border-collapse border-2 border-black text-xs text-black">
           <thead>
             <tr className="bg-gray-100 border-b-2 border-black">
-              <th className="border border-black px-3 py-2 text-left font-black uppercase">Box Name</th>
-              <th className="border border-black px-3 py-2 text-center font-black uppercase">Decal</th>
-              <th className="border border-black px-3 py-2 text-center font-black uppercase">Cutting</th>
-              <th className="border border-black px-3 py-2 text-center font-black uppercase">GSM (L/F/P)</th>
-              <th className="border border-black px-3 py-2 text-right font-black uppercase">Liner Weight</th>
-              <th className="border border-black px-3 py-2 text-right font-black uppercase">Paper Weight</th>
-              <th className="border border-black px-3 py-2 text-right font-black uppercase">Total Weight</th>
+              <th style={{ width: '28%' }} className="border border-black px-3 py-2 text-left font-black uppercase">Box Name</th>
+              <th style={{ width: '11%' }} className="border border-black px-3 py-2 text-center font-black uppercase">Decal</th>
+              <th style={{ width: '11%' }} className="border border-black px-3 py-2 text-center font-black uppercase">Cutting</th>
+              <th style={{ width: '16%' }} className="border border-black px-3 py-2 text-center font-black uppercase">GSM (L/F/P)</th>
+              <th style={{ width: '11%' }} className="border border-black px-3 py-2 text-right font-black uppercase">Liner Weight</th>
+              <th style={{ width: '11%' }} className="border border-black px-3 py-2 text-right font-black uppercase">Paper Weight</th>
+              <th style={{ width: '12%' }} className="border border-black px-3 py-2 text-right font-black uppercase">Total Weight</th>
             </tr>
           </thead>
           <tbody>
