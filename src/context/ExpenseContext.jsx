@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { getTodayYMD } from '../utils/dateUtils';
 
@@ -165,40 +165,112 @@ export const ExpenseProvider = ({ children }) => {
     return { success: true };
   };
 
+  // Helper to schedule localStorage snapshot writing off the main UI thread
+  const scheduleSnapshotCache = (snapshot) => {
+    const save = () => {
+      try {
+        localStorage.setItem('shukan_erp_cached_snapshot', JSON.stringify({
+          ...snapshot,
+          cachedAt: Date.now()
+        }));
+      } catch (e) {}
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(save, { timeout: 1000 });
+    } else {
+      setTimeout(save, 100);
+    }
+  };
+
   // Fetch state from PHP backend database (Ultra-fast single request)
-  const loadBackendData = async () => {
+  const loadBackendData = useCallback(async (isBackground = false) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
-    setIsSyncing(true);
+    if (!isBackground) {
+      setIsSyncing(true);
+    }
     try {
-      // 1. Try single-request bulk bootstrap API (1 HTTP request instead of 8)
+      // Single-request bulk bootstrap API (1 HTTP request instead of 8)
       const bootRes = await apiService.getBootstrapData();
       if (bootRes && bootRes.success) {
-        if (Array.isArray(bootRes.debits)) setDebitTransactions(bootRes.debits);
-        if (Array.isArray(bootRes.credits)) setCreditTransactions(bootRes.credits);
-        if (Array.isArray(bootRes.vaultDeposits)) setVaultDeposits(bootRes.vaultDeposits);
-        if (Array.isArray(bootRes.allocationsHistory)) setAllocationsHistory(bootRes.allocationsHistory);
-        if (bootRes.userAllocations && typeof bootRes.userAllocations === 'object') setUserAllocations(bootRes.userAllocations);
-        if (Array.isArray(bootRes.users) && bootRes.users.length > 0) setUsers(bootRes.users);
-        if (bootRes.settings) setSettings(bootRes.settings);
-        if (Array.isArray(bootRes.tasks)) setTasks(bootRes.tasks);
-        if (Array.isArray(bootRes.auditLogs)) setEditLogs(bootRes.auditLogs);
+        // Fast referential equality guards: return `prev` if data hasn't changed to prevent unnecessary React re-renders
+        if (Array.isArray(bootRes.debits)) {
+          setDebitTransactions(prev => {
+            if (prev.length === bootRes.debits.length && (prev.length === 0 || (prev[0]?.id === bootRes.debits[0]?.id && prev[0]?.amount === bootRes.debits[0]?.amount))) {
+              return prev;
+            }
+            return bootRes.debits;
+          });
+        }
+        if (Array.isArray(bootRes.credits)) {
+          setCreditTransactions(prev => {
+            if (prev.length === bootRes.credits.length && (prev.length === 0 || (prev[0]?.id === bootRes.credits[0]?.id && prev[0]?.amount === bootRes.credits[0]?.amount))) {
+              return prev;
+            }
+            return bootRes.credits;
+          });
+        }
+        if (Array.isArray(bootRes.vaultDeposits)) {
+          setVaultDeposits(prev => {
+            if (prev.length === bootRes.vaultDeposits.length && (prev.length === 0 || prev[0]?.id === bootRes.vaultDeposits[0]?.id)) {
+              return prev;
+            }
+            return bootRes.vaultDeposits;
+          });
+        }
+        if (Array.isArray(bootRes.allocationsHistory)) {
+          setAllocationsHistory(prev => {
+            if (prev.length === bootRes.allocationsHistory.length && (prev.length === 0 || prev[0]?.id === bootRes.allocationsHistory[0]?.id)) {
+              return prev;
+            }
+            return bootRes.allocationsHistory;
+          });
+        }
+        if (bootRes.userAllocations && typeof bootRes.userAllocations === 'object') {
+          setUserAllocations(prev => {
+            const prevKeys = Object.keys(prev);
+            const nextKeys = Object.keys(bootRes.userAllocations);
+            if (prevKeys.length === nextKeys.length && prevKeys.every(k => prev[k] === bootRes.userAllocations[k])) {
+              return prev;
+            }
+            return bootRes.userAllocations;
+          });
+        }
+        if (Array.isArray(bootRes.users) && bootRes.users.length > 0) {
+          setUsers(prev => prev.length === bootRes.users.length ? prev : bootRes.users);
+        }
+        if (bootRes.settings) {
+          setSettings(prev => (prev?.id === bootRes.settings.id && prev?.banks === bootRes.settings.banks && prev?.currency === bootRes.settings.currency) ? prev : bootRes.settings);
+        }
+        if (Array.isArray(bootRes.tasks)) {
+          setTasks(prev => {
+            if (prev.length === bootRes.tasks.length && (prev.length === 0 || prev[0]?.id === bootRes.tasks[0]?.id)) {
+              return prev;
+            }
+            return bootRes.tasks;
+          });
+        }
+        if (Array.isArray(bootRes.auditLogs)) {
+          setEditLogs(prev => {
+            if (prev.length === bootRes.auditLogs.length && (prev.length === 0 || prev[0]?.id === bootRes.auditLogs[0]?.id)) {
+              return prev;
+            }
+            return bootRes.auditLogs;
+          });
+        }
 
-        // Cache snapshot locally for low-connectivity / instant startup
-        try {
-          localStorage.setItem('shukan_erp_cached_snapshot', JSON.stringify({
-            debits: bootRes.debits,
-            credits: bootRes.credits,
-            vaultDeposits: bootRes.vaultDeposits,
-            allocationsHistory: bootRes.allocationsHistory,
-            userAllocations: bootRes.userAllocations,
-            users: bootRes.users,
-            settings: bootRes.settings,
-            tasks: bootRes.tasks,
-            auditLogs: bootRes.auditLogs,
-            cachedAt: Date.now()
-          }));
-        } catch (e) {}
+        // Asynchronous non-blocking snapshot caching
+        scheduleSnapshotCache({
+          debits: bootRes.debits,
+          credits: bootRes.credits,
+          vaultDeposits: bootRes.vaultDeposits,
+          allocationsHistory: bootRes.allocationsHistory,
+          userAllocations: bootRes.userAllocations,
+          users: bootRes.users,
+          settings: bootRes.settings,
+          tasks: bootRes.tasks,
+          auditLogs: bootRes.auditLogs,
+        });
 
         setIsDbConnected(true);
         setDbError(null);
@@ -245,10 +317,12 @@ export const ExpenseProvider = ({ children }) => {
       setIsDbConnected(false);
       setDbError(err.message || "Cannot connect to PHP Database");
     } finally {
-      setIsSyncing(false);
+      if (!isBackground) {
+        setIsSyncing(false);
+      }
       isFetchingRef.current = false;
     }
-  };
+  }, []);
 
   // Merged view of all transactions for backward-compatible calculations
   const transactions = useMemo(() => {
@@ -261,22 +335,24 @@ export const ExpenseProvider = ({ children }) => {
   }, [debitTransactions, creditTransactions]);
 
   useEffect(() => {
-    // Initial fetch
-    loadBackendData();
+    // Initial active fetch
+    loadBackendData(false);
 
-    // Auto update background polling every 5 seconds
+    // Smart background silent sync every 25 seconds (paused when browser tab is inactive)
     const interval = setInterval(() => {
-      loadBackendData();
-    }, 5000);
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadBackendData(true);
+      }
+    }, 25000);
 
     // Instant update on tab focus or window visibility
     const handleFocus = () => {
-      loadBackendData();
+      loadBackendData(false);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        loadBackendData();
+        loadBackendData(false);
       }
     };
 
@@ -288,17 +364,17 @@ export const ExpenseProvider = ({ children }) => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [loadBackendData]);
 
   // Helper to determine if an account / destination is a Bank
-  const isBankDestination = (dest) => {
+  const isBankDestination = useCallback((dest) => {
     if (!dest) return false;
     const clean = String(dest).toLowerCase().trim();
     if (clean === 'company wallet' || clean === 'my hand' || clean === 'hand' || clean === 'cash') return false;
     if (clean.includes('bank') || clean === 'banks') return true;
     const availableBanks = (settings?.banks || 'IOB Bank, BOB Bank').split(',').map(b => b.trim().toLowerCase()).filter(Boolean);
     return availableBanks.some(b => b && (clean.includes(b) || b.includes(clean)));
-  };
+  }, [settings?.banks]);
 
   // Effective Vault Deposits = Direct Manual Deposits + Completed Company Wallet & Bank Credit Transactions (No Duplicates!)
   const effectiveVaultDeposits = useMemo(() => {
@@ -329,9 +405,9 @@ export const ExpenseProvider = ({ children }) => {
       }));
 
     return [...creditTxnDeposits, ...directManualDeposits].sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [vaultDeposits, transactions, settings?.banks]);
+  }, [vaultDeposits, transactions, isBankDestination]);
 
-  const isDepositDue = (d) => {
+  const isDepositDue = useCallback((d) => {
     if (!d) return false;
     if (d.status === 'Due') return true;
     if (d.txnId) {
@@ -339,32 +415,45 @@ export const ExpenseProvider = ({ children }) => {
       if (linkedTxn) return linkedTxn.status === 'Due';
     }
     return false;
-  };
+  }, [transactions]);
 
   // Calculate Admin Vault Balance dynamically: [ Total Done Cash Deposit - Total Allocated to Team - Total Company Direct Expenses ]
-  const totalVaultDeposited = (effectiveVaultDeposits || []).reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
-  const totalDoneCashDeposit = (effectiveVaultDeposits || [])
-    .filter(d => !isBankDestination(d?.depositTo) && d?.status !== 'Due')
-    .reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
+  const totalVaultDeposited = useMemo(() => {
+    return (effectiveVaultDeposits || []).reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
+  }, [effectiveVaultDeposits]);
 
-  const totalDoneDebit = (debitTransactions || [])
-    .filter(t => t && t.status !== 'Due')
-    .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
+  const totalDoneCashDeposit = useMemo(() => {
+    return (effectiveVaultDeposits || [])
+      .filter(d => !isBankDestination(d?.depositTo) && d?.status !== 'Due')
+      .reduce((sum, d) => sum + (parseFloat(d?.amount) || 0), 0);
+  }, [effectiveVaultDeposits, isBankDestination]);
 
-  const totalAllocatedToTeam = Object.values(userAllocations || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  const totalDoneDebit = useMemo(() => {
+    return (debitTransactions || [])
+      .filter(t => t && t.status !== 'Due')
+      .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
+  }, [debitTransactions]);
 
-  const totalCompanyDirectExpenses = (transactions || [])
-    .filter(t => {
-      if (!t || t.status === 'Due' || t.type === 'Cash In' || t.type === 'Credit') return false;
-      const isCompany = t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault';
-      if (!isCompany) return false;
-      const dep = t.depositTo || t.account || t.paymentMethod || t.bankName || 'Company Wallet';
-      // Exclude Bank Debits from Company Vault cash reserve calculation
-      return !isBankDestination(dep);
-    })
-    .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
+  const totalAllocatedToTeam = useMemo(() => {
+    return Object.values(userAllocations || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  }, [userAllocations]);
 
-  const adminVaultBalance = totalDoneCashDeposit - totalAllocatedToTeam - totalCompanyDirectExpenses;
+  const totalCompanyDirectExpenses = useMemo(() => {
+    return (transactions || [])
+      .filter(t => {
+        if (!t || t.status === 'Due' || t.type === 'Cash In' || t.type === 'Credit') return false;
+        const isCompany = t.userName === 'Shukan Company' || t.userName === 'Shukan Packaging (Company)' || t.userName === 'Company Vault';
+        if (!isCompany) return false;
+        const dep = t.depositTo || t.account || t.paymentMethod || t.bankName || 'Company Wallet';
+        // Exclude Bank Debits from Company Vault cash reserve calculation
+        return !isBankDestination(dep);
+      })
+      .reduce((sum, t) => sum + (parseFloat(t?.amount) || 0), 0);
+  }, [transactions, isBankDestination]);
+
+  const adminVaultBalance = useMemo(() => {
+    return totalDoneCashDeposit - totalAllocatedToTeam - totalCompanyDirectExpenses;
+  }, [totalDoneCashDeposit, totalAllocatedToTeam, totalCompanyDirectExpenses]);
 
   // 1. ADD VAULT DEPOSIT (INSTANT OPTIMISTIC UPDATE)
   const addVaultDeposit = async (depositData) => {
@@ -593,7 +682,7 @@ export const ExpenseProvider = ({ children }) => {
   };
 
   // Helper to calculate user statistics (Allocated, Spent, Remaining)
-  const getUserStats = (userName) => {
+  const getUserStats = useCallback((userName) => {
     if (userName === 'Shukan Company' || userName === 'Shukan Packaging (Company)' || userName === 'Company Vault') {
       return {
         allocated: totalDoneCashDeposit,
@@ -660,7 +749,7 @@ export const ExpenseProvider = ({ children }) => {
       remaining,
       needFromCompany
     };
-  };
+  }, [totalDoneCashDeposit, totalCompanyDirectExpenses, adminVaultBalance, userAllocations, transactions, isBankDestination]);
 
   // Transaction CRUD — routes to debit or credit table based on type (INSTANT OPTIMISTIC UPDATE)
   const addTransaction = async (txnData) => {
@@ -1072,70 +1161,103 @@ export const ExpenseProvider = ({ children }) => {
     return { success: true };
   };
 
-  const totalCashIn = (creditTransactions || [])
-    .filter(t => (t.status || 'Done') === 'Done')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  const totalCashIn = useMemo(() => {
+    return (creditTransactions || [])
+      .filter(t => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [creditTransactions]);
 
-  const totalCashOut = (debitTransactions || [])
-    .filter(t => (t.status || 'Done') === 'Done')
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  const totalCashOut = useMemo(() => {
+    return (debitTransactions || [])
+      .filter(t => (t.status || 'Done') === 'Done')
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [debitTransactions]);
 
-  const netBalance = totalCashIn - totalCashOut;
+  const netBalance = useMemo(() => {
+    return totalCashIn - totalCashOut;
+  }, [totalCashIn, totalCashOut]);
+
+  const contextValue = useMemo(() => ({
+    adminVaultBalance,
+    totalVaultDeposited,
+    totalDoneCashDeposit,
+    totalDoneDebit,
+    vaultDeposits: effectiveVaultDeposits,
+    isDepositDue,
+    isBankDestination,
+    userAllocations,
+    allocationsHistory,
+    transactions,
+    debitTransactions,
+    creditTransactions,
+    users,
+    settings,
+    tasks,
+    totalAllocatedToTeam,
+    totalCashIn,
+    totalCashOut,
+    netBalance,
+    isDbConnected,
+    dbError,
+    isSyncing,
+    lastSyncedAt,
+    editLogs,
+    recordEditLog,
+    updateAuditLog,
+    deleteAuditLog,
+    revertAuditLog,
+    deleteLastMonthAuditLogs,
+    refetchData: loadBackendData,
+    addVaultDeposit,
+    updateVaultDeposit,
+    deleteVaultDeposit,
+    allocateMoneyToUser,
+    updateAllocation,
+    deleteAllocation,
+    getUserStats,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+    addUser,
+    updateUser,
+    deleteUser,
+    toggleUserStatus,
+    updateSettings,
+    addTask,
+    updateTask,
+    updateTaskStatus,
+    deleteTask
+  }), [
+    adminVaultBalance,
+    totalVaultDeposited,
+    totalDoneCashDeposit,
+    totalDoneDebit,
+    effectiveVaultDeposits,
+    isDepositDue,
+    isBankDestination,
+    userAllocations,
+    allocationsHistory,
+    transactions,
+    debitTransactions,
+    creditTransactions,
+    users,
+    settings,
+    tasks,
+    totalAllocatedToTeam,
+    totalCashIn,
+    totalCashOut,
+    netBalance,
+    isDbConnected,
+    dbError,
+    isSyncing,
+    lastSyncedAt,
+    editLogs,
+    loadBackendData,
+    getUserStats
+  ]);
 
   return (
-    <ExpenseContext.Provider
-      value={{
-        adminVaultBalance,
-        totalVaultDeposited,
-        totalDoneCashDeposit,
-        totalDoneDebit,
-        vaultDeposits: effectiveVaultDeposits,
-        isDepositDue,
-        isBankDestination,
-        userAllocations,
-        allocationsHistory,
-        transactions,
-        debitTransactions,
-        creditTransactions,
-        users,
-        settings,
-        tasks,
-        totalAllocatedToTeam,
-        totalCashIn,
-        totalCashOut,
-        netBalance,
-        isDbConnected,
-        dbError,
-        isSyncing,
-        lastSyncedAt,
-        editLogs,
-        recordEditLog,
-        updateAuditLog,
-        deleteAuditLog,
-        revertAuditLog,
-        deleteLastMonthAuditLogs,
-        refetchData: loadBackendData,
-        addVaultDeposit,
-        updateVaultDeposit,
-        deleteVaultDeposit,
-        allocateMoneyToUser,
-        updateAllocation,
-        deleteAllocation,
-        getUserStats,
-        addTransaction,
-        updateTransaction,
-        deleteTransaction,
-        addUser,
-        updateUser,
-        deleteUser,
-        toggleUserStatus,
-        updateSettings,
-        addTask,
-        updateTask,
-        updateTaskStatus,
-        deleteTask
-      }}
-    >
+    <ExpenseContext.Provider value={contextValue}>
       {children}
     </ExpenseContext.Provider>
   );

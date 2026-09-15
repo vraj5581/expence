@@ -337,25 +337,32 @@ const Calculator = () => {
       cost: batchPaperCost > 0 ? batchPaperCost.toFixed(2) : null
     };
 
-    setIsSaving(true);
+    // ⚡ Instant Optimistic Update: Reflect immediately in UI on click
+    const updated = [newHistoryItem, ...savedHistory.filter(h => h.id !== calcId).slice(0, 49)];
+    setSavedHistory(updated);
+    setJustSaved(true);
+    setLastSavedId(calcId);
+    setTimeout(() => setJustSaved(false), 2000);
     try {
-      const res = await apiService.saveCalculation(payload);
-      if (res && res.success) {
-        toast.success('Calculation saved in database successfully!', { theme: 'light' });
-      } else {
-        toast.warning(res?.message || 'Saved locally (DB sync pending)', { theme: 'light' });
-      }
-    } catch (e) {
-      toast.info('Saved locally', { theme: 'light' });
-    } finally {
-      setIsSaving(false);
-      setJustSaved(true);
-      setLastSavedId(calcId);
-      setTimeout(() => setJustSaved(false), 2500);
-      const updated = [newHistoryItem, ...savedHistory.filter(h => h.id !== calcId).slice(0, 49)];
-      setSavedHistory(updated);
       localStorage.setItem('shukan_calc_history', JSON.stringify(updated));
-    }
+    } catch (e) {}
+
+    // Background HTTP Persistence
+    setIsSaving(true);
+    (async () => {
+      try {
+        const res = await apiService.saveCalculation(payload);
+        if (res && res.success) {
+          toast.success('Calculation saved successfully!', { theme: 'light', autoClose: 1000 });
+        } else {
+          toast.warning(res?.message || 'Saved locally (DB sync pending)', { theme: 'light', autoClose: 1200 });
+        }
+      } catch (e) {
+        toast.info('Saved locally', { theme: 'light', autoClose: 1000 });
+      } finally {
+        setIsSaving(false);
+      }
+    })();
   };
 
   const handleDeleteHistory = async (id) => {

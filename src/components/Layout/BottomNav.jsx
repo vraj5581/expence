@@ -119,8 +119,32 @@ const BottomNav = () => {
           <NavLink
             key={item.name}
             to={item.path}
+            onMouseEnter={() => {
+              try {
+                if (item.path.includes('dashboard')) import('../../pages/Dashboard');
+                else if (item.path.includes('credit-debit')) import('../../pages/CreditDebit');
+                else if (item.path.includes('deposit-allocate')) import('../../pages/DepositAllocate');
+                else if (item.path.includes('calculator')) import('../../pages/Calculator');
+                else if (item.path.includes('tasks')) import('../../pages/Tasks');
+                else if (item.path.includes('reports')) import('../../pages/Reports');
+                else if (item.path.includes('settings')) import('../../pages/Settings');
+                else if (item.path.includes('my-credit-debit')) import('../../pages/MyCreditDebit');
+              } catch (e) {}
+            }}
+            onTouchStart={() => {
+              try {
+                if (item.path.includes('dashboard')) import('../../pages/Dashboard');
+                else if (item.path.includes('credit-debit')) import('../../pages/CreditDebit');
+                else if (item.path.includes('deposit-allocate')) import('../../pages/DepositAllocate');
+                else if (item.path.includes('calculator')) import('../../pages/Calculator');
+                else if (item.path.includes('tasks')) import('../../pages/Tasks');
+                else if (item.path.includes('reports')) import('../../pages/Reports');
+                else if (item.path.includes('settings')) import('../../pages/Settings');
+                else if (item.path.includes('my-credit-debit')) import('../../pages/MyCreditDebit');
+              } catch (e) {}
+            }}
             className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-150 active:scale-95 min-w-0 ${
+              `relative flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-100 active:scale-90 min-w-0 cursor-pointer select-none ${
                 isActive
                   ? 'text-[#002B49]'
                   : 'text-slate-400 hover:text-slate-700'

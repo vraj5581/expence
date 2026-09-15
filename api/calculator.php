@@ -2,35 +2,6 @@
 // Centralized Box Weight Calculator API for Shukan Packaging ERP
 require_once __DIR__ . '/db.php';
 
-// Auto-create table if not exists
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `box_calculations` (
-        `id` VARCHAR(50) PRIMARY KEY,
-        `boxName` VARCHAR(255) DEFAULT '',
-        `inputMode` VARCHAR(20) DEFAULT 'dimensions',
-        `length` DECIMAL(10,2) DEFAULT 0.00,
-        `width` DECIMAL(10,2) DEFAULT 0.00,
-        `height` DECIMAL(10,2) DEFAULT 0.00,
-        `decalSize` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        `cuttingSize` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        `gsm1` DECIMAL(10,2) DEFAULT 0.00,
-        `gsm2` DECIMAL(10,2) DEFAULT 0.00,
-        `gsm3` DECIMAL(10,2) DEFAULT 0.00,
-        `fluting` DECIMAL(10,2) DEFAULT 40.00,
-        `formulaMode` VARCHAR(30) DEFAULT 'takeup',
-        `linerWeight` DECIMAL(15,2) DEFAULT 0.00,
-        `paperWeight` DECIMAL(15,2) DEFAULT 0.00,
-        `totalWeight` DECIMAL(15,2) DEFAULT 0.00,
-        `batchQuantity` INT DEFAULT 1,
-        `batchWeight` DECIMAL(15,2) DEFAULT 0.00,
-        `paperRate` DECIMAL(15,2) DEFAULT 0.00,
-        `totalCost` DECIMAL(15,2) DEFAULT 0.00,
-        `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-} catch (\Exception $e) {
-    // Ignore if table exists or permission issue
-}
-
 $method = $_SERVER['REQUEST_METHOD'];
 $data = getJsonInput();
 

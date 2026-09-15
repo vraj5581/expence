@@ -48,7 +48,32 @@ const AdminOnlyRoute = ({ children }) => {
   return isAdmin ? children : <Navigate to="/user/dashboard" replace />;
 };
 
+// Pre-warm lazy routes for instant, zero-delay click response
+export const preloadAllPages = () => {
+  const loaders = [
+    () => import('./pages/Dashboard'),
+    () => import('./pages/CreditDebit'),
+    () => import('./pages/DepositAllocate'),
+    () => import('./pages/Calculator'),
+    () => import('./pages/Tasks'),
+    () => import('./pages/Reports'),
+    () => import('./pages/Settings'),
+    () => import('./pages/MyCreditDebit')
+  ];
+  loaders.forEach(fn => {
+    try { fn(); } catch (e) {}
+  });
+};
+
 function App() {
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(preloadAllPages, { timeout: 1500 });
+    } else {
+      setTimeout(preloadAllPages, 300);
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <AuthProvider>

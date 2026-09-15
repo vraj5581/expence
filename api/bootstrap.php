@@ -48,23 +48,8 @@ try {
     $stmt7 = $pdo->query("SELECT *, created_at as createdAt FROM tasks ORDER BY created_at DESC");
     $tasks = $stmt7->fetchAll();
 
-    // 8. Audit Logs (auto-clean previous month logs & orphan logs for deleted entries)
-    $firstDayOfCurrentMonth = date('Y-m-01');
-    try {
-        $pdo->prepare("DELETE FROM audit_logs WHERE date < :current_month_start")->execute(['current_month_start' => $firstDayOfCurrentMonth]);
-        $pdo->exec("
-            DELETE FROM audit_logs
-            WHERE txnId IS NOT NULL
-              AND txnId != ''
-              AND txnId != 'N/A'
-              AND txnId NOT IN (SELECT id FROM debit_transactions)
-              AND txnId NOT IN (SELECT id FROM credit_transactions)
-              AND txnId NOT IN (SELECT id FROM allocations_history)
-              AND txnId NOT IN (SELECT id FROM vault_deposits)
-        ");
-    } catch (\Exception $e) {}
-
-    $stmt8 = $pdo->query("SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC");
+    // 8. Audit Logs (indexed retrieval, non-blocking)
+    $stmt8 = $pdo->query("SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT 200");
     $auditLogs = $stmt8->fetchAll();
 
     echo json_encode([

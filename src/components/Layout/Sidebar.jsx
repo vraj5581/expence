@@ -157,8 +157,32 @@ const Sidebar = ({ isOpen, onClose }) => {
                 key={item.name}
                 to={item.path}
                 onClick={onClose}
+                onMouseEnter={() => {
+                  try {
+                    if (item.path.includes('dashboard')) import('../../pages/Dashboard');
+                    else if (item.path.includes('credit-debit')) import('../../pages/CreditDebit');
+                    else if (item.path.includes('deposit-allocate')) import('../../pages/DepositAllocate');
+                    else if (item.path.includes('calculator')) import('../../pages/Calculator');
+                    else if (item.path.includes('tasks')) import('../../pages/Tasks');
+                    else if (item.path.includes('reports')) import('../../pages/Reports');
+                    else if (item.path.includes('settings')) import('../../pages/Settings');
+                    else if (item.path.includes('my-credit-debit')) import('../../pages/MyCreditDebit');
+                  } catch (e) {}
+                }}
+                onTouchStart={() => {
+                  try {
+                    if (item.path.includes('dashboard')) import('../../pages/Dashboard');
+                    else if (item.path.includes('credit-debit')) import('../../pages/CreditDebit');
+                    else if (item.path.includes('deposit-allocate')) import('../../pages/DepositAllocate');
+                    else if (item.path.includes('calculator')) import('../../pages/Calculator');
+                    else if (item.path.includes('tasks')) import('../../pages/Tasks');
+                    else if (item.path.includes('reports')) import('../../pages/Reports');
+                    else if (item.path.includes('settings')) import('../../pages/Settings');
+                    else if (item.path.includes('my-credit-debit')) import('../../pages/MyCreditDebit');
+                  } catch (e) {}
+                }}
                 className={({ isActive }) =>
-                  `flex items-center space-x-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all duration-200 ${
+                  `flex items-center space-x-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all duration-150 active:scale-[0.98] cursor-pointer ${
                     isActive
                       ? 'bg-[#c69255] text-white shadow-md'
                       : 'text-slate-300 hover:bg-white/10 hover:text-white'

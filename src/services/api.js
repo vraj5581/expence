@@ -1,50 +1,73 @@
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+const inFlightRequests = new Map();
+
 async function request(endpoint, options = {}, timeoutMs = 12000) {
-  const url = `${BASE_URL}/${endpoint}`;
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
+  const cacheKey = `${method}:${endpoint}`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  const config = {
-    ...options,
-    signal: options.signal || controller.signal,
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
-  };
-
-  if (config.body && typeof config.body === 'object') {
-    config.body = JSON.stringify(config.body);
+  // Deduplicate identical in-flight GET requests
+  if (isGet && inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey);
   }
 
-  try {
-    const res = await fetch(url, config);
-    clearTimeout(timeoutId);
-    if (!res.ok) {
-      const errorText = await res.text();
-      let parsedMessage = '';
-      try {
-        const parsed = JSON.parse(errorText);
-        parsedMessage = parsed.message || parsed.error;
-      } catch (e) {
-        parsedMessage = errorText;
-      }
-      return { success: false, error: parsedMessage || `HTTP Error ${res.status}` };
+  const reqPromise = (async () => {
+    const url = `${BASE_URL}/${endpoint}`;
+    const defaultHeaders = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const config = {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        ...defaultHeaders,
+        ...options.headers,
+      },
+    };
+
+    if (config.body && typeof config.body === 'object') {
+      config.body = JSON.stringify(config.body);
     }
-    return await res.json();
-  } catch (err) {
-    clearTimeout(timeoutId);
-    const isTimeout = err.name === 'AbortError';
-    const errMsg = isTimeout ? 'Network timeout: Slow or weak connection' : (err.message || 'Network connection error');
-    console.warn(`API Request warning for ${endpoint}:`, errMsg);
-    return { success: false, error: errMsg, isTimeout };
+
+    try {
+      const res = await fetch(url, config);
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        const errorText = await res.text();
+        let parsedMessage = '';
+        try {
+          const parsed = JSON.parse(errorText);
+          parsedMessage = parsed.message || parsed.error;
+        } catch (e) {
+          parsedMessage = errorText;
+        }
+        return { success: false, error: parsedMessage || `HTTP Error ${res.status}` };
+      }
+      return await res.json();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isTimeout = err.name === 'AbortError';
+      const errMsg = isTimeout ? 'Network timeout: Slow or weak connection' : (err.message || 'Network connection error');
+      console.warn(`API Request warning for ${endpoint}:`, errMsg);
+      return { success: false, error: errMsg, isTimeout };
+    } finally {
+      if (isGet) {
+        inFlightRequests.delete(cacheKey);
+      }
+    }
+  })();
+
+  if (isGet) {
+    inFlightRequests.set(cacheKey, reqPromise);
   }
+
+  return reqPromise;
 }
 
 export const apiService = {

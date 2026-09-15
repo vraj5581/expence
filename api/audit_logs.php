@@ -4,34 +4,9 @@ require_once __DIR__ . '/db.php';
 $method = $_SERVER['REQUEST_METHOD'];
 $data = getJsonInput();
 
-// Ensure oldData column exists in audit_logs table
-try {
-    $pdo->exec("ALTER TABLE audit_logs ADD COLUMN oldData TEXT NULL");
-} catch (\Exception $e) {
-    // Column already exists
-}
-
-// Auto-delete entries older than current month & orphan logs for deleted entries
-$firstDayOfCurrentMonth = date('Y-m-01');
-try {
-    $stmtClean = $pdo->prepare("DELETE FROM audit_logs WHERE date < :current_month_start");
-    $stmtClean->execute(['current_month_start' => $firstDayOfCurrentMonth]);
-    $pdo->exec("
-        DELETE FROM audit_logs
-        WHERE txnId IS NOT NULL
-          AND txnId != ''
-          AND txnId != 'N/A'
-          AND txnId NOT IN (SELECT id FROM debit_transactions)
-          AND txnId NOT IN (SELECT id FROM credit_transactions)
-          AND txnId NOT IN (SELECT id FROM allocations_history)
-          AND txnId NOT IN (SELECT id FROM vault_deposits)
-    ");
-} catch (\Exception $e) {
-    // Ignore error if table is empty or missing
-}
-
 if ($method === 'GET') {
-    $stmt = $pdo->query("SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC");
+    $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 200;
+    $stmt = $pdo->query("SELECT * FROM audit_logs ORDER BY created_at DESC, id DESC LIMIT $limit");
     $logs = $stmt->fetchAll();
     echo json_encode(['success' => true, 'auditLogs' => $logs]);
     exit();

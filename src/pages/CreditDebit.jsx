@@ -1472,8 +1472,7 @@ const CreditDebit = ({ isMyView = false }) => {
       {/* ======================================================== */}
       {/* 🟠 SECTION 1: DEBIT TRANSACTIONS TABLE & FILTERS (FIRST)  */}
       {/* ======================================================== */}
-      {(activeTab === 'all' || activeTab === 'debit' || printTarget === 'all' || printTarget === 'debit') && (
-        <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-rose-50/60 border border-rose-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent print:space-y-0 print:mb-4 ${activeTab !== 'all' && activeTab !== 'debit' ? 'hidden print:block' : ''} ${printTarget === 'credit' ? 'print:hidden' : ''}`}>
+      <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-rose-50/60 border border-rose-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent print:space-y-0 print:mb-4 ${activeTab !== 'all' && activeTab !== 'debit' ? 'hidden print:block' : ''} ${printTarget === 'credit' ? 'print:hidden' : ''}`}>
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-200/80 print:border-b-2 print:border-black pb-3 print:pb-1 print:mb-1.5 print-section-header">
             <div className="flex items-center space-x-2.5 min-w-0">
@@ -1912,13 +1911,11 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
           </div>
         </div>
-      )}
 
       {/* ======================================================== */}
       {/* 🟢 SECTION 2: CREDIT TRANSACTIONS TABLE & FILTERS (SECOND)*/}
       {/* ======================================================== */}
-      {(activeTab === 'all' || activeTab === 'credit' || printTarget === 'all' || printTarget === 'credit') && (
-        <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-emerald-50/60 border border-emerald-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent print:space-y-0 print:mb-4 ${activeTab !== 'all' && activeTab !== 'credit' ? 'hidden print:block' : ''} ${printTarget === 'debit' ? 'print:hidden' : ''}`}>
+      <div className={`p-1.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-emerald-50/60 border border-emerald-200/90 shadow-xs space-y-4 print:p-0 print:border-none print:shadow-none print:bg-transparent print:space-y-0 print:mb-4 ${activeTab !== 'all' && activeTab !== 'credit' ? 'hidden print:block' : ''} ${printTarget === 'debit' ? 'print:hidden' : ''}`}>
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/80 print:border-b-2 print:border-black pb-3 print:pb-1 print:mb-1.5 print-section-header">
             <div className="flex items-center space-x-2.5 min-w-0">
@@ -2429,7 +2426,6 @@ const CreditDebit = ({ isMyView = false }) => {
             </div>
           </div>
         </div>
-      )}
 
 
 
